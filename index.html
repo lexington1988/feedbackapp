@@ -1,121 +1,311 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Boiler Service Checklist</title>
-  <meta name="theme-color" content="#8a2be2" />
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
-  <style>
-    body {
-      font-family: 'Roboto', sans-serif;
-      background-color: #f9f9f9;
-      color: #333;
-      margin: 0;
-      padding: 20px;
-      display: flex;
-      justify-content: center;
-    }
+<div class="app">
+  <header class="topbar">
+    <div>
+      <h1>PPC Inspection Feedback</h1>
+      <p class="sub">Verbal script + report from the same findings</p>
+    </div>
 
-    .container {
-      max-width: 640px;
-      width: 100%;
-      background: #fff;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 0 12px rgba(0,0,0,0.1);
-      border-top: 4px solid #8a2be2;
-    }
+    <div class="top-actions">
+      <button id="newInspectionBtn" class="btn ghost" type="button">New</button>
+      <button id="saveInspectionBtn" class="btn" type="button">Save</button>
+    </div>
+  </header>
 
-    h2 {
-      text-align: center;
-      color: #8a2be2;
-      margin-bottom: 20px;
-    }
+  <main class="grid">
+    <!-- LEFT: INSPECTION + FINDINGS -->
+    <section class="card">
+      <h2>Inspection</h2>
 
-    ul.checklist {
-      list-style: none;
-      padding: 0;
-    }
+      <div class="form-grid">
+        <label class="field">
+          <span>Engineer name</span>
+          <input id="engineerInput" type="text" placeholder="e.g., Dan Smith" />
+        </label>
 
-    ul.checklist li {
-      border-bottom: 1px solid #eee;
-      padding: 10px 0;
-    }
+        <label class="field">
+          <span>Job reference</span>
+          <input id="jobRefInput" type="text" placeholder="e.g., JR-10294" />
+        </label>
 
-    ul.checklist li:last-child {
-      border-bottom: none;
-    }
+        <label class="field">
+          <span>Address / site</span>
+          <input id="addressInput" type="text" placeholder="Optional" />
+        </label>
 
-    label.check-label {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      cursor: pointer;
-    }
+        <label class="field">
+          <span>Appliance / boiler</span>
+          <input id="applianceInput" type="text" placeholder="Optional" />
+        </label>
 
-    input[type="checkbox"] {
-      accent-color: #8a2be2;
-      margin-top: 4px;
-    }
+        <label class="field">
+          <span>Date</span>
+          <input id="dateInput" type="date" />
+        </label>
 
-    .checked label.check-label {
-      text-decoration: line-through;
-      color: #888;
-    }
+        <label class="field">
+          <span>Overall outcome</span>
+          <select id="outcomeSelect">
+            <option value="Pass">Pass with actions</option>
+            <option value="Pass with actions" selected>Pass</option>
+            <option value="Requires revisit">Requires revisit</option>
+          </select>
+        </label>
+      </div>
 
-    .reset-btn {
-      display: block;
-      margin: 20px auto 0;
-      padding: 10px 20px;
-      background-color: #8a2be2;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-weight: bold;
-      cursor: pointer;
-    }
+      <div class="split">
+        <div class="section">
+          <div class="section-head">
+            <h3>Positives</h3>
+            <button id="addPositiveBtn" class="btn small" type="button">+ Add</button>
+          </div>
+          <div id="positivesList" class="list"></div>
+          <p id="positivesEmpty" class="muted">No positives added yet.</p>
+        </div>
 
-    .reset-btn:hover {
-      background-color: #7221c2;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h2>Boiler Service Checklist</h2>
-    <ul class="checklist">
-      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Check Manufacturer's Instructions for service requirements and relevant boiler readings</label></li>
-      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Visually Inspect Boiler, Flue and Gas System</label></li>
-      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Check Fuse</label></li>
-      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Perform Electrical Safe To Touch Test and Safe Isolation To TB118a (Prove, Test, Prove)</label></li>
-      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Perform Relevant Boiler Service Procedure As Per Manufacturer's Instructions</label></li>
-      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Visually Inspect Inside Of Boiler (Cable Grommets, Room Seal, Burner Insulation etc.)</label></li>
-      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Perform Combustion Analysis Comparing To Manufacturer's Instructions (Case On)</label></li>
-      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Perform Gas Rate And Compare To Manufacturer's Instructions</label></li>
-      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Test FFD</label></li>
-      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Perform Full Tightness Test Procedure (While Boiler In Lockout State)</label></li>
-      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Spray Test Nipple And ECV Barrel</label></li>
-      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Test Alarms And Check Expiry Dates</label></li>
-      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Ensure Boiler Has Been Reassembled Correctly, Flue Sample Point Has Been Replaced And That Appliance Is Left In Working Order</label></li>
-      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Inspect Gas Meter Test Nipple Final Time To Ensure No Leaks Are Left</label></li>
-      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Collect Tenants Contact Details</label></li>
-    </ul>
-    <button class="reset-btn" onclick="resetChecklist()">Reset</button>
+        <div class="section">
+          <div class="section-head">
+            <h3>Findings & Actions</h3>
+            <button id="addFindingBtn" class="btn small" type="button">+ Add</button>
+          </div>
+          <div id="findingsList" class="list"></div>
+          <p id="findingsEmpty" class="muted">No findings added yet.</p>
+        </div>
+      </div>
+
+      <div class="darkmode-box">
+        <h3>Dark Mode</h3>
+        <label class="toggle">
+          <input id="darkModeToggle" type="checkbox" />
+          <span>Enable</span>
+        </label>
+      </div>
+    </section>
+
+    <!-- RIGHT: OUTPUTS + SAVED -->
+    <section class="card">
+      <div class="tabs">
+  <button class="tab active" data-tab="verbal" type="button">Verbal</button>
+  <button class="tab" data-tab="report" type="button">Report</button>
+  <button class="tab" data-tab="saved" type="button">Saved</button>
+  <button class="tab" data-tab="engineers" type="button">Engineers</button>
+</div>
+
+
+      <!-- VERBAL -->
+      <div id="tabVerbal" class="tab-panel active">
+        <div class="row">
+          <label class="field inline">
+            <span>Style</span>
+            <select id="verbalStyleSelect">
+              <option value="matey" selected>Matey / supportive</option>
+              <option value="neutral">Neutral</option>
+              <option value="direct">Direct</option>
+            </select>
+          </label>
+
+          <label class="field inline">
+            <span>Length</span>
+            <select id="verbalLengthSelect">
+              <option value="quick" selected>Quick</option>
+              <option value="full">Full</option>
+            </select>
+          </label>
+
+          <button id="copyVerbalBtn" class="btn ghost" type="button">Copy</button>
+        </div>
+
+        <div class="output">
+          <pre id="verbalOutput" class="pre"></pre>
+        </div>
+      </div>
+
+      <!-- REPORT -->
+      <div id="tabReport" class="tab-panel">
+        <div class="row">
+  <button id="copyReportBtn" class="btn" type="button">Copy</button>
+  <button id="emailReportBtn" class="btn" type="button">Email</button>
+  <button id="printReportBtn" class="btn" type="button">Print / Save PDF</button>
+</div>
+
+
+        <div class="output report-preview" id="reportPreview">
+          <h2 class="rp-title">Inspection Feedback Report</h2>
+          <div id="reportMeta" class="rp-meta"></div>
+          <hr />
+          <div id="reportBody"></div>
+        </div>
+      </div>
+
+     <!-- SAVED -->
+<div id="tabSaved" class="tab-panel">
+  <div class="row">
+    <button id="exportAllBtn" class="btn ghost" type="button">Export JSON</button>
+    <button id="clearAllBtn" class="btn danger" type="button">Clear All</button>
   </div>
 
-  <script>
-    function toggleCheck(checkbox) {
-      const li = checkbox.closest('li');
-      li.classList.toggle('checked', checkbox.checked);
-    }
+  <div id="savedList" class="saved"></div>
+  <p id="savedEmpty" class="muted">No saved inspections yet.</p>
+</div>
 
-    function resetChecklist() {
-      document.querySelectorAll('.checklist input[type="checkbox"]').forEach(checkbox => {
-        checkbox.checked = false;
-        checkbox.closest('li').classList.remove('checked');
-      });
-    }
-  </script>
-</body>
-</html>
+<!-- ENGINEERS -->
+<div id="tabEngineers" class="tab-panel">
+  <div class="row">
+    <label class="field inline" style="min-width:220px;">
+      <span>Engineer</span>
+      <select id="engineerSelect"></select>
+    </label>
+
+    <label class="field inline">
+      <span>Range</span>
+      <select id="rangeSelect">
+        <option value="last5" selected>Last 5 audits</option>
+        <option value="last10">Last 10 audits</option>
+        <option value="30d">Last 30 days</option>
+        <option value="90d">Last 90 days</option>
+        <option value="custom">Custom range</option>
+      </select>
+    </label>
+
+    <label class="field inline" id="fromWrap" style="display:none;">
+      <span>From</span>
+      <input id="rangeFrom" type="date" />
+    </label>
+
+    <label class="field inline" id="toWrap" style="display:none;">
+      <span>To</span>
+      <input id="rangeTo" type="date" />
+    </label>
+
+    <button id="generateEngineerBtn" class="btn" type="button">Generate Summary</button>
+    <button id="copyEngineerBtn" class="btn ghost" type="button">Copy</button>
+    <button id="printEngineerBtn" class="btn" type="button">Print / Save PDF</button>
+
+  </div>
+
+  <div class="output">
+    <pre id="engineerOutput" class="pre"></pre>
+  </div>
+
+  <div class="muted" style="margin-top:10px;">
+    Tip: Analytics works best when you consistently use <strong>Issue Tag</strong> (e.g. PAPERWORK_BENCHMARK, FLUE_SUPPORT).
+  </div>
+</div>
+
+
+<!-- MODAL: Add Positive / Finding -->
+<div id="modalBackdrop" class="backdrop hidden"></div>
+<div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-head">
+    <h3 id="modalTitle">Add item</h3>
+    <button id="closeModalBtn" class="icon-btn" type="button" aria-label="Close">✕</button>
+  </div>
+
+  <div class="modal-body">
+    <div id="modalPositiveFields" class="modal-section hidden">
+      <label class="field">
+        <span>Positive note</span>
+        <input id="positiveTextInput" type="text" placeholder="e.g., Neat pipework and left tidy" />
+      </label>
+    </div>
+
+  <div id="modalFindingFields" class="modal-section hidden">
+  <div class="form-grid">
+    <label class="field">
+      <span>Category</span>
+      <select id="findingCategory">
+        <option>Flue</option>
+        <option>Combustion / analysis</option>
+        <option>Gas pipework</option>
+        <option>Ventilation</option>
+        <option>Condensate</option>
+        <option>Electrical / isolation</option>
+        <option>Benchmark / paperwork</option>
+        <option>Workmanship</option>
+        <option>Manufacturer instructions</option>
+        <option>Other</option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span>Severity</span>
+      <select id="findingSeverity">
+        <option value="Critical">ID</option>
+        <option value="Major" selected>AR</option>
+        <option value="Minor">NCS</option>
+        <option value="Advisory">Advisory</option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span>Issue Tag (for trends)</span>
+      <select id="findingTag">
+        <option value="FLUE_SUPPORT">FLUE_SUPPORT</option>
+        <option value="FLUE_TERMINATION">FLUE_TERMINATION</option>
+        <option value="COMBUSTION_RECORDING">COMBUSTION_RECORDING</option>
+        <option value="GAS_PRESSURE">GAS_PRESSURE</option>
+        <option value="CONDENSATE_ROUTING">CONDENSATE_ROUTING</option>
+        <option value="VENTILATION_CHECKS">VENTILATION_CHECKS</option>
+        <option value="PAPERWORK_BENCHMARK">PAPERWORK_BENCHMARK</option>
+        <option value="PAPERWORK_COMMISSIONING">PAPERWORK_COMMISSIONING</option>
+        <option value="WORKMANSHIP_TIDINESS">WORKMANSHIP_TIDINESS</option>
+        <option value="MANUFACTURER_MI">MANUFACTURER_MI</option>
+        <option value="OTHER">OTHER</option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span>Status</span>
+      <select id="findingStatus">
+        <option value="Open" selected>Open</option>
+        <option value="Closed">Closed</option>
+        <option value="N/A">N/A</option>
+      </select>
+    </label>
+
+    <label class="field" style="grid-column: 1 / -1;">
+      <span>Finding (what you saw)</span>
+      <input id="findingTitle" type="text" placeholder="e.g., Flue not adequately supported near elbow" />
+    </label>
+
+    <label class="field">
+      <span>Due</span>
+      <select id="findingDue">
+        <option value="Today">Today</option>
+        <option value="48 hours" selected>48 hours</option>
+        <option value="7 days">7 days</option>
+        <option value="Next visit">Next visit</option>
+      </select>
+    </label>
+  </div>
+
+  <label class="field">
+    <span>Why it matters (short)</span>
+    <textarea id="findingWhy" rows="2" placeholder="e.g., Can affect safety/performance and may not meet MI."></textarea>
+  </label>
+
+  <label class="field">
+    <span>Action required</span>
+    <textarea id="findingAction" rows="2" placeholder="e.g., Add bracket/support and confirm flue gradient per MI."></textarea>
+  </label>
+
+  <label class="field">
+    <span>Notes (optional)</span>
+    <textarea id="findingNotes" rows="2" placeholder="Anything extra you want to remember."></textarea>
+  </label>
+</div> <!-- end modalFindingFields -->
+</div> <!-- end modal-body -->
+
+<div class="modal-foot">
+  <button id="deleteItemBtn" class="btn danger hidden" type="button">Delete</button>
+  <div class="spacer"></div>
+  <button id="cancelModalBtn" class="btn ghost" type="button">Cancel</button>
+  <button id="saveModalBtn" class="btn" type="button">Save</button>
+</div>
+</div> <!-- end modal -->
+
+<!-- PRINT AREA (must exist + be outside the modal) -->
+<div id="printArea" class="print-area hidden"></div>
+
+</main>     <!-- end main grid -->
+</div>      <!-- end .app -->
+
