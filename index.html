@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Boiler Service Checklist</title>
+  <meta name="theme-color" content="#8a2be2" />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Roboto', sans-serif;
+      background-color: #f9f9f9;
+      color: #333;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      max-width: 640px;
+      width: 100%;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 12px rgba(0,0,0,0.1);
+      border-top: 4px solid #8a2be2;
+    }
+
+    h2 {
+      text-align: center;
+      color: #8a2be2;
+      margin-bottom: 20px;
+    }
+
+    ul.checklist {
+      list-style: none;
+      padding: 0;
+    }
+
+    ul.checklist li {
+      border-bottom: 1px solid #eee;
+      padding: 10px 0;
+    }
+
+    ul.checklist li:last-child {
+      border-bottom: none;
+    }
+
+    label.check-label {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      cursor: pointer;
+    }
+
+    input[type="checkbox"] {
+      accent-color: #8a2be2;
+      margin-top: 4px;
+    }
+
+    .checked label.check-label {
+      text-decoration: line-through;
+      color: #888;
+    }
+
+    .reset-btn {
+      display: block;
+      margin: 20px auto 0;
+      padding: 10px 20px;
+      background-color: #8a2be2;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .reset-btn:hover {
+      background-color: #7221c2;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Boiler Service Checklist</h2>
+    <ul class="checklist">
+      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Check Manufacturer's Instructions for service requirements and relevant boiler readings</label></li>
+      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Visually Inspect Boiler, Flue and Gas System</label></li>
+      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Check Fuse</label></li>
+      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Perform Electrical Safe To Touch Test and Safe Isolation To TB118a (Prove, Test, Prove)</label></li>
+      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Perform Relevant Boiler Service Procedure As Per Manufacturer's Instructions</label></li>
+      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Visually Inspect Inside Of Boiler (Cable Grommets, Room Seal, Burner Insulation etc.)</label></li>
+      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Perform Combustion Analysis Comparing To Manufacturer's Instructions (Case On)</label></li>
+      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Perform Gas Rate And Compare To Manufacturer's Instructions</label></li>
+      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Test FFD</label></li>
+      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Perform Full Tightness Test Procedure (While Boiler In Lockout State)</label></li>
+      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Spray Test Nipple And ECV Barrel</label></li>
+      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Test Alarms And Check Expiry Dates</label></li>
+      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Ensure Boiler Has Been Reassembled Correctly, Flue Sample Point Has Been Replaced And That Appliance Is Left In Working Order</label></li>
+      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Inspect Gas Meter Test Nipple Final Time To Ensure No Leaks Are Left</label></li>
+      <li><label class="check-label"><input type="checkbox" onchange="toggleCheck(this)">Collect Tenants Contact Details</label></li>
+    </ul>
+    <button class="reset-btn" onclick="resetChecklist()">Reset</button>
+  </div>
+
+  <script>
+    function toggleCheck(checkbox) {
+      const li = checkbox.closest('li');
+      li.classList.toggle('checked', checkbox.checked);
+    }
+
+    function resetChecklist() {
+      document.querySelectorAll('.checklist input[type="checkbox"]').forEach(checkbox => {
+        checkbox.checked = false;
+        checkbox.closest('li').classList.remove('checked');
+      });
+    }
+  </script>
+</body>
+</html>
