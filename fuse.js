@@ -1,0 +1,1 @@
+// Simulated fuse.js content
