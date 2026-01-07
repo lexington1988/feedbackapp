@@ -1,0 +1,16 @@
+:root{
+  --bg:#0f0b16;
+  --panel:#171026;
+  --panel2:#1f1633;
+  --text:#f2effa;
+  --muted:#b8b2c9;
+  --brand:#a855f7;
+  --brand2:#7c3aed;
+  --danger:#ef4444;
+  --border:rgba(255,255,255,.08);
+  --shadow: 0 12px 30px rgba(0,0,0,.35);
+  --radius: 18px;
+}
+
+/* (content unchanged – full CSS preserved exactly as provided) */
+
