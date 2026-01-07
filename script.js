@@ -17,9 +17,10 @@ const state = {
 };
 
 // ---------- Init ----------
-init();
+window.addEventListener("DOMContentLoaded", init);
 
 function init() {
+
   const today = new Date();
   el("dateInput").value = today.toISOString().slice(0, 10);
 
@@ -111,9 +112,11 @@ el("emailReportBtn").addEventListener("click", async () => {
 
 
 
-  // Saved
-  el("exportAllBtn").addEventListener("click", exportAllJson);
-  el("clearAllBtn").addEventListener("click", clearAll);
+ // Saved
+el("exportAllBtn").addEventListener("click", exportAllJson);
+el("emailSelectedBtn").addEventListener("click", emailSelectedReports);
+el("clearAllBtn").addEventListener("click", clearAll);
+
 
   // Engineers tab
   if (el("rangeSelect")) {
@@ -124,7 +127,6 @@ el("emailReportBtn").addEventListener("click", async () => {
   document.querySelectorAll("#printArea").forEach((node, i) => {
     if (i > 0) node.remove();
   });
-
   const pa = el("printArea");
   pa.innerHTML = "";
   pa.innerHTML = buildPrintableEngineerHTML();
@@ -147,11 +149,32 @@ el("emailReportBtn").addEventListener("click", async () => {
   }
 
   // Start with a new inspection
-  newInspection();
+   newInspection();
   renderSavedList();
   refreshEngineerDropdown();       // ✅ always sync
   renderEngineerPanelPlaceholder();
+
+  // ✅ Engineer typeahead setup (ghost + datalist)
+  refreshEngineerDatalist();
+  renderEngineerGhost();
+
+  // Ghost updates as you type
+  el("engineerInput").addEventListener("input", renderEngineerGhost);
+
+  // Tab or → accepts ghost suggestion
+  el("engineerInput").addEventListener("keydown", (e) => {
+    if ((e.key === "Tab" || e.key === "ArrowRight") && acceptEngineerGhost()) {
+      e.preventDefault();
+    }
+  });
+
+  // On blur, snap to existing engineer spelling if it matches one
+  el("engineerInput").addEventListener("blur", () => {
+    el("engineerInput").value = canonicalFromPool(el("engineerInput").value);
+    renderEngineerGhost();
+  });
 }
+
 
 // ---------- Dark mode ----------
 function applyDarkMode(enabled) {
@@ -168,7 +191,7 @@ function makeNewInspection() {
     address: "",
     appliance: "",
     date: el("dateInput")?.value || new Date().toISOString().slice(0,10),
-    outcome: "Pass with actions",
+    outcome: "Pass",
     positives: [],
     findings: []
   };
@@ -207,6 +230,8 @@ function writeFormFromCurrent() {
   el("applianceInput").value = c.appliance;
   el("dateInput").value = c.date;
   el("outcomeSelect").value = c.outcome;
+    renderEngineerGhost();
+
 
   el("engineerInput").oninput = () => { c.engineer = el("engineerInput").value; renderOutputs(); renderSavedList(); refreshEngineerDropdown(); };
   el("jobRefInput").oninput = () => { c.jobRef = el("jobRefInput").value; renderOutputs(); renderSavedList(); };
@@ -218,7 +243,8 @@ function writeFormFromCurrent() {
 
 function pullFormIntoCurrent() {
   const c = state.current;
-  c.engineer = el("engineerInput").value.trim();
+  c.engineer = canonicalFromPool(el("engineerInput").value);
+
   c.jobRef = el("jobRefInput").value.trim();
   c.address = el("addressInput").value.trim();
   c.appliance = el("applianceInput").value.trim();
@@ -239,10 +265,12 @@ function saveCurrentInspection() {
   if (idx >= 0) state.db.inspections[idx] = structuredClone(c);
   else state.db.inspections.unshift(structuredClone(c));
 
-  saveDb();
+    saveDb();
   renderSavedList();
   refreshEngineerDropdown();  // ✅ ensure Engineers sees it immediately
+  refreshEngineerDatalist();  // ✅ update suggestions list
   alert("Saved.");
+
 }
 
 function loadInspectionById(id) {
@@ -261,9 +289,11 @@ function deleteInspectionById(id) {
   const ok = confirm("Delete this saved inspection?");
   if (!ok) return;
   state.db.inspections = state.db.inspections.filter(x => x.id !== id);
-  saveDb();
+    saveDb();
   renderSavedList();
   refreshEngineerDropdown();
+  refreshEngineerDatalist(); // ✅ update suggestions list
+
 
   if (state.current?.id === id) newInspection();
 }
@@ -355,7 +385,13 @@ function renderSavedList() {
         <h4>${escapeHtml(title)}</h4>
         <p>${escapeHtml(meta)}</p>
       </div>
+
       <div class="badges">
+        <label class="select-toggle" title="Select for email">
+          <input class="saved-select" type="checkbox" data-select="${ins.id}" />
+          <span class="select-icon" aria-hidden="true">✉️</span>
+        </label>
+
         <button class="btn ghost small" type="button" data-load="${ins.id}">Load</button>
         <button class="btn danger small" type="button" data-del="${ins.id}">Delete</button>
       </div>
@@ -364,11 +400,18 @@ function renderSavedList() {
     card.querySelector("[data-load]").addEventListener("click", () => loadInspectionById(ins.id));
     card.querySelector("[data-del]").addEventListener("click", () => deleteInspectionById(ins.id));
 
+    const cb = card.querySelector(".saved-select");
+    if (cb) cb.addEventListener("change", updateSelectedCount);
+
     container.appendChild(card);
   });
 
-  refreshEngineerDropdown(); // ✅ keep Engineers always in sync with Saved
+  refreshEngineerDropdown();
+  refreshEngineerDatalist();
+  updateSelectedCount();
 }
+
+
 
 // ---------- Modal logic ----------
 function openModal(type, id = null) {
@@ -658,6 +701,13 @@ function buildReportText() {
 
   return lines.join("\n");
 }
+function getWatermarkHTML() {
+  return `
+    <div class="print-watermark" aria-hidden="true">
+      <img src="./logo.png" alt="" />
+    </div>
+  `;
+}
 
 function buildPrintableReportHTML() {
   pullFormIntoCurrent(); // ✅ ensure freshest values are used
@@ -693,7 +743,10 @@ function buildPrintableReportHTML() {
     : `<div class="muted">No findings recorded.</div>`;
 
   return `
-    <h1>Inspection Feedback Report</h1>
+  ${getWatermarkHTML()}
+
+  <h1>Inspection Feedback Report</h1>
+
 
     <div class="muted">
       ${metaHtml}
@@ -1044,27 +1097,209 @@ function topN(countObj, n) {
 function normalizeEngineer(name) {
   return String(name || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
+// ---------------- Engineer typeahead (ghost + datalist) ----------------
 
-function buildPrintableEngineerHTML() {
-  const engineer = el("engineerSelect")?.value?.trim();
-  if (!engineer) return `<h1>Engineer Summary</h1><div class="muted">No engineer selected.</div>`;
+// OPTIONAL: Pre-populated engineers (add your names here)
+const PRESET_ENGINEERS = [
+  "Benn Pellington",
+  "Bhupinder Singh",
+  "Bryan West",
+  "Charlie Abraham",
+  "Ed Johnson",
+  "Gary Hall",
+  "Graham Black",
+  "Harrison Daly",
+  "John Turlington",
+  "Joshua Porter",
+  "Pete Topliss",
+  "Paul Teece",
+  "Renjie Chen",
+  "Sam Ogejo",
+  "Sohail Mahmood",
+];
 
-  const audits = filterAuditsForEngineer(engineer);
-  if (!audits.length) return `<h1>Engineer Summary</h1><div class="muted">No audits found in selected range.</div>`;
 
-  const summary = buildEngineerSummary(engineer, audits);
+// Build list from presets + saved audits (deduped)
+function getEngineerPool() {
+  const map = new Map(); // norm -> display name
 
-  return `
-    <h1>Engineer Summary Report</h1>
-    <div class="muted">
-      <div><strong>Engineer:</strong> ${escapeHtml(engineer)}</div>
-      <div><strong>Audits included:</strong> ${audits.length}</div>
-      <div><strong>Range:</strong> ${escapeHtml(rangeLabel())}</div>
-    </div>
-    <div class="box">
-      <pre style="white-space:pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Courier New', monospace; font-size:12.5px; line-height:1.45;">${escapeHtml(summary.text)}</pre>
-    </div>
-  `;
+  const add = (name) => {
+    const raw = String(name || "").trim();
+    if (!raw) return;
+    const norm = normalizeEngineer(raw);
+    if (!map.has(norm)) map.set(norm, raw);
+  };
+
+  PRESET_ENGINEERS.forEach(add);
+  (state.db.inspections || []).forEach(i => add(i.engineer));
+
+  return Array.from(map.values()).sort((a,b) => a.localeCompare(b));
+}
+
+// Fill the <datalist id="engineerSuggestions">
+function refreshEngineerDatalist() {
+  const dl = document.getElementById("engineerSuggestions");
+  if (!dl) return;
+
+  const pool = getEngineerPool();
+  dl.innerHTML = pool.map(n => `<option value="${escapeHtml(n)}"></option>`).join("");
+}
+
+// Find a "starts with" suggestion for ghost text
+function findGhostSuggestion(typed) {
+  const t = String(typed || "");
+  if (!t.trim()) return null;
+
+  const pool = getEngineerPool();
+  const lower = t.toLowerCase();
+
+  for (const name of pool) {
+    if (name.toLowerCase().startsWith(lower) && name.length > t.length) {
+      return name;
+    }
+  }
+  return null;
+}
+
+// Draw the ghost text behind the input
+function renderEngineerGhost() {
+  const input = el("engineerInput");
+  const ghost = el("engineerGhost");
+  if (!input || !ghost) return;
+
+  const typed = input.value || "";
+  const suggestion = findGhostSuggestion(typed);
+
+  if (!suggestion) {
+    ghost.innerHTML = "";
+    return;
+  }
+
+  ghost.innerHTML =
+    `<span class="typed">${escapeHtml(typed)}</span>` +
+    `${escapeHtml(suggestion.slice(typed.length))}`;
+}
+
+// Accept the ghost suggestion into the input
+function acceptEngineerGhost() {
+  const input = el("engineerInput");
+  if (!input) return false;
+
+  const suggestion = findGhostSuggestion(input.value || "");
+  if (!suggestion) return false;
+
+  input.value = suggestion;
+  renderEngineerGhost();
+  return true;
+}
+
+// If typed name matches an existing engineer (ignoring case/spaces),
+// snap it to the existing saved display name. Otherwise allow new name.
+function canonicalFromPool(name) {
+  const raw = String(name || "").trim();
+  if (!raw) return "";
+
+  const norm = normalizeEngineer(raw);
+  const pool = getEngineerPool();
+
+  for (const p of pool) {
+    if (normalizeEngineer(p) === norm) return p;
+  }
+  return raw;
+}
+function buildReportTextFromInspection(ins) {
+  const c = ins;
+
+  const positives = c.positives || [];
+  const findings = sortFindingsBySeverity(c.findings || []);
+
+  const lines = [];
+  lines.push("INSPECTION FEEDBACK REPORT");
+  lines.push("—");
+  lines.push(`Date: ${formatDate(c.date)}`);
+  lines.push(`Engineer: ${c.engineer || "—"}`);
+  lines.push(`Job ref: ${c.jobRef || "—"}`);
+  lines.push(`Site: ${c.address || "—"}`);
+  lines.push(`Appliance: ${c.appliance || "—"}`);
+  lines.push(`Outcome: ${c.outcome || "—"}`);
+  lines.push("");
+  lines.push("SUMMARY");
+  lines.push(summaryLine(c));
+  lines.push("");
+
+  lines.push("WHAT WAS DONE WELL");
+  if (!positives.length) lines.push("- (No positives recorded)");
+  else positives.forEach(p => lines.push(`- ${p.text}`));
+  lines.push("");
+
+  lines.push("FINDINGS & REQUIRED ACTIONS");
+  if (!findings.length) {
+    lines.push("- (No findings recorded)");
+  } else {
+    findings.forEach((f, i) => {
+      lines.push(`${i + 1}. ${f.title}`);
+      lines.push(`   Category: ${f.category} | Severity: ${f.severity} | Due: ${f.due || "—"} | Status: ${f.status || "Open"} | Tag: ${f.tag || "OTHER"}`);
+      if (f.why) lines.push(`   Why it matters: ${f.why}`);
+      if (f.action) lines.push(`   Action: ${f.action}`);
+      if (f.notes) lines.push(`   Notes: ${f.notes}`);
+      lines.push("");
+    });
+  }
+
+  lines.push("CLOSE-OUT");
+  lines.push("Please confirm once actions are complete. If a revisit is required, arrange a suitable time for reinspection.");
+
+  return lines.join("\n");
+}
+
+function emailSelectedReports() {
+  const selectedIds = Array.from(document.querySelectorAll(".saved-select:checked"))
+    .map(cb => cb.getAttribute("data-select"))
+    .filter(Boolean);
+
+  if (!selectedIds.length) {
+    alert("Select at least one saved audit first.");
+    return;
+  }
+
+  const selectedAudits = selectedIds
+    .map(id => state.db.inspections.find(x => x.id === id))
+    .filter(Boolean);
+
+  if (!selectedAudits.length) {
+    alert("Couldn’t find the selected audits.");
+    return;
+  }
+
+  // Build combined body
+  const combined = selectedAudits.map((a, idx) => {
+    const header =
+      `==============================\n` +
+      `REPORT ${idx + 1} of ${selectedAudits.length}\n` +
+      `${a.engineer || "—"}${a.jobRef ? ` • ${a.jobRef}` : ""}${a.date ? ` • ${formatDate(a.date)}` : ""}\n` +
+      `==============================\n\n`;
+
+    return header + buildReportTextFromInspection(a);
+  }).join("\n\n");
+
+  const to = ""; // optional: put a default email here later
+  const subject = `Inspection Feedback Reports (${selectedAudits.length})`;
+
+  const mailto = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(combined)}`;
+
+  // If too long for mailto, copy + open a short draft
+  if (mailto.length > 1800) {
+    copyToClipboard(combined);
+    const shortBody =
+      `Hi,\n\n` +
+      `I’m sending ${selectedAudits.length} inspection feedback reports.\n` +
+      `The full reports have been copied to your clipboard — please paste them into this email.\n\n` +
+      `Thanks,\n`;
+    const fallback = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(shortBody)}`;
+    window.location.href = fallback;
+  } else {
+    window.location.href = mailto;
+  }
 }
 
 // ---------- Helpers ----------
@@ -1115,6 +1350,15 @@ function parseDateSafe(yyyyMmDd) {
   if (!yyyyMmDd) return null;
   const d = new Date(yyyyMmDd + "T00:00:00");
   return isNaN(d.getTime()) ? null : d;
+}
+function updateSelectedCount() {
+  const countEl = el("selectedCount");
+  if (!countEl) return;
+
+  const n = document.querySelectorAll(".saved-select:checked").length;
+
+  countEl.textContent = `${n} Selected`;
+  countEl.classList.toggle("hidden", n === 0);
 }
 
 async function copyToClipboard(text) {
