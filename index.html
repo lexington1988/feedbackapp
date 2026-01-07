@@ -13,7 +13,7 @@
   <header class="topbar">
     <div>
       <h1>PPC Inspection Feedback</h1>
-      <p class="sub">Verbal script + report from the same findings</p>
+      <p class="sub">Engineer Feedback Generator</p>
     </div>
 
     <div class="top-actions">
@@ -28,10 +28,24 @@
       <h2>Inspection</h2>
 
       <div class="form-grid">
-        <label class="field">
-          <span>Engineer name</span>
-          <input id="engineerInput" type="text" placeholder="e.g., Dan Smith" />
-        </label>
+     <label class="field">
+  <span>Engineer name</span>
+
+  <div class="ghost-field">
+    <input
+      id="engineerInput"
+      type="text"
+      placeholder="e.g., Dan Smith"
+      autocomplete="off"
+      list="engineerSuggestions"
+    />
+    <div id="engineerGhost" class="ghost-text" aria-hidden="true"></div>
+  </div>
+
+  <datalist id="engineerSuggestions"></datalist>
+</label>
+
+
 
         <label class="field">
           <span>Job reference</span>
@@ -151,9 +165,16 @@
      <!-- SAVED -->
 <div id="tabSaved" class="tab-panel">
   <div class="row">
-    <button id="exportAllBtn" class="btn ghost" type="button">Export JSON</button>
-    <button id="clearAllBtn" class="btn danger" type="button">Clear All</button>
-  </div>
+  <button id="exportAllBtn" class="btn ghost" type="button">Export JSON</button>
+  <button id="emailSelectedBtn" class="btn" type="button">Email Selected</button>
+
+  <!-- ✅ discreet counter -->
+  <span id="selectedCount" class="selected-count hidden">0 Selected</span>
+
+  <button id="clearAllBtn" class="btn danger" type="button">Clear All</button>
+</div>
+
+
 
   <div id="savedList" class="saved"></div>
   <p id="savedEmpty" class="muted">No saved inspections yet.</p>
@@ -265,28 +286,11 @@
       </select>
     </label>
 
-    <label class="field">
-      <span>Status</span>
-      <select id="findingStatus">
-        <option value="Open" selected>Open</option>
-        <option value="Closed">Closed</option>
-        <option value="N/A">N/A</option>
-      </select>
-    </label>
+    
 
     <label class="field" style="grid-column: 1 / -1;">
       <span>Finding (what you saw)</span>
       <input id="findingTitle" type="text" placeholder="e.g., Flue not adequately supported near elbow" />
-    </label>
-
-    <label class="field">
-      <span>Due</span>
-      <select id="findingDue">
-        <option value="Today">Today</option>
-        <option value="48 hours" selected>48 hours</option>
-        <option value="7 days">7 days</option>
-        <option value="Next visit">Next visit</option>
-      </select>
     </label>
   </div>
 
@@ -325,3 +329,4 @@
 <script src="./script.js"></script>
 </body>
 </html>
+
