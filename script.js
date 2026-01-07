@@ -84,30 +84,41 @@ el("emailReportBtn").addEventListener("click", async () => {
   }
 });
 
- el("printReportBtn").addEventListener("click", () => {
+el("printReportBtn").addEventListener("click", async () => {
   // ✅ ensure we only ever have ONE printArea
   document.querySelectorAll("#printArea").forEach((node, i) => {
     if (i > 0) node.remove();
   });
 
   const pa = el("printArea");
-
-  // ✅ clear first (prevents any odd duplication)
   pa.innerHTML = "";
   pa.innerHTML = buildPrintableReportHTML();
-
   pa.classList.remove("hidden");
 
   const restore = () => {
     pa.classList.add("hidden");
-    pa.innerHTML = ""; // ✅ clean up after printing
+    pa.innerHTML = "";
   };
   window.addEventListener("afterprint", restore, { once: true });
+
+  // ✅ WAIT for watermark image to load (prevents missing logo in print preview)
+  const wmImg = pa.querySelector(".print-watermark img");
+  if (wmImg) {
+    await new Promise((resolve) => {
+      // already loaded
+      if (wmImg.complete) return resolve();
+      wmImg.addEventListener("load", resolve, { once: true });
+      wmImg.addEventListener("error", resolve, { once: true }); // still print if it fails
+      // safety timeout so printing never gets stuck
+      setTimeout(resolve, 1200);
+    });
+  }
 
   requestAnimationFrame(() => {
     setTimeout(() => window.print(), 50);
   });
 });
+
 
 
 
@@ -702,12 +713,17 @@ function buildReportText() {
   return lines.join("\n");
 }
 function getWatermarkHTML() {
+  // Build an absolute URL to avoid any relative-path weirdness on GitHub Pages,
+  // plus a cache-buster so updated logos show immediately.
+  const logoUrl = new URL("logo.png", window.location.href).href + `?v=${Date.now()}`;
+
   return `
     <div class="print-watermark" aria-hidden="true">
-      <img src="./logo.png" alt="" />
+      <img src="${logoUrl}" alt="" />
     </div>
   `;
 }
+
 
 function buildPrintableReportHTML() {
   pullFormIntoCurrent(); // ✅ ensure freshest values are used
