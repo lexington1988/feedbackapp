@@ -1,3 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PPC Inspection Feedback</title>
+
+  <!-- 🔥 YOUR STYLES -->
+  <link rel="stylesheet" href="./ppc-inspection-feedback.css" />
+</head>
+<body>
 <div class="app">
   <header class="topbar">
     <div>
@@ -43,13 +54,14 @@
         </label>
 
         <label class="field">
-          <span>Overall outcome</span>
-          <select id="outcomeSelect">
-            <option value="Pass">Pass with actions</option>
-            <option value="Pass with actions" selected>Pass</option>
-            <option value="Requires revisit">Requires revisit</option>
-          </select>
-        </label>
+  <span>Overall outcome</span>
+  <select id="outcomeSelect">
+    <option value="Pass" selected>Pass</option>
+    <option value="Pass with actions">Pass with actions</option>
+    <option value="Requires revisit">Requires revisit</option>
+  </select>
+</label>
+
       </div>
 
       <div class="split">
@@ -308,4 +320,6 @@
 
 </main>     <!-- end main grid -->
 </div>      <!-- end .app -->
-
+<script src="./script.js"></script>
+</body>
+</html>
