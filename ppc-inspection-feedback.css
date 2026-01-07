@@ -348,6 +348,128 @@ textarea{ resize: vertical; }
   color: var(--muted);
   font-size: 12px;
 }
+.saved{
+  display:flex;
+  flex-direction:column;
+  gap: 10px;
+}
+
+.saved-card{
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 12px;
+  display:flex;
+  justify-content:space-between;
+  gap: 12px;
+  align-items:flex-start;
+}
+
+.saved-card h4{
+  margin:0;
+  font-size: 13.5px;
+}
+.saved-card p{
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+/* Saved selection icon toggle (email) */
+.select-toggle{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,.03);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* hide the real checkbox */
+.select-toggle input{
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+/* icon */
+.select-icon{
+  font-size: 15px;
+  line-height: 1;
+  opacity: 0.75;
+}
+
+/* selected state */
+.select-toggle:has(input:checked){
+  border-color: rgba(168,85,247,.55);
+  box-shadow: 0 0 0 3px rgba(168,85,247,.14) inset;
+}
+.select-toggle:has(input:checked) .select-icon{
+  opacity: 1;
+}
+
+/* Saved selection counter */
+.selected-count{
+  font-size: 12px;
+  color: var(--muted);
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255,255,255,.03);
+  align-self: center; /* sits nicely in the row */
+}
+
+/* --- Saved card: tiny select icon toggle (mobile friendly) --- */
+.select-toggle{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:38px;
+  height:38px;
+  border-radius:999px;
+  border:1px solid rgba(120,120,120,.25);
+  background:rgba(255,255,255,.04);
+  cursor:pointer;
+  user-select:none;
+}
+
+.select-toggle input{
+  position:absolute;
+  opacity:0;
+  pointer-events:none;
+}
+
+.select-icon{
+  font-size:18px;
+  line-height:1;
+  transform:translateY(1px);
+  opacity:.55;
+}
+
+/* Selected state */
+.select-toggle:has(input:checked){
+  border-color: rgba(168,85,247,.75);
+  background: rgba(168,85,247,.18);
+}
+
+.select-toggle:has(input:checked) .select-icon{
+  opacity:1;
+}
+
+/* Nice keyboard focus */
+.select-toggle:has(input:focus-visible){
+  outline:2px solid rgba(168,85,247,.6);
+  outline-offset:2px;
+}
+
+/* MODAL */
+.backdrop{
+  ...
+}
 
 /* MODAL */
 .backdrop{
@@ -482,6 +604,36 @@ textarea{ resize: vertical; }
     background: #fff !important;
     padding: 18px !important;
   }
+  /* ===== Watermark (faint logo behind text) ===== */
+  #printArea{
+    position: absolute !important; /* you already set this, keep it */
+  }
+
+  #printArea{
+    position: relative !important; /* this is needed so watermark can be positioned inside */
+  }
+
+  #printArea .print-watermark{
+    position: absolute !important;
+    inset: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    pointer-events: none !important;
+    z-index: 0 !important;
+  }
+
+  #printArea .print-watermark img{
+    width: 70% !important;
+    max-width: 520px !important;
+    opacity: 0.07 !important; /* 👈 adjust this if needed */
+  }
+
+  /* Ensure printed content is ABOVE the watermark */
+  #printArea > *{
+    position: relative !important;
+    z-index: 1 !important;
+  }
 
     /* Base print typography */
   #printArea, #printArea * {
@@ -553,5 +705,59 @@ textarea{ resize: vertical; }
 
 /* Engineers tab helpers */
 #tabEngineers .output { min-height: 320px; }
+/* Engineer typeahead "ghost" */
+.ghost-field{
+  position: relative;
+}
 
+.ghost-field input{
+  position: relative;
+  z-index: 2;
+  background: rgba(255,255,255,.04);
+}
+
+.ghost-text{
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+
+  /* match input padding + font */
+  padding: 10px 10px;
+  font: inherit;
+  border-radius: 12px;
+
+  color: rgba(184,178,201,.65); /* muted ghost colour */
+}
+
+body.light .ghost-text{
+  color: rgba(92,81,108,.55);
+}
+
+.ghost-text .typed{
+  color: transparent; /* hides the already-typed part */
+}
+/* Engineer name ghost suggestion */
+.engineer-wrap {
+  position: relative;
+}
+
+#engineerGhost {
+  position: absolute;
+  top: 45%;
+  left: 5px;               /* 🔑 MATCH input left padding */
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-size: inherit;
+  font-family: inherit;
+  color: var(--muted);
+  opacity: 0.55;
+  white-space: nowrap;
+}
+
+#engineerGhost .typed {
+  color: transparent;      /* hides duplicate typed text */
+}
 
