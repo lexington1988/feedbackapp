@@ -468,11 +468,6 @@ textarea{ resize: vertical; }
 
 /* MODAL */
 .backdrop{
-  ...
-}
-
-/* MODAL */
-.backdrop{
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,.55);
@@ -582,126 +577,125 @@ textarea{ resize: vertical; }
 
 /* PRINT */
 @media print {
-  /* Hide everything by default */
-  body * {
-    visibility: hidden !important;
+
+  /* ✅ Remove the app from the print layout completely (prevents blank page 1) */
+  body > *:not(#printArea) {
+    display: none !important;
   }
 
-  /* Show ONLY printArea and its children */
-  #printArea * {
-    visibility: visible !important;
-  }
-
-  /* Put printArea at the top-left of the page */
+  /* ✅ Make sure printArea is included in layout */
   #printArea {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
+    display: block !important;
+    position: relative !important;   /* anchor watermark layering */
+    left: auto !important;
+    top: auto !important;
     width: 100% !important;
     height: auto !important;
-
-    display: block !important;   /* important for CodePen */
+    margin: 0 !important;
+    padding: 0 !important;
     background: #fff !important;
-    padding: 18px !important;
-  }
-  /* ===== Watermark (faint logo behind text) ===== */
-  #printArea{
-    position: absolute !important; /* you already set this, keep it */
+    overflow: visible !important;
   }
 
-  #printArea{
-    position: relative !important; /* this is needed so watermark can be positioned inside */
-  }
+  /* ✅ Center the content nicely on the page */
+ #printArea .print-content {
+  max-width: 760px !important;
+  margin: 0 auto !important;
+  padding: 18px !important;
+  padding-top: 10mm !important; /* ✅ pushes content below the logo band */
+  position: relative !important;
+  z-index: 1 !important;
+}
 
-  #printArea .print-watermark{
-    position: absolute !important;
-    inset: 0 !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    pointer-events: none !important;
-    z-index: 0 !important;
-  }
 
-  #printArea .print-watermark img{
-    width: 70% !important;
-    max-width: 520px !important;
-    opacity: 0.07 !important; /* 👈 adjust this if needed */
-  }
+  /* ===== Watermark (behind content) ===== */
+  #printArea .print-watermark {
+  position: fixed !important;
+  top: 12mm !important;       /* distance from top of page */
+  left: 0 !important;
+  right: 0 !important;
+  height: 90mm !important;    /* reserved watermark band */
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: center !important;  /* centered horizontally */
+  pointer-events: none !important;
+  z-index: 0 !important;
+}
 
-  /* Ensure printed content is ABOVE the watermark */
-  #printArea > *{
-    position: relative !important;
-    z-index: 1 !important;
-  }
 
-    /* Base print typography */
+
+  #printArea .print-watermark img {
+  width: min(560px, 86vw) !important;  /* a bit wider for header */
+  height: auto !important;
+  opacity: 0.10 !important;            /* adjust as needed */
+}
+
+
+  /* Print typography */
   #printArea, #printArea * {
     color: #111 !important;
-    background: transparent !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
+  html, body {
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
   #printArea h1 {
-    margin: 0 0 10px;
-    font-size: 22px;
-    letter-spacing: .2px;
+    margin: 0 0 10px !important;
+    font-size: 22px !important;
+    letter-spacing: .2px !important;
   }
 
   #printArea h3 {
-    margin: 0 0 8px;
-    font-size: 13.5px;
+    margin: 0 0 8px !important;
+    font-size: 13.5px !important;
   }
 
-  /* “Meta” lines under the title */
   #printArea .muted {
     color: #444 !important;
-    font-size: 12px;
-    line-height: 1.35;
-    margin: 0 0 10px;
+    font-size: 12px !important;
+    line-height: 1.35 !important;
+    margin: 0 0 10px !important;
   }
 
-  /* ✅ Polished card sections (this brings back your “original” look) */
   #printArea .box {
     border: 1px solid #d7d7d7 !important;
     border-radius: 12px !important;
     padding: 12px 14px !important;
     margin: 12px 0 !important;
     background: #fff !important;
+    break-inside: avoid !important;
   }
 
-  /* Lists */
   #printArea ul {
-    margin: 6px 0 0;
-    padding-left: 18px;
-  }
-  #printArea li {
-    margin: 4px 0;
+    margin: 6px 0 0 !important;
+    padding-left: 18px !important;
   }
 
-  /* Finding blocks */
+  #printArea li {
+    margin: 4px 0 !important;
+  }
+
   #printArea .rp-block {
     border: 1px solid #e2e2e2 !important;
     border-radius: 10px !important;
     padding: 10px 12px !important;
     margin: 10px 0 !important;
+    break-inside: avoid !important;
   }
 
   #printArea .rp-small,
   #printArea .rp-meta {
     color: #555 !important;
-    font-size: 12px;
-    line-height: 1.35;
-  }
-
-
-  /* Remove any app layout spacing affecting print */
-  html, body {
-    margin: 0 !important;
-    padding: 0 !important;
+    font-size: 12px !important;
+    line-height: 1.35 !important;
   }
 }
+
 
 /* Engineers tab helpers */
 #tabEngineers .output { min-height: 320px; }
