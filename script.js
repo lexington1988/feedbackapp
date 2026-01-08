@@ -15,7 +15,24 @@ const state = {
   editingModal: null,
   db: loadDb()
 };
+// ===== Watermark logo (IMPORTANT) =====
+// If you're on CodePen, you MUST use a full https URL to the image asset.
+// If you're on GitHub Pages and logo.png is in the same folder as index.html,
+// you can leave it as "logo.png".
+const LOGO_URL = "https://lexington1988.github.io/feedbackapp/logo.png";
+ // <-- change to your CodePen asset URL if needed
 
+function resolveLogoUrl() {
+  try {
+    // If LOGO_URL is already absolute, leave it.
+    if (/^https?:\/\//i.test(LOGO_URL)) return LOGO_URL;
+
+    // Otherwise make it absolute relative to the current page URL.
+    return new URL(LOGO_URL, window.location.href).href;
+  } catch {
+    return "";
+  }
+}
 // ---------- Init ----------
 window.addEventListener("DOMContentLoaded", init);
 
@@ -134,14 +151,15 @@ el("clearAllBtn").addEventListener("click", clearAll);
     el("rangeSelect").addEventListener("change", onRangeChange);
     el("generateEngineerBtn").addEventListener("click", generateEngineerSummary);
     el("copyEngineerBtn").addEventListener("click", () => copyToClipboard(el("engineerOutput").innerText));
-   el("printEngineerBtn").addEventListener("click", () => {
+   el("printEngineerBtn").addEventListener("click", async () => {
+  // ✅ ensure we only ever have ONE printArea
   document.querySelectorAll("#printArea").forEach((node, i) => {
     if (i > 0) node.remove();
   });
+
   const pa = el("printArea");
   pa.innerHTML = "";
   pa.innerHTML = buildPrintableEngineerHTML();
-
   pa.classList.remove("hidden");
 
   const restore = () => {
@@ -150,10 +168,22 @@ el("clearAllBtn").addEventListener("click", clearAll);
   };
   window.addEventListener("afterprint", restore, { once: true });
 
+  // ✅ WAIT for watermark image to load (prevents missing logo in print preview)
+  const wmImg = pa.querySelector(".print-watermark img");
+  if (wmImg) {
+    await new Promise((resolve) => {
+      if (wmImg.complete) return resolve();
+      wmImg.addEventListener("load", resolve, { once: true });
+      wmImg.addEventListener("error", resolve, { once: true });
+      setTimeout(resolve, 1200);
+    });
+  }
+
   requestAnimationFrame(() => {
     setTimeout(() => window.print(), 50);
   });
 });
+
 
 
 
@@ -713,9 +743,8 @@ function buildReportText() {
   return lines.join("\n");
 }
 function getWatermarkHTML() {
-  // Build an absolute URL to avoid any relative-path weirdness on GitHub Pages,
-  // plus a cache-buster so updated logos show immediately.
-  const logoUrl = new URL("logo.png", window.location.href).href + `?v=${Date.now()}`;
+  const logoUrl = resolveLogoUrl();
+  if (!logoUrl) return "";
 
   return `
     <div class="print-watermark" aria-hidden="true">
@@ -723,6 +752,8 @@ function getWatermarkHTML() {
     </div>
   `;
 }
+
+
 
 
 function buildPrintableReportHTML() {
@@ -758,11 +789,11 @@ function buildPrintableReportHTML() {
       `).join("")
     : `<div class="muted">No findings recorded.</div>`;
 
-  return `
+return `
   ${getWatermarkHTML()}
 
-  <h1>Inspection Feedback Report</h1>
-
+  <div class="print-content">
+    <h1>Inspection Feedback Report</h1>
 
     <div class="muted">
       ${metaHtml}
@@ -786,6 +817,40 @@ function buildPrintableReportHTML() {
     <div class="box">
       <h3>Close-out</h3>
       <div>Please confirm once actions are complete. If revisit is required, arrange a suitable time for reinspection.</div>
+    </div>
+  </div>
+`;
+
+
+}
+function buildPrintableEngineerHTML() {
+  // Ensure dropdown is up to date
+  refreshEngineerDropdown();
+
+  const engineer = el("engineerSelect")?.value?.trim() || "—";
+  const range = rangeLabel();
+  const text = el("engineerOutput")?.innerText?.trim() || "No summary generated.";
+
+  const esc = escapeHtml;
+
+  return `
+    ${getWatermarkHTML()}
+
+    <div class="print-content">
+      <h1>Engineer Summary Report</h1>
+
+      <div class="muted">
+        <div><strong>Engineer:</strong> ${esc(engineer)}</div>
+        <div><strong>Range:</strong> ${esc(range)}</div>
+        <div><strong>Generated:</strong> ${esc(formatDate(new Date().toISOString().slice(0,10)))}</div>
+      </div>
+
+      <div class="box">
+        <h3>Summary</h3>
+        <pre style="white-space:pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size:12.5px; line-height:1.45; margin:0;">
+${esc(text)}
+        </pre>
+      </div>
     </div>
   `;
 }
