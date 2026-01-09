@@ -6,6 +6,8 @@
 */
 
 const STORAGE_KEY = "ppc_inspection_feedback_v1";
+const CLOUDINARY_CLOUD_NAME = "dnz3fuyjx";
+const CLOUDINARY_UPLOAD_PRESET = "feedback";
 
 const el = (id) => document.getElementById(id);
 const uid = () => Math.random().toString(16).slice(2) + Date.now().toString(16);
@@ -14,8 +16,11 @@ const state = {
   current: null,
   editingModal: null,
   db: loadDb(),
-  modalPhotoDataUrl: "" // ✅ temp holding area while editing
+  modalPhotoDataUrl: "", // local preview
+  modalPhotoUrl: ""      // ✅ Cloudinary URL (saved in the finding)
 };
+
+
 
 // ===== Watermark logo (IMPORTANT) =====
 // If you're on CodePen, you MUST use a full https URL to the image asset.
@@ -35,6 +40,91 @@ function resolveLogoUrl() {
     return "";
   }
 }
+// ===================== Firebase Cloud Sync =====================
+// 1) In Firebase Console enable: Authentication -> Email/Password
+// 2) Create yourself a user (your email + password)
+// 3) Paste your firebaseConfig below (from Project settings)
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAeTLlKPffedC6XCP83zan-4ue0LqZR_I0",
+  authDomain: "ppcfeedback-5b2a5.firebaseapp.com",
+  projectId: "ppcfeedback-5b2a5",
+  storageBucket: "ppcfeedback-5b2a5.firebasestorage.app",
+  appId: "1:560785286512:web:2f2ee57c7eeb6c23121bb5"
+};
+
+firebase.initializeApp(firebaseConfig);
+
+const auth = firebase.auth();
+const cloudDb = firebase.firestore();
+
+
+let cloudUnsub = null;
+
+function cloudSignedIn() {
+  return !!auth.currentUser;
+}
+
+function getUser() {
+  const u = auth.currentUser;
+  if (!u) throw new Error("Not logged in");
+  return u;
+}
+
+function inspectionsCol(uid) {
+  return cloudDb.collection("users").doc(uid).collection("inspections");
+}
+
+function startCloudSync() {
+  const u = getUser();
+
+  if (cloudUnsub) cloudUnsub();
+
+  cloudUnsub = inspectionsCol(u.uid)
+    .orderBy("updatedAt", "desc")
+    .onSnapshot((snap) => {
+      const inspections = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      state.db.inspections = inspections;
+
+      // keep a local cache too
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ inspections }));
+
+      renderSavedList();
+      refreshEngineerDropdown();
+      refreshEngineerDatalist();
+    });
+}
+
+function stopCloudSync() {
+  if (cloudUnsub) cloudUnsub();
+  cloudUnsub = null;
+}
+
+async function upsertInspectionCloud(ins) {
+  const u = getUser();
+  const now = new Date().toISOString();
+  const ref = inspectionsCol(u.uid).doc(ins.id);
+
+  const payload = {
+    ...ins,
+    updatedAt: now,
+    createdAt: ins.createdAt || now
+  };
+
+  await ref.set(payload, { merge: true });
+}
+
+async function deleteInspectionCloud(id) {
+  const u = getUser();
+  await inspectionsCol(u.uid).doc(id).delete();
+}
+
+// Convert a dataURL to Blob (for Storage upload)
+async function dataUrlToBlob(dataUrl) {
+  const res = await fetch(dataUrl);
+  return await res.blob();
+}
+
 // ---------- Init ----------
 window.addEventListener("DOMContentLoaded", init);
 
@@ -64,6 +154,49 @@ function init() {
   el("modalBackdrop").addEventListener("click", closeModal);
   el("saveModalBtn").addEventListener("click", saveModalItem);
   el("deleteItemBtn").addEventListener("click", deleteModalItem);
+  // -------- Cloud login / logout ----------
+if (el("loginBtn")) {
+  el("loginBtn").addEventListener("click", async () => {
+    const email = prompt("Email:");
+    if (!email) return;
+    const password = prompt("Password:");
+    if (!password) return;
+
+    try {
+      await auth.signInWithEmailAndPassword(email.trim(), password);
+      alert("Logged in. Cloud sync is on.");
+    } catch (err) {
+      console.error(err);
+      alert("Login failed. Check email/password in Firebase Auth.");
+    }
+  });
+}
+
+if (el("logoutBtn")) {
+  el("logoutBtn").addEventListener("click", async () => {
+    try {
+      await auth.signOut();
+      alert("Logged out. Using local device storage only.");
+    } catch (err) {
+      console.error(err);
+      alert("Logout failed.");
+    }
+  });
+}
+
+// When auth state changes, start/stop sync and toggle buttons
+auth.onAuthStateChanged((user) => {
+  if (user) {
+    startCloudSync();
+    if (el("loginBtn")) el("loginBtn").classList.add("hidden");
+    if (el("logoutBtn")) el("logoutBtn").classList.remove("hidden");
+  } else {
+    stopCloudSync();
+    if (el("loginBtn")) el("loginBtn").classList.remove("hidden");
+    if (el("logoutBtn")) el("logoutBtn").classList.add("hidden");
+  }
+});
+
 // Photo input (Finding modal)
 if (el("findingPhoto")) {
   el("findingPhoto").addEventListener("change", async (e) => {
@@ -71,22 +204,35 @@ if (el("findingPhoto")) {
     if (!file) return;
 
     try {
+      // 1) Make a compressed preview (what you already do)
       state.modalPhotoDataUrl = await fileToCompressedDataUrl(file, 1200, 0.75);
       setPhotoPreview(state.modalPhotoDataUrl);
+
+      // 2) Upload the compressed dataURL to Cloudinary
+      state.modalPhotoUrl = await uploadCompressedDataUrlToCloudinary(state.modalPhotoDataUrl);
+
     } catch (err) {
       console.error(err);
-      alert("Could not load that photo. Try a different image.");
+      alert("Photo upload failed. Try again.");
+
+      state.modalPhotoDataUrl = "";
+      state.modalPhotoUrl = "";
+      if (el("findingPhoto")) el("findingPhoto").value = "";
+      setPhotoPreview("");
     }
   });
 }
 
+
 if (el("removeFindingPhotoBtn")) {
   el("removeFindingPhotoBtn").addEventListener("click", () => {
     state.modalPhotoDataUrl = "";
+    state.modalPhotoUrl = "";
     if (el("findingPhoto")) el("findingPhoto").value = "";
     setPhotoPreview("");
   });
 }
+
 
   // Tabs
   document.querySelectorAll(".tab").forEach(btn => {
@@ -320,7 +466,7 @@ function pullFormIntoCurrent() {
   c.outcome = el("outcomeSelect").value;
 }
 
-function saveCurrentInspection() {
+async function saveCurrentInspection() {
   pullFormIntoCurrent();
   const c = state.current;
 
@@ -333,13 +479,25 @@ function saveCurrentInspection() {
   if (idx >= 0) state.db.inspections[idx] = structuredClone(c);
   else state.db.inspections.unshift(structuredClone(c));
 
-    saveDb();
+  saveDb();
   renderSavedList();
-  refreshEngineerDropdown();  // ✅ ensure Engineers sees it immediately
-  refreshEngineerDatalist();  // ✅ update suggestions list
-  alert("Saved.");
+  refreshEngineerDropdown();
+  refreshEngineerDatalist();
 
+  // ✅ Cloud save if logged in
+  if (cloudSignedIn()) {
+    try {
+      await upsertInspectionCloud(structuredClone(c));
+    } catch (err) {
+      console.error(err);
+      alert("Saved locally, but cloud save failed (check Firebase config/rules).");
+      return;
+    }
+  }
+
+  alert(cloudSignedIn() ? "Saved (cloud sync on)." : "Saved (local only).");
 }
+
 
 function loadInspectionById(id) {
   const found = state.db.inspections.find(x => x.id === id);
@@ -358,6 +516,14 @@ function deleteInspectionById(id) {
   if (!ok) return;
   state.db.inspections = state.db.inspections.filter(x => x.id !== id);
     saveDb();
+  // ✅ Cloud delete if logged in
+if (cloudSignedIn()) {
+  deleteInspectionCloud(id).catch((err) => {
+    console.error(err);
+    alert("Deleted locally, but cloud delete failed.");
+  });
+}
+
   renderSavedList();
   refreshEngineerDropdown();
   refreshEngineerDatalist(); // ✅ update suggestions list
@@ -550,6 +716,7 @@ function closeModal() {
   el("modal").classList.add("hidden");
 
   state.modalPhotoDataUrl = "";
+ state.modalPhotoUrl = "";
   if (el("findingPhoto")) el("findingPhoto").value = "";
   setPhotoPreview("");
 
@@ -557,7 +724,7 @@ function closeModal() {
 }
 
 
-function saveModalItem() {
+async function saveModalItem() {
   const meta = state.editingModal;
   if (!meta) return;
 
@@ -577,9 +744,25 @@ function saveModalItem() {
 const title = (titleEl ? titleEl.value : "").trim();
 if (!title) { alert("Add a finding title (what you saw)."); return; }
 
+// ✅ Make sure we have a stable finding id
+const findingId = meta.id || uid();
+
+// ✅ If user clicked Save before Cloudinary finished, wait and upload now
+if (state.modalPhotoDataUrl && !state.modalPhotoUrl) {
+  try {
+    state.modalPhotoUrl = await uploadCompressedDataUrlToCloudinary(state.modalPhotoDataUrl);
+  } catch (err) {
+    console.error(err);
+    alert("Photo upload failed. The finding will save, but without the cloud photo link.");
+    state.modalPhotoUrl = "";
+  }
+}
+
+
 
   const obj = {
-  id: meta.id || uid(),
+  id: findingId,
+
   category: el("findingCategory").value,
   severity: el("findingSeverity").value,
   tag: el("findingTag") ? el("findingTag").value : "OTHER",
@@ -590,7 +773,11 @@ due: el("findingDue") ? el("findingDue").value : "48 hours",
   why: el("findingWhy").value.trim(),
   action: el("findingAction").value.trim(),
   notes: el("findingNotes").value.trim(),
-  photoDataUrl: state.modalPhotoDataUrl || ""
+ photoDataUrl: "", // keep empty to avoid huge storage
+photoUrl: state.modalPhotoUrl || ""
+
+
+
 };
 
 
@@ -744,21 +931,22 @@ function renderReportPreview() {
   parts.push(`<div class="rp-section-title">Findings & required actions</div>`);
   if (!findings.length) {
     parts.push(`<div class="rp-small">No findings recorded.</div>`);
-  } else {
-    findings.forEach(f => {
-      parts.push(`
-        <div class="rp-block">
-          <div><strong>${escapeHtml(f.title)}</strong></div>
-          <div class="rp-small">${escapeHtml(f.category)} • ${escapeHtml(f.severity)} • Due: ${escapeHtml(f.due)} • Status: ${escapeHtml(f.status || "Open")} • Tag: ${escapeHtml(f.tag || "OTHER")}</div>
-          ${f.why ? `<div class="rp-small"><strong>Why it matters:</strong> ${escapeHtml(f.why)}</div>` : ""}
-          ${f.action ? `<div class="rp-small"><strong>Action:</strong> ${escapeHtml(f.action)}</div>` : ""}
-          ${f.notes ? `<div class="rp-small"><strong>Notes:</strong> ${escapeHtml(f.notes)}</div>` : ""}
-          ${f.photoDataUrl ? `<div style="margin-top:8px;"><img src="${f.photoDataUrl}" style="max-width:100%; border-radius:12px; border:1px solid var(--border);" /></div>` : ""}
+ } else {
+  findings.forEach(f => {
+    parts.push(`
+      <div class="rp-block">
+        <div><strong>${escapeHtml(f.title)}</strong></div>
+        <div class="rp-small">${escapeHtml(f.category)} • ${escapeHtml(f.severity)} • Due: ${escapeHtml(f.due)} • Status: ${escapeHtml(f.status || "Open")} • Tag: ${escapeHtml(f.tag || "OTHER")}</div>
+        ${f.why ? `<div class="rp-small"><strong>Why it matters:</strong> ${escapeHtml(f.why)}</div>` : ""}
+        ${f.action ? `<div class="rp-small"><strong>Action:</strong> ${escapeHtml(f.action)}</div>` : ""}
+        ${f.notes ? `<div class="rp-small"><strong>Notes:</strong> ${escapeHtml(f.notes)}</div>` : ""}
+        ${photoHtml(f, "#e2e2e2")}
 
-        </div>
-      `);
-    });
-  }
+      </div>
+    `);
+  });
+}
+
 
   parts.push(`<div class="rp-section-title">Close-out</div>`);
   parts.push(`<div class="rp-small">Please confirm once actions are complete. If revisit is required, arrange a suitable time for reinspection.</div>`);
@@ -854,7 +1042,9 @@ function buildPrintableReportHTML() {
           ${f.why ? `<div class="rp-small"><strong>Why it matters:</strong> ${esc(f.why)}</div>` : ""}
           ${f.action ? `<div class="rp-small"><strong>Action:</strong> ${esc(f.action)}</div>` : ""}
           ${f.notes ? `<div class="rp-small"><strong>Notes:</strong> ${esc(f.notes)}</div>` : ""}
-          ${f.photoDataUrl ? `<div style="margin-top:8px;"><img src="${f.photoDataUrl}" style="max-width:100%; border-radius:12px; border:1px solid #e2e2e2;" /></div>` : ""}
+         ${photoHtml(f, "#e2e2e2")}
+
+
 
         </div>
       `).join("")
@@ -923,11 +1113,9 @@ function buildPrintableEngineerHTML() {
                     • Tag: ${esc(f.tag || "OTHER")}
                   </div>
                   ${f.action ? `<div class="rp-small"><strong>Action:</strong> ${esc(f.action)}</div>` : ""}
-                  ${f.photoDataUrl ? `
-                    <div style="margin-top:8px;">
-                      <img src="${f.photoDataUrl}" style="max-width:100%; border-radius:12px; border:1px solid #e2e2e2;" />
-                    </div>
-                  ` : ""}
+                 ${photoHtml(f, "#e2e2e2")}
+
+
                 </div>
               `).join("")
             : `<div class="rp-small">No findings on this audit.</div>`;
@@ -1596,6 +1784,25 @@ function downloadTextFile(filename, text) {
   a.click();
   URL.revokeObjectURL(url);
 }
+async function uploadCompressedDataUrlToCloudinary(dataUrl) {
+  const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+
+  const fd = new FormData();
+  fd.append("file", dataUrl); // ✅ Cloudinary accepts data URLs
+  fd.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+
+  const res = await fetch(url, { method: "POST", body: fd });
+  if (!res.ok) {
+    const msg = await res.text();
+    throw new Error(`Cloudinary upload failed: ${msg}`);
+  }
+
+  const data = await res.json();
+console.log("Cloudinary response:", data);
+return data.secure_url || "";
+
+}
+
 // --- Photo helpers (compress to keep localStorage happy) ---
 async function fileToCompressedDataUrl(file, maxW = 1200, quality = 0.75) {
   const dataUrl = await new Promise((resolve, reject) => {
@@ -1640,6 +1847,13 @@ function setPhotoPreview(dataUrl) {
 
   img.src = dataUrl;
   wrap.classList.remove("hidden");
+}
+function photoHtml(f, borderColor) {
+  const src = (f && (f.photoUrl || f.photoDataUrl)) ? (f.photoUrl || f.photoDataUrl) : "";
+  if (!src) return "";
+  return `<div style="margin-top:8px;">
+    <img src="${src}" style="max-width:100%; border-radius:12px; border:1px solid ${borderColor};" />
+  </div>`;
 }
 
 function escapeHtml(str) {
