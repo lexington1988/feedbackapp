@@ -606,6 +606,9 @@ textarea{ resize: vertical; }
   position: relative !important;
   z-index: 1 !important;
 }
+@media print{
+  #printArea img{ max-width: 100% !important; height: auto !important; }
+}
 
 
   /* ===== Watermark (behind content) ===== */
@@ -753,5 +756,19 @@ body.light .ghost-text{
 
 #engineerGhost .typed {
   color: transparent;      /* hides duplicate typed text */
+}
+.photo-preview{
+  margin-top: 8px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.photo-preview img{
+  width: 88px;
+  height: 88px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid var(--border);
 }
 
