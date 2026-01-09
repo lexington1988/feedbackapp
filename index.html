@@ -307,6 +307,16 @@
   <label class="field">
     <span>Notes (optional)</span>
     <textarea id="findingNotes" rows="2" placeholder="Anything extra you want to remember."></textarea>
+    <label class="field">
+  <span>Photo (optional)</span>
+  <input id="findingPhoto" type="file" accept="image/*" capture="environment" />
+</label>
+
+<div id="findingPhotoPreview" class="photo-preview hidden">
+  <img id="findingPhotoImg" alt="Finding photo preview" />
+  <button id="removeFindingPhotoBtn" class="btn ghost small" type="button">Remove photo</button>
+</div>
+
   </label>
 </div> <!-- end modalFindingFields -->
 </div> <!-- end modal-body -->
