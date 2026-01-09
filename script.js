@@ -13,8 +13,10 @@ const uid = () => Math.random().toString(16).slice(2) + Date.now().toString(16);
 const state = {
   current: null,
   editingModal: null,
-  db: loadDb()
+  db: loadDb(),
+  modalPhotoDataUrl: "" // ✅ temp holding area while editing
 };
+
 // ===== Watermark logo (IMPORTANT) =====
 // If you're on CodePen, you MUST use a full https URL to the image asset.
 // If you're on GitHub Pages and logo.png is in the same folder as index.html,
@@ -62,6 +64,29 @@ function init() {
   el("modalBackdrop").addEventListener("click", closeModal);
   el("saveModalBtn").addEventListener("click", saveModalItem);
   el("deleteItemBtn").addEventListener("click", deleteModalItem);
+// Photo input (Finding modal)
+if (el("findingPhoto")) {
+  el("findingPhoto").addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    try {
+      state.modalPhotoDataUrl = await fileToCompressedDataUrl(file, 1200, 0.75);
+      setPhotoPreview(state.modalPhotoDataUrl);
+    } catch (err) {
+      console.error(err);
+      alert("Could not load that photo. Try a different image.");
+    }
+  });
+}
+
+if (el("removeFindingPhotoBtn")) {
+  el("removeFindingPhotoBtn").addEventListener("click", () => {
+    state.modalPhotoDataUrl = "";
+    if (el("findingPhoto")) el("findingPhoto").value = "";
+    setPhotoPreview("");
+  });
+}
 
   // Tabs
   document.querySelectorAll(".tab").forEach(btn => {
@@ -261,6 +286,8 @@ function newInspection() {
   renderLists();
   renderOutputs();
   refreshEngineerDropdown(); // ✅ so Engineers tab sees current engineer immediately
+  resetFindingModalFields();
+
 }
 
 function writeFormFromCurrent() {
@@ -451,6 +478,23 @@ function renderSavedList() {
   refreshEngineerDatalist();
   updateSelectedCount();
 }
+function resetFindingModalFields() {
+  if (el("findingCategory")) el("findingCategory").value = "Flue";
+  if (el("findingSeverity")) el("findingSeverity").value = "Major";
+  if (el("findingTag")) el("findingTag").value = "OTHER";
+  if (el("findingStatus")) el("findingStatus").value = "Open";
+
+  if (el("findingTitle")) el("findingTitle").value = "";
+  if (el("findingDue")) el("findingDue").value = "48 hours";
+  if (el("findingWhy")) el("findingWhy").value = "";
+  if (el("findingAction")) el("findingAction").value = "";
+  if (el("findingNotes")) el("findingNotes").value = "";
+
+  // Photo state reset
+  state.modalPhotoDataUrl = "";
+  if (el("findingPhoto")) el("findingPhoto").value = "";
+  setPhotoPreview("");
+}
 
 
 
@@ -470,30 +514,48 @@ function openModal(type, id = null) {
     const existing = id ? state.current.positives.find(x => x.id === id) : null;
     el("positiveTextInput").value = existing?.text || "";
     el("positiveTextInput").focus();
+ } else {
+  el("modalTitle").innerText = id ? "Edit finding" : "Add finding";
+  const existing = id ? state.current.findings.find(x => x.id === id) : null;
+
+  if (!existing) {
+    // ✅ New finding = hard reset every field
+    resetFindingModalFields();
   } else {
-    el("modalTitle").innerText = id ? "Edit finding" : "Add finding";
-    const existing = id ? state.current.findings.find(x => x.id === id) : null;
+    // ✅ Editing an existing finding
+    if (el("findingCategory")) el("findingCategory").value = existing.category || "Flue";
+    if (el("findingSeverity")) el("findingSeverity").value = existing.severity || "Major";
+    if (el("findingTag")) el("findingTag").value = existing.tag || "OTHER";
+    if (el("findingStatus")) el("findingStatus").value = existing.status || "Open";
 
-    el("findingCategory").value = existing?.category || "Flue";
-    el("findingSeverity").value = existing?.severity || "Major";
-    el("findingTitle").value = existing?.title || "";
-    el("findingDue").value = existing?.due || "48 hours";
-    el("findingWhy").value = existing?.why || "";
-    el("findingAction").value = existing?.action || "";
-    el("findingNotes").value = existing?.notes || "";
+    if (el("findingTitle")) el("findingTitle").value = existing.title || "";
+    if (el("findingDue")) el("findingDue").value = existing.due || "48 hours";
+    if (el("findingWhy")) el("findingWhy").value = existing.why || "";
+    if (el("findingAction")) el("findingAction").value = existing.action || "";
+    if (el("findingNotes")) el("findingNotes").value = existing.notes || "";
 
-    if (el("findingTag")) el("findingTag").value = existing?.tag || "OTHER";
-    if (el("findingStatus")) el("findingStatus").value = existing?.status || "Open";
-
-    el("findingTitle").focus();
+    // Photo
+    state.modalPhotoDataUrl = existing.photoDataUrl || "";
+    if (el("findingPhoto")) el("findingPhoto").value = "";
+    setPhotoPreview(state.modalPhotoDataUrl);
   }
+
+  if (el("findingTitle")) el("findingTitle").focus();
+}
+
 }
 
 function closeModal() {
   el("modalBackdrop").classList.add("hidden");
   el("modal").classList.add("hidden");
+
+  state.modalPhotoDataUrl = "";
+  if (el("findingPhoto")) el("findingPhoto").value = "";
+  setPhotoPreview("");
+
   state.editingModal = null;
 }
+
 
 function saveModalItem() {
   const meta = state.editingModal;
@@ -511,21 +573,26 @@ function saveModalItem() {
     }
 
   } else {
-    const title = el("findingTitle").value.trim();
-    if (!title) { alert("Add a finding title (what you saw)."); return; }
+   const titleEl = el("findingTitle");
+const title = (titleEl ? titleEl.value : "").trim();
+if (!title) { alert("Add a finding title (what you saw)."); return; }
 
-    const obj = {
-      id: meta.id || uid(),
-      category: el("findingCategory").value,
-      severity: el("findingSeverity").value,
-      tag: el("findingTag") ? el("findingTag").value : "OTHER",
-      status: el("findingStatus") ? el("findingStatus").value : "Open",
-      title,
-      due: el("findingDue").value,
-      why: el("findingWhy").value.trim(),
-      action: el("findingAction").value.trim(),
-      notes: el("findingNotes").value.trim()
-    };
+
+  const obj = {
+  id: meta.id || uid(),
+  category: el("findingCategory").value,
+  severity: el("findingSeverity").value,
+  tag: el("findingTag") ? el("findingTag").value : "OTHER",
+  status: el("findingStatus") ? el("findingStatus").value : "Open",
+    title: title,
+due: el("findingDue") ? el("findingDue").value : "48 hours",
+
+  why: el("findingWhy").value.trim(),
+  action: el("findingAction").value.trim(),
+  notes: el("findingNotes").value.trim(),
+  photoDataUrl: state.modalPhotoDataUrl || ""
+};
+
 
     if (meta.id) {
       const idx = state.current.findings.findIndex(x => x.id === meta.id);
@@ -686,6 +753,8 @@ function renderReportPreview() {
           ${f.why ? `<div class="rp-small"><strong>Why it matters:</strong> ${escapeHtml(f.why)}</div>` : ""}
           ${f.action ? `<div class="rp-small"><strong>Action:</strong> ${escapeHtml(f.action)}</div>` : ""}
           ${f.notes ? `<div class="rp-small"><strong>Notes:</strong> ${escapeHtml(f.notes)}</div>` : ""}
+          ${f.photoDataUrl ? `<div style="margin-top:8px;"><img src="${f.photoDataUrl}" style="max-width:100%; border-radius:12px; border:1px solid var(--border);" /></div>` : ""}
+
         </div>
       `);
     });
@@ -785,6 +854,8 @@ function buildPrintableReportHTML() {
           ${f.why ? `<div class="rp-small"><strong>Why it matters:</strong> ${esc(f.why)}</div>` : ""}
           ${f.action ? `<div class="rp-small"><strong>Action:</strong> ${esc(f.action)}</div>` : ""}
           ${f.notes ? `<div class="rp-small"><strong>Notes:</strong> ${esc(f.notes)}</div>` : ""}
+          ${f.photoDataUrl ? `<div style="margin-top:8px;"><img src="${f.photoDataUrl}" style="max-width:100%; border-radius:12px; border:1px solid #e2e2e2;" /></div>` : ""}
+
         </div>
       `).join("")
     : `<div class="muted">No findings recorded.</div>`;
@@ -824,14 +895,55 @@ return `
 
 }
 function buildPrintableEngineerHTML() {
-  // Ensure dropdown is up to date
   refreshEngineerDropdown();
 
   const engineer = el("engineerSelect")?.value?.trim() || "—";
-  const range = rangeLabel();
-  const text = el("engineerOutput")?.innerText?.trim() || "No summary generated.";
+  const audits = filterAuditsForEngineer(engineer);
 
+  const range = rangeLabel();
+  const summaryText = el("engineerOutput")?.innerText?.trim() || "No summary generated.";
   const esc = escapeHtml;
+
+  const auditsHtml = audits.length
+    ? audits
+        .slice()
+        .sort((a,b) => (b.date || "").localeCompare(a.date || "")) // newest first
+        .map(a => {
+          const findings = sortFindingsBySeverity(a.findings || []);
+          const photosCount = findings.filter(f => !!f.photoDataUrl).length;
+
+          const findingsHtml = findings.length
+            ? findings.map(f => `
+                <div class="rp-block">
+                  <div><strong>${esc(f.title || "(No title)")}</strong></div>
+                  <div class="rp-small">
+                    ${esc(f.category || "—")} • ${esc(f.severity || "—")}
+                    • Due: ${esc(f.due || "—")}
+                    • Status: ${esc(f.status || "Open")}
+                    • Tag: ${esc(f.tag || "OTHER")}
+                  </div>
+                  ${f.action ? `<div class="rp-small"><strong>Action:</strong> ${esc(f.action)}</div>` : ""}
+                  ${f.photoDataUrl ? `
+                    <div style="margin-top:8px;">
+                      <img src="${f.photoDataUrl}" style="max-width:100%; border-radius:12px; border:1px solid #e2e2e2;" />
+                    </div>
+                  ` : ""}
+                </div>
+              `).join("")
+            : `<div class="rp-small">No findings on this audit.</div>`;
+
+          return `
+            <div class="box">
+              <h3>${esc(a.engineer || "Engineer")} • ${esc(a.jobRef || "No job ref")} • ${esc(formatDate(a.date))}</h3>
+              <div class="rp-small">
+                Outcome: ${esc(a.outcome || "—")} • Positives: ${(a.positives || []).length} • Findings: ${findings.length} • Photos: ${photosCount}
+              </div>
+              ${findingsHtml}
+            </div>
+          `;
+        })
+        .join("")
+    : `<div class="box"><div class="rp-small">No audits found for this engineer in the selected range.</div></div>`;
 
   return `
     ${getWatermarkHTML()}
@@ -847,13 +959,15 @@ function buildPrintableEngineerHTML() {
 
       <div class="box">
         <h3>Summary</h3>
-        <pre style="white-space:pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size:12.5px; line-height:1.45; margin:0;">
-${esc(text)}
-        </pre>
+        <pre style="white-space:pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size:12.5px; line-height:1.45; margin:0;">${esc(summaryText)}</pre>
       </div>
+
+      <div class="rp-section-title">Audits in range (with photos)</div>
+      ${auditsHtml}
     </div>
   `;
 }
+
 
 
 // ---------- Engineers tab ----------
@@ -1153,8 +1267,8 @@ function buildCoachingParagraph(engineer, topTags, topCats) {
 
 function rangeLabel() {
   const r = el("rangeSelect")?.value || "last5";
-  if (r === "last5") return "last 5";
-  if (r === "last10") return "last 10";
+  if (r === "last5") return "last 5 Audits";
+  if (r === "last10") return "last 10 Audits";
   if (r === "30d") return "last 30 days";
   if (r === "90d") return "last 90 days";
   if (r === "custom") return "custom range";
@@ -1481,6 +1595,51 @@ function downloadTextFile(filename, text) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+// --- Photo helpers (compress to keep localStorage happy) ---
+async function fileToCompressedDataUrl(file, maxW = 1200, quality = 0.75) {
+  const dataUrl = await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+
+  const img = await new Promise((resolve, reject) => {
+    const i = new Image();
+    i.onload = () => resolve(i);
+    i.onerror = reject;
+    i.src = dataUrl;
+  });
+
+  const scale = Math.min(1, maxW / img.width);
+  const w = Math.round(img.width * scale);
+  const h = Math.round(img.height * scale);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0, w, h);
+
+  // JPEG is smaller than PNG for photos
+  return canvas.toDataURL("image/jpeg", quality);
+}
+
+function setPhotoPreview(dataUrl) {
+  const wrap = el("findingPhotoPreview");
+  const img = el("findingPhotoImg");
+  if (!wrap || !img) return;
+
+  if (!dataUrl) {
+    img.src = "";
+    wrap.classList.add("hidden");
+    return;
+  }
+
+  img.src = dataUrl;
+  wrap.classList.remove("hidden");
 }
 
 function escapeHtml(str) {
