@@ -157,7 +157,8 @@ function init() {
   // -------- Cloud login / logout ----------
 if (el("loginBtn")) {
   el("loginBtn").addEventListener("click", async () => {
-    const email = prompt("Email:");
+    const email = prompt("Email:", "lex@fake.com");
+
     if (!email) return;
     const password = prompt("Password:");
     if (!password) return;
@@ -269,45 +270,57 @@ if (el("findingPhotoLibrary")) el("findingPhotoLibrary").value = "";
   el("verbalStyleSelect").addEventListener("change", renderOutputs);
   el("verbalLengthSelect").addEventListener("change", renderOutputs);
 
-  el("copyVerbalBtn").addEventListener("click", () => copyToClipboard(el("verbalOutput").innerText));
+  el("copyVerbalBtn").addEventListener("click", () => copyToClipboard(el("verbalOutput").value)
+);
   el("copyReportBtn").addEventListener("click", () => copyToClipboard(buildReportText()));
 el("emailReportBtn").addEventListener("click", async () => {
-  pullFormIntoCurrent();
-  const c = state.current;
+  try {
+    pullFormIntoCurrent();
+    const c = state.current;
 
-  // You can hardcode a default recipient later, or add an input field.
-  const to = ""; // e.g. "engineer@email.com"
-  const subject = `Inspection Feedback Report${c.jobRef ? ` - ${c.jobRef}` : ""}${c.engineer ? ` - ${c.engineer}` : ""}`;
-  const body = buildReportText();
+    const filename = `PPC-Inspection-Report${c.jobRef ? "-" + c.jobRef : ""}${c.engineer ? "-" + c.engineer.replace(/\s+/g, "_") : ""}.pdf`;
+    const pdfBlob = await buildPdfFromHtml(buildPrintableReportHTML(), filename);
 
-  // mailto links have length limits — if it's too long, we'll copy + open a shorter draft
-  const mailto = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    const file = new File([pdfBlob], filename, { type: "application/pdf" });
 
-  // conservative limit (varies by device/client)
-  if (mailto.length > 1800) {
-    await copyToClipboard(body);
-    const shortBody =
-      `Hi${c.engineer ? " " + c.engineer : ""},\n\n` +
-      `I’ve completed an inspection audit.${c.jobRef ? ` Job ref: ${c.jobRef}.` : ""}\n` +
-      `I’ve copied the full report to your clipboard — please paste it into this email.\n\n` +
-      `Thanks,\n`;
-    const fallback = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(shortBody)}`;
-    window.location.href = fallback;
-  } else {
-    window.location.href = mailto;
+    // If share-with-file is supported (mobile/tablet best case)
+    if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+      await navigator.share({
+        title: "Inspection Feedback Report",
+        text: "Inspection report PDF attached.",
+        files: [file]
+      });
+      return;
+    }
+
+    // Fallback: download PDF (desktop / older browsers)
+    const url = URL.createObjectURL(pdfBlob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    alert("PDF downloaded. Attach it to your email.");
+  } catch (err) {
+    console.error(err);
+    alert("Could not create/share the PDF. Check console for details.");
   }
 });
 
+
 el("printReportBtn").addEventListener("click", async () => {
-  // ✅ ensure we only ever have ONE printArea
-  document.querySelectorAll("#printArea").forEach((node, i) => {
-    if (i > 0) node.remove();
-  });
+  // Build the print HTML with the latest values
+  pullFormIntoCurrent();
 
   const pa = el("printArea");
   pa.innerHTML = "";
   pa.innerHTML = buildPrintableReportHTML();
   pa.classList.remove("hidden");
+
+  // ✅ wait 1 paint + wait for ALL images (watermark + Cloudinary photos)
+  await new Promise(requestAnimationFrame);
+  await waitForImages(pa, 4000);
 
   const restore = () => {
     pa.classList.add("hidden");
@@ -315,28 +328,10 @@ el("printReportBtn").addEventListener("click", async () => {
   };
   window.addEventListener("afterprint", restore, { once: true });
 
-  // ✅ WAIT for watermark image to load (prevents missing logo in print preview)
-  const wmImg = pa.querySelector(".print-watermark img");
-  if (wmImg) {
-    await new Promise((resolve) => {
-      // already loaded
-      if (wmImg.complete) return resolve();
-      wmImg.addEventListener("load", resolve, { once: true });
-      wmImg.addEventListener("error", resolve, { once: true }); // still print if it fails
-      // safety timeout so printing never gets stuck
-      setTimeout(resolve, 1200);
-    });
-  }
-
-  requestAnimationFrame(() => {
-    setTimeout(() => window.print(), 50);
-  });
+  // ✅ print after content is ready
+  setTimeout(() => window.print(), 50);
 });
-
-
-
-
-
+  
  // Saved
 el("exportAllBtn").addEventListener("click", exportAllJson);
 el("emailSelectedBtn").addEventListener("click", emailSelectedReports);
@@ -347,39 +342,79 @@ el("clearAllBtn").addEventListener("click", clearAll);
   if (el("rangeSelect")) {
     el("rangeSelect").addEventListener("change", onRangeChange);
     el("generateEngineerBtn").addEventListener("click", generateEngineerSummary);
-    el("copyEngineerBtn").addEventListener("click", () => copyToClipboard(el("engineerOutput").innerText));
+    el("copyEngineerBtn").addEventListener("click", () => copyToClipboard(el("engineerOutput").value)
+);
    el("printEngineerBtn").addEventListener("click", async () => {
-  // ✅ ensure we only ever have ONE printArea
+  const send = confirm(
+    "Send Engineer PDF?\n\nOK = Send (share/email PDF)\nCancel = Print / Save PDF"
+  );
+
+  // =========================
+  // OK = SEND PDF
+  // =========================
+  if (send) {
+    try {
+      // Ensure summary is up to date
+      generateEngineerSummary();
+
+      const engineer = el("engineerSelect")?.value?.trim() || "Engineer";
+      const range = (rangeLabel() || "").replace(/\s+/g, "_");
+      const filename = `PPC-Engineer-Summary-${engineer.replace(/\s+/g, "_")}-${range}.pdf`;
+
+      const pdfBlob = await buildPdfFromHtml(buildPrintableEngineerHTML(), filename);
+      const file = new File([pdfBlob], filename, { type: "application/pdf" });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+        await navigator.share({
+          title: "Engineer Summary Report",
+          text: "Engineer summary PDF attached.",
+          files: [file]
+        });
+        return;
+      }
+
+      // Fallback: download
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      alert("PDF downloaded. Attach it to your email.");
+      return;
+    } catch (err) {
+      console.error(err);
+      alert("Could not create/share the Engineer PDF. Check console for details.");
+      return;
+    }
+  }
+
+  // =========================
+  // Cancel = PRINT / SAVE PDF (existing behaviour)
+  // =========================
+
   document.querySelectorAll("#printArea").forEach((node, i) => {
     if (i > 0) node.remove();
   });
-
+generateEngineerSummary();
   const pa = el("printArea");
+ pa.innerHTML = "";
+pa.innerHTML = buildPrintableEngineerHTML();
+pa.classList.remove("hidden");
+
+await new Promise(requestAnimationFrame);
+await waitForImages(pa, 4000);
+
+const restore = () => {
+  pa.classList.add("hidden");
   pa.innerHTML = "";
-  pa.innerHTML = buildPrintableEngineerHTML();
-  pa.classList.remove("hidden");
+};
+window.addEventListener("afterprint", restore, { once: true });
 
-  const restore = () => {
-    pa.classList.add("hidden");
-    pa.innerHTML = "";
-  };
-  window.addEventListener("afterprint", restore, { once: true });
-
-  // ✅ WAIT for watermark image to load (prevents missing logo in print preview)
-  const wmImg = pa.querySelector(".print-watermark img");
-  if (wmImg) {
-    await new Promise((resolve) => {
-      if (wmImg.complete) return resolve();
-      wmImg.addEventListener("load", resolve, { once: true });
-      wmImg.addEventListener("error", resolve, { once: true });
-      setTimeout(resolve, 1200);
-    });
-  }
-
-  requestAnimationFrame(() => {
-    setTimeout(() => window.print(), 50);
-  });
+setTimeout(() => window.print(), 50);
 });
+
 
 
 
@@ -840,7 +875,8 @@ function deleteModalItem() {
 
 // ---------- Outputs ----------
 function renderOutputs() {
-  el("verbalOutput").innerText = buildVerbalScript();
+ el("verbalOutput").value = buildVerbalScript();
+
   renderReportPreview();
 }
 
@@ -1025,6 +1061,45 @@ function buildReportText() {
 
   return lines.join("\n");
 }
+async function buildPdfFromHtml(html, filename) {
+  // Build printArea content
+  const pa = el("printArea");
+  pa.innerHTML = html;
+  pa.classList.remove("hidden");
+
+  // Switch into PDF export layout
+  document.body.classList.add("pdf-export");
+
+  // Wait for watermark image (and any other images) to load
+  const imgs = Array.from(pa.querySelectorAll("img"));
+  await Promise.all(imgs.map(img => new Promise((resolve) => {
+    if (img.complete) return resolve();
+    img.addEventListener("load", resolve, { once: true });
+    img.addEventListener("error", resolve, { once: true });
+    setTimeout(resolve, 1500);
+  })));
+
+  // jsPDF (UMD)
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: "p", unit: "pt", format: "a4" });
+
+  // Render the printArea into PDF (auto pages)
+  await doc.html(pa, {
+    x: 24,
+    y: 24,
+    html2canvas: { scale: 2, useCORS: true },
+    autoPaging: "text"
+  });
+
+  // Cleanup
+  document.body.classList.remove("pdf-export");
+  pa.classList.add("hidden");
+  pa.innerHTML = "";
+
+  // Return as Blob
+  return doc.output("blob");
+}
+
 function getWatermarkHTML() {
   const logoUrl = resolveLogoUrl();
   if (!logoUrl) return "";
@@ -1117,7 +1192,8 @@ function buildPrintableEngineerHTML() {
   const audits = filterAuditsForEngineer(engineer);
 
   const range = rangeLabel();
-  const summaryText = el("engineerOutput")?.innerText?.trim() || "No summary generated.";
+  const summaryText = el("engineerOutput")?.value?.trim() || "No summary generated.";
+
   const esc = escapeHtml;
 
   const auditsHtml = audits.length
@@ -1126,7 +1202,8 @@ function buildPrintableEngineerHTML() {
         .sort((a,b) => (b.date || "").localeCompare(a.date || "")) // newest first
         .map(a => {
           const findings = sortFindingsBySeverity(a.findings || []);
-          const photosCount = findings.filter(f => !!f.photoDataUrl).length;
+          const photosCount = findings.filter(f => !!(f.photoUrl || f.photoDataUrl)).length;
+
 
           const findingsHtml = findings.length
             ? findings.map(f => `
@@ -1289,7 +1366,8 @@ function generateEngineerSummary() {
   }
 
   const summary = buildEngineerSummary(engineer, audits);
-  el("engineerOutput").innerText = summary.text;
+ el("engineerOutput").value = summary.text;
+
 }
 
 function filterAuditsForEngineer(engineerName) {
@@ -1881,6 +1959,19 @@ function photoHtml(f, borderColor) {
     <img src="${src}" style="max-width:100%; border-radius:12px; border:1px solid ${borderColor};" />
   </div>`;
 }
+async function waitForImages(root, timeoutMs = 3000) {
+  const imgs = Array.from(root.querySelectorAll("img"));
+  if (!imgs.length) return;
+
+  await Promise.race([
+    Promise.all(imgs.map(img => new Promise(resolve => {
+      if (img.complete) return resolve();
+      img.addEventListener("load", resolve, { once: true });
+      img.addEventListener("error", resolve, { once: true });
+    }))),
+    new Promise(resolve => setTimeout(resolve, timeoutMs))
+  ]);
+}
 
 function escapeHtml(str) {
   return String(str ?? "")
@@ -1889,4 +1980,29 @@ function escapeHtml(str) {
     .replaceAll(">","&gt;")
     .replaceAll('"',"&quot;")
     .replaceAll("'","&#039;");
+}
+// 🧩 Build a PDF blob from given HTML string
+async function buildPdfFromHtml(html, filename = "report.pdf") {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF("p", "pt", "a4");
+
+  // Create a temporary container to render the HTML
+  const container = document.createElement("div");
+  container.style.width = "800px";
+  container.innerHTML = html;
+  document.body.appendChild(container);
+
+  await doc.html(container, {
+    callback: function (pdf) {
+      document.body.removeChild(container);
+    },
+    margin: [20, 20, 20, 20],
+    autoPaging: "text",
+    x: 0,
+    y: 0,
+    width: 570,
+    windowWidth: 800
+  });
+
+  return doc.output("blob");
 }
