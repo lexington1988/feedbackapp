@@ -198,38 +198,64 @@ auth.onAuthStateChanged((user) => {
 });
 
 // Photo input (Finding modal)
-if (el("findingPhoto")) {
-  el("findingPhoto").addEventListener("change", async (e) => {
+async function handleFindingPhotoPicked(file) {
+  if (!file) return;
+
+  try {
+    // Preview (compressed)
+    state.modalPhotoDataUrl = await fileToCompressedDataUrl(file, 1200, 0.75);
+    setPhotoPreview(state.modalPhotoDataUrl);
+
+    // Upload to Cloudinary (save URL)
+    state.modalPhotoUrl = await uploadCompressedDataUrlToCloudinary(state.modalPhotoDataUrl);
+
+  } catch (err) {
+    console.error(err);
+    alert("Photo upload failed. Try again.");
+
+    state.modalPhotoDataUrl = "";
+    state.modalPhotoUrl = "";
+    setPhotoPreview("");
+  }
+}
+
+// Take Photo button -> triggers camera input
+if (el("takePhotoBtn") && el("findingPhotoCamera")) {
+  el("takePhotoBtn").addEventListener("click", () => {
+    el("findingPhotoCamera").click();
+  });
+
+  el("findingPhotoCamera").addEventListener("change", (e) => {
     const file = e.target.files && e.target.files[0];
-    if (!file) return;
+    handleFindingPhotoPicked(file);
+    e.target.value = ""; // allows taking another photo immediately
+  });
+}
 
-    try {
-      // 1) Make a compressed preview (what you already do)
-      state.modalPhotoDataUrl = await fileToCompressedDataUrl(file, 1200, 0.75);
-      setPhotoPreview(state.modalPhotoDataUrl);
+// Choose Photo button -> triggers library input
+if (el("choosePhotoBtn") && el("findingPhotoLibrary")) {
+  el("choosePhotoBtn").addEventListener("click", () => {
+    el("findingPhotoLibrary").click();
+  });
 
-      // 2) Upload the compressed dataURL to Cloudinary
-      state.modalPhotoUrl = await uploadCompressedDataUrlToCloudinary(state.modalPhotoDataUrl);
-
-    } catch (err) {
-      console.error(err);
-      alert("Photo upload failed. Try again.");
-
-      state.modalPhotoDataUrl = "";
-      state.modalPhotoUrl = "";
-      if (el("findingPhoto")) el("findingPhoto").value = "";
-      setPhotoPreview("");
-    }
+  el("findingPhotoLibrary").addEventListener("change", (e) => {
+    const file = e.target.files && e.target.files[0];
+    handleFindingPhotoPicked(file);
+    e.target.value = "";
   });
 }
 
 
+
 if (el("removeFindingPhotoBtn")) {
   el("removeFindingPhotoBtn").addEventListener("click", () => {
-    state.modalPhotoDataUrl = "";
-    state.modalPhotoUrl = "";
-    if (el("findingPhoto")) el("findingPhoto").value = "";
-    setPhotoPreview("");
+   state.modalPhotoDataUrl = "";
+state.modalPhotoUrl = "";
+setPhotoPreview("");
+
+// Clear BOTH file inputs (Option 2)
+if (el("findingPhotoCamera")) el("findingPhotoCamera").value = "";
+if (el("findingPhotoLibrary")) el("findingPhotoLibrary").value = "";
   });
 }
 
