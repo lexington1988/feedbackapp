@@ -311,10 +311,19 @@
   <label class="field">
     <span>Notes (optional)</span>
     <textarea id="findingNotes" rows="2" placeholder="Anything extra you want to remember."></textarea>
-    <label class="field">
+   <label class="field">
   <span>Photo (optional)</span>
-  <input id="findingPhoto" type="file" accept="image/*" capture="environment" />
+
+  <!-- Hidden inputs: one for camera, one for library -->
+  <input id="findingPhotoCamera" type="file" accept="image/*" capture="environment" class="hidden" />
+  <input id="findingPhotoLibrary" type="file" accept="image/*" class="hidden" />
+
+  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    <button id="takePhotoBtn" class="btn small" type="button">📷 Take Photo</button>
+    <button id="choosePhotoBtn" class="btn ghost small" type="button">🖼️ Choose Photo</button>
+  </div>
 </label>
+
 
 <div id="findingPhotoPreview" class="photo-preview hidden">
   <img id="findingPhotoImg" alt="Finding photo preview" />
