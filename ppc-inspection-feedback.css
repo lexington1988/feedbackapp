@@ -322,6 +322,18 @@ textarea{ resize: vertical; }
   line-height: 1.45;
   color: var(--text);
 }
+/* Make editable output boxes fill the output panel */
+.output textarea.pre{
+  width: 100%;
+  box-sizing: border-box;
+  border: 0;
+  background: transparent;
+  resize: vertical;
+  display: block;
+}
+.output textarea.pre{
+  min-height: 260px; /* match your .output min-height */
+}
 
 .saved{
   display:flex;
@@ -534,6 +546,41 @@ textarea{ resize: vertical; }
 .spacer{ flex:1; }
 
 .hidden{ display:none !important; }
+/* PDF export mode (so jsPDF captures the print layout) */
+body.pdf-export > *:not(#printArea){
+  display:none !important;
+}
+
+body.pdf-export #printArea{
+  display:block !important;
+  position:relative !important;
+  width:100% !important;
+  background:#fff !important;
+}
+
+body.pdf-export #printArea .print-content{
+  max-width:760px !important;
+  margin:0 auto !important;
+  padding:18px !important;
+}
+
+body.pdf-export #printArea .print-watermark{
+  position:fixed !important;
+  top:12mm !important;
+  left:0 !important;
+  right:0 !important;
+  height:90mm !important;
+  display:flex !important;
+  align-items:flex-start !important;
+  justify-content:center !important;
+  pointer-events:none !important;
+  z-index:0 !important;
+}
+
+body.pdf-export #printArea .print-content{
+  position:relative !important;
+  z-index:1 !important;
+}
 
 .report-preview{
   background: rgba(255,255,255,.02);
