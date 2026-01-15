@@ -1998,7 +1998,7 @@ async function shareOrDownloadHtmlFile(fullHtmlDoc, filename) {
   const blob = new Blob([fullHtmlDoc], { type: "text/html;charset=utf-8" });
   const file = new File([blob], filename, { type: "text/html" });
 
-  // Share sheet first (mobile best)
+  // 1) Share sheet first (best on mobile)
   if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
     await navigator.share({
       title: filename,
@@ -2008,14 +2008,45 @@ async function shareOrDownloadHtmlFile(fullHtmlDoc, filename) {
     return;
   }
 
-  // Fallback: download
+  // 2) Windows/Chrome/Edge: "Save As..." picker (most reliable on desktop)
+  // This avoids the flaky <a download> behaviour in PWAs / managed environments.
+  if (window.showSaveFilePicker) {
+    const handle = await window.showSaveFilePicker({
+      suggestedName: filename,
+      types: [
+        {
+          description: "HTML file",
+          accept: { "text/html": [".html"] }
+        }
+      ]
+    });
+
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return;
+  }
+
+  // 3) Classic download fallback
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } finally {
+    // 4) Last resort: open in a new tab so user can Ctrl+S / Save page as...
+    // (Useful when downloads are blocked)
+    setTimeout(() => {
+      try { window.open(url, "_blank", "noopener,noreferrer"); } catch {}
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    }, 200);
+  }
 }
+
 // ============================================================================//
 
 function clearAll() {
