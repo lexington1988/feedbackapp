@@ -385,6 +385,21 @@ textarea{ resize: vertical; }
   color: var(--muted);
   font-size: 12px;
 }
+/* Keep Saved card actions on one line */
+.saved-card{
+  align-items: center;              /* stops odd vertical stacking */
+}
+
+.saved-card .badges{
+  flex-wrap: nowrap;                /* prevent Delete dropping down */
+  white-space: nowrap;              /* keep items together */
+  margin-left: auto;                /* push buttons to the right */
+}
+
+.saved-card .badges .btn{
+  flex: 0 0 auto;                   /* buttons don't shrink weirdly */
+}
+
 /* Saved selection icon toggle (email) */
 .select-toggle{
   display: inline-flex;
@@ -413,6 +428,14 @@ textarea{ resize: vertical; }
   font-size: 15px;
   line-height: 1;
   opacity: 0.75;
+}
+.saved-card > div:first-child{
+  min-width: 0;                     /* allows text area to shrink */
+}
+.saved-card h4,
+.saved-card p{
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* selected state */
@@ -625,15 +648,13 @@ body.pdf-export #printArea .print-content{
 /* PRINT */
 @media print {
 
-  /* ✅ Remove the app from the print layout completely (prevents blank page 1) */
   body > *:not(#printArea) {
     display: none !important;
   }
 
-  /* ✅ Make sure printArea is included in layout */
   #printArea {
     display: block !important;
-    position: relative !important;   /* anchor watermark layering */
+    position: relative !important;
     left: auto !important;
     top: auto !important;
     width: 100% !important;
@@ -644,18 +665,34 @@ body.pdf-export #printArea .print-content{
     overflow: visible !important;
   }
 
-  /* ✅ Center the content nicely on the page */
- #printArea .print-content {
-  max-width: 760px !important;
-  margin: 0 auto !important;
-  padding: 18px !important;
-  padding-top: 10mm !important; /* ✅ pushes content below the logo band */
-  position: relative !important;
-  z-index: 1 !important;
-}
-@media print{
-  #printArea img{ max-width: 100% !important; height: auto !important; }
-}
+  #printArea .print-content {
+    max-width: 760px !important;
+    margin: 0 auto !important;
+    padding: 18px !important;
+    padding-top: 10mm !important;
+    position: relative !important;
+    z-index: 1 !important;
+  }
+
+  /* ✅ General: all images behave */
+  #printArea img {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+
+  /* ✅ Photos inside findings: keep them sensible */
+  #printArea .rp-block img{
+    max-height: 320px !important;   /* adjust 260–420 */
+    max-width: 100% !important;
+    width: auto !important;
+    height: auto !important;
+    object-fit: contain !important;
+    display: block !important;
+  }
+/* Allow Findings to start on page 1 (PDF/print) */
+
+
+  /* ...rest of your print CSS continues here... */
 
 
   /* ===== Watermark (behind content) ===== */
@@ -720,6 +757,36 @@ body.pdf-export #printArea .print-content{
     background: #fff !important;
     break-inside: avoid !important;
   }
+  /* ✅ Engineer: allow each audit card to break across pages (prevents huge gaps) */
+#printArea .box.audit-box {
+  break-inside: auto !important;
+  page-break-inside: auto !important;
+}
+
+  /* ✅ Let these container boxes split across pages (prevents wasted space) */
+#printArea .box.findings-box,
+#printArea .box.audits-box {
+  break-inside: auto !important;
+  page-break-inside: auto !important;
+}
+
+/* ✅ But keep each individual finding together (title/meta/photo) */
+#printArea .rp-block {
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
+}
+
+/* ✅ Let the Findings container split across pages so page 1 isn't wasted */
+#printArea .box.findings-box {
+  break-inside: auto !important;
+  page-break-inside: auto !important;
+}
+
+/* ✅ But keep each individual finding together (title/meta/photo) */
+#printArea .rp-block {
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
+}
 
   #printArea ul {
     margin: 6px 0 0 !important;
@@ -744,8 +811,148 @@ body.pdf-export #printArea .print-content{
     font-size: 12px !important;
     line-height: 1.35 !important;
   }
+  /* ✅ Force Audits section onto a new page */
+#printArea .page-break-before {
+  break-before: page !important;
+  page-break-before: always !important;
+  height: 0 !important;
+}
+}
+/* ==========================================================
+   Make EMAIL PDF (jsPDF) match PRINT PREVIEW layout
+   ========================================================== */
+body.pdf-export #printArea {
+  display: block !important;
+  position: relative !important;
+  width: 100% !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: #fff !important;
+  overflow: visible !important;
 }
 
+/* Match print preview spacing */
+body.pdf-export #printArea .print-content{
+  max-width: 760px !important;
+  margin: 0 auto !important;
+  padding: 18px !important;
+  padding-top: 10mm !important;  /* keep in sync with @media print */
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* Watermark (same as print) */
+body.pdf-export #printArea .print-watermark{
+  position: fixed !important;
+  top: 12mm !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 90mm !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+}
+
+body.pdf-export #printArea .print-watermark img{
+  width: min(560px, 86vw) !important;
+  height: auto !important;
+  opacity: 0.10 !important;
+}
+
+/* Typography */
+body.pdf-export #printArea,
+body.pdf-export #printArea *{
+  color: #111 !important;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* Boxes + lists */
+body.pdf-export #printArea .box{
+  border: 1px solid #d7d7d7 !important;
+  border-radius: 12px !important;
+  padding: 12px 14px !important;
+  margin: 12px 0 !important;
+  background: #fff !important;
+  break-inside: avoid !important;
+}
+
+body.pdf-export #printArea ul{
+  margin: 6px 0 0 !important;
+  padding-left: 18px !important;
+}
+
+body.pdf-export #printArea li{
+  margin: 4px 0 !important;
+}
+
+/* Finding blocks */
+body.pdf-export #printArea .rp-block{
+  border: 1px solid #e2e2e2 !important;
+  border-radius: 10px !important;
+  padding: 10px 12px !important;
+  margin: 10px 0 !important;
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
+}
+
+body.pdf-export #printArea .rp-small,
+body.pdf-export #printArea .rp-meta{
+  color: #555 !important;
+  font-size: 12px !important;
+  line-height: 1.35 !important;
+}
+
+/* Images (match print) */
+body.pdf-export #printArea img{
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+body.pdf-export #printArea .rp-block img{
+  max-height: 320px !important;
+  max-width: 100% !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain !important;
+  display: block !important;
+}
+
+/* Your “no wasted space” exceptions */
+body.pdf-export #printArea .box.findings-box,
+body.pdf-export #printArea .box.audits-box,
+body.pdf-export #printArea .box.audit-box{
+  break-inside: auto !important;
+  page-break-inside: auto !important;
+}
+
+/* ✅ Same behavior during jsPDF export (email PDF) */
+body.pdf-export #printArea .page-break-before {
+  break-before: page !important;
+  page-break-before: always !important;
+  height: 0 !important;
+}
+
+/* ✅ Same behavior during jsPDF export (email PDF) */
+body.pdf-export #printArea .box.audit-box {
+  break-inside: auto !important;
+  page-break-inside: auto !important;
+}
+
+/* ✅ Same page-flow rules during jsPDF export (email PDF) */
+body.pdf-export #printArea .box.findings-box,
+body.pdf-export #printArea .box.audits-box {
+  break-inside: auto !important;
+  page-break-inside: auto !important;
+}
+
+body.pdf-export #printArea .rp-block {
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
+}
 
 /* Engineers tab helpers */
 #tabEngineers .output { min-height: 320px; }
@@ -818,4 +1025,10 @@ body.light .ghost-text{
   border-radius: 12px;
   border: 1px solid var(--border);
 }
-
+.report-preview .rp-block img{
+  max-height: 360px;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
