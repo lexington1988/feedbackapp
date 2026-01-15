@@ -1165,77 +1165,11 @@ function getWatermarkHTML() {
 
 
 function buildPrintableReportHTML() {
-  pullFormIntoCurrent(); // ✅ ensure freshest values are used
-  const c = state.current;
-
-  const positives = c.positives || [];
-  const findings = sortFindingsBySeverity(c.findings || []);
-  const esc = escapeHtml;
-
-  const metaHtml = `
-    <div><strong>Date:</strong> ${esc(formatDate(c.date))}</div>
-    <div><strong>Engineer:</strong> ${esc(c.engineer || "—")}</div>
-    <div><strong>Job ref:</strong> ${esc(c.jobRef || "—")}</div>
-    <div><strong>Site:</strong> ${esc(c.address || "—")}</div>
-    <div><strong>Appliance:</strong> ${esc(c.appliance || "—")}</div>
-    <div><strong>Outcome:</strong> ${esc(c.outcome || "—")}</div>
-  `;
-
-  const positivesHtml = positives.length
-    ? `<ul>${positives.map(p => `<li>${esc(p.text)}</li>`).join("")}</ul>`
-    : `<div class="muted">No positives recorded.</div>`;
-
-  const findingsHtml = findings.length
-    ? findings.map(f => `
-      <div class="rp-block">
-
-          <div><strong>${esc(f.title)}</strong></div>
-          <div class="rp-small">${esc(f.category)} • ${esc(f.severity)} • Due: ${esc(f.due)} • Status: ${esc(f.status || "Open")} • Tag: ${esc(f.tag || "OTHER")}</div>
-          ${f.why ? `<div class="rp-small"><strong>Why it matters:</strong> ${esc(f.why)}</div>` : ""}
-          ${f.action ? `<div class="rp-small"><strong>Action:</strong> ${esc(f.action)}</div>` : ""}
-          ${f.notes ? `<div class="rp-small"><strong>Notes:</strong> ${esc(f.notes)}</div>` : ""}
-         <div style="margin-top:8px; break-inside:avoid; page-break-inside:avoid;">
-  ${photoHtml(f, "#e2e2e2")}
-</div>
-
-
-
-
-        </div>
-      `).join("")
-    : `<div class="muted">No findings recorded.</div>`;
-
-return `
-  ${getWatermarkHTML()}
-
-  <div class="print-content">
-    <div id="engTop">
-      <h1>Engineer Summary Report</h1>
-
-      <div class="muted">
-        <div><strong>Engineer:</strong> ${esc(engineer)}</div>
-        <div><strong>Range:</strong> ${esc(range)}</div>
-        <div><strong>Generated:</strong> ${esc(formatDate(new Date().toISOString().slice(0,10)))}</div>
-      </div>
-
-      <div class="box">
-        <h3>Summary</h3>
-        <div style="white-space:pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size:12.5px; line-height:1.45; margin:0; padding:0;">${esc(summaryText)}</div>
-      </div>
-    </div>
-
-    <div id="engAudits">
-      <div class="rp-section-title">Audits in range (with photos)</div>
-      <div class="box audits-box">
-        ${auditsHtml}
-      </div>
-    </div>
-  </div>
-`;
-
-
-
+  // Always use the same proven report builder (with watermark + photos)
+  pullFormIntoCurrent();
+  return buildPrintableReportHTMLFromInspection(structuredClone(state.current));
 }
+
 function buildPrintableReportHTMLFromInspection(ins) {
   const c = ins;
 
