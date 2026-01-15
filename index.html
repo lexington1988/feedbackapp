@@ -84,10 +84,12 @@
         <label class="field">
   <span>Overall outcome</span>
   <select id="outcomeSelect">
-    <option value="Pass" selected>Pass</option>
-    <option value="Pass with actions">Pass with actions</option>
-    <option value="Requires revisit">Requires revisit</option>
-  </select>
+  <option value="Work & Documentation Correct" selected>Work & Documentation Correct</option>
+  <option value="Work FAIL - Documentation PASS">Work FAIL - Documentation PASS</option>
+  <option value="Work PASS - Documentation FAIL">Work PASS - Documentation FAIL</option>
+  <option value="Work FAIL - Documentation FAIL">Work FAIL - Documentation FAIL</option>
+</select>
+
 </label>
 
       </div>
@@ -165,6 +167,7 @@
         <div class="row">
   <button id="copyReportBtn" class="btn" type="button">Copy</button>
   <button id="emailReportBtn" class="btn" type="button">Email</button>
+          <button id="shareReportHtmlBtn" class="btn ghost" type="button">Share HTML</button>
   <button id="printReportBtn" class="btn" type="button">Print / Save PDF</button>
 </div>
 
@@ -227,6 +230,7 @@
     <button id="generateEngineerBtn" class="btn" type="button">Generate Summary</button>
     <button id="copyEngineerBtn" class="btn ghost" type="button">Copy</button>
     <button id="printEngineerBtn" class="btn" type="button">Print / Save PDF</button>
+<button id="shareEngineerHtmlBtn" class="btn ghost" type="button">Share HTML</button>
 
   </div>
 
