@@ -204,7 +204,9 @@ async function handleFindingPhotoPicked(file) {
 
   try {
     // Preview (compressed)
-    state.modalPhotoDataUrl = await fileToCompressedDataUrl(file, 1200, 0.75);
+  state.modalPhotoDataUrl = await fileToCompressedDataUrl(file, 800, 0.68);
+
+
     setPhotoPreview(state.modalPhotoDataUrl);
 
     // Upload to Cloudinary (save URL)
@@ -279,7 +281,9 @@ el("emailReportBtn").addEventListener("click", async () => {
     const c = state.current;
 
     const filename = `PPC-Inspection-Report${c.jobRef ? "-" + c.jobRef : ""}${c.engineer ? "-" + c.engineer.replace(/\s+/g, "_") : ""}.pdf`;
-    const pdfBlob = await buildPdfFromHtml(buildPrintableReportHTML(), filename);
+   const pdfBlob = await buildPdfFromHtml(buildPrintableReportHTML(), filename);
+
+
 
     const file = new File([pdfBlob], filename, { type: "application/pdf" });
 
@@ -307,6 +311,44 @@ el("emailReportBtn").addEventListener("click", async () => {
     alert("Could not create/share the PDF. Check console for details.");
   }
 });
+// -------- Share HTML (single scrollable sheet) ----------
+if (el("shareReportHtmlBtn")) {
+  el("shareReportHtmlBtn").addEventListener("click", async () => {
+    try {
+      pullFormIntoCurrent();
+      const c = state.current;
+
+      const filename = `PPC-Inspection-Report${c.jobRef ? "-" + c.jobRef : ""}${c.engineer ? "-" + c.engineer.replace(/\s+/g, "_") : ""}.html`;
+      const inner = buildPrintableReportHTML(); // includes watermark + content
+      const doc = wrapAsStandaloneHtml(inner, "Inspection Feedback Report");
+
+      await shareOrDownloadHtmlFile(doc, filename);
+    } catch (err) {
+      console.error(err);
+      alert("Could not create/share the HTML report. Check console for details.");
+    }
+  });
+}
+
+if (el("shareEngineerHtmlBtn")) {
+  el("shareEngineerHtmlBtn").addEventListener("click", async () => {
+    try {
+      generateEngineerSummary(); // keep it up to date
+
+      const engineer = el("engineerSelect")?.value?.trim() || "Engineer";
+      const range = (rangeLabel() || "").replace(/\s+/g, "_");
+      const filename = `PPC-Engineer-Summary-${engineer.replace(/\s+/g, "_")}-${range}.html`;
+
+      const inner = buildPrintableEngineerHTML();
+      const doc = wrapAsStandaloneHtml(inner, "Engineer Summary Report");
+
+      await shareOrDownloadHtmlFile(doc, filename);
+    } catch (err) {
+      console.error(err);
+      alert("Could not create/share the Engineer HTML report. Check console for details.");
+    }
+  });
+}
 
 
 el("printReportBtn").addEventListener("click", async () => {
@@ -334,7 +376,10 @@ el("printReportBtn").addEventListener("click", async () => {
   
  // Saved
 el("exportAllBtn").addEventListener("click", exportAllJson);
-el("emailSelectedBtn").addEventListener("click", emailSelectedReports);
+el("emailSelectedBtn").addEventListener("click", async () => {
+  await emailSelectedReports();
+});
+
 el("clearAllBtn").addEventListener("click", clearAll);
 
 
@@ -361,7 +406,11 @@ el("clearAllBtn").addEventListener("click", clearAll);
       const range = (rangeLabel() || "").replace(/\s+/g, "_");
       const filename = `PPC-Engineer-Summary-${engineer.replace(/\s+/g, "_")}-${range}.pdf`;
 
-      const pdfBlob = await buildPdfFromHtml(buildPrintableEngineerHTML(), filename);
+    const pdfBlob = await buildEngineerPdfSplit(buildPrintableEngineerHTML(), filename);
+
+
+
+
       const file = new File([pdfBlob], filename, { type: "application/pdf" });
 
       if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
@@ -464,7 +513,7 @@ function makeNewInspection() {
     address: "",
     appliance: "",
     date: el("dateInput")?.value || new Date().toISOString().slice(0,10),
-    outcome: "Pass",
+    outcome: "Work & Documentation Correct",
     positives: [],
     findings: []
   };
@@ -1106,10 +1155,11 @@ function getWatermarkHTML() {
 
   return `
     <div class="print-watermark" aria-hidden="true">
-      <img src="${logoUrl}" alt="" />
+      <img src="${logoUrl}" alt="" crossorigin="anonymous" referrerpolicy="no-referrer" />
     </div>
   `;
 }
+
 
 
 
@@ -1137,13 +1187,17 @@ function buildPrintableReportHTML() {
 
   const findingsHtml = findings.length
     ? findings.map(f => `
-        <div class="rp-block">
+      <div class="rp-block">
+
           <div><strong>${esc(f.title)}</strong></div>
           <div class="rp-small">${esc(f.category)} • ${esc(f.severity)} • Due: ${esc(f.due)} • Status: ${esc(f.status || "Open")} • Tag: ${esc(f.tag || "OTHER")}</div>
           ${f.why ? `<div class="rp-small"><strong>Why it matters:</strong> ${esc(f.why)}</div>` : ""}
           ${f.action ? `<div class="rp-small"><strong>Action:</strong> ${esc(f.action)}</div>` : ""}
           ${f.notes ? `<div class="rp-small"><strong>Notes:</strong> ${esc(f.notes)}</div>` : ""}
-         ${photoHtml(f, "#e2e2e2")}
+         <div style="margin-top:8px; break-inside:avoid; page-break-inside:avoid;">
+  ${photoHtml(f, "#e2e2e2")}
+</div>
+
 
 
 
@@ -1155,36 +1209,99 @@ return `
   ${getWatermarkHTML()}
 
   <div class="print-content">
-    <h1>Inspection Feedback Report</h1>
+    <div id="engTop">
+      <h1>Engineer Summary Report</h1>
 
-    <div class="muted">
-      ${metaHtml}
+      <div class="muted">
+        <div><strong>Engineer:</strong> ${esc(engineer)}</div>
+        <div><strong>Range:</strong> ${esc(range)}</div>
+        <div><strong>Generated:</strong> ${esc(formatDate(new Date().toISOString().slice(0,10)))}</div>
+      </div>
+
+      <div class="box">
+        <h3>Summary</h3>
+        <div style="white-space:pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size:12.5px; line-height:1.45; margin:0; padding:0;">${esc(summaryText)}</div>
+      </div>
     </div>
 
-    <div class="box">
-      <h3>Summary</h3>
-      <div>${esc(summaryLine(c))}</div>
-    </div>
-
-    <div class="box">
-      <h3>What was done well</h3>
-      ${positivesHtml}
-    </div>
-
-    <div class="box">
-      <h3>Findings & required actions</h3>
-      ${findingsHtml}
-    </div>
-
-    <div class="box">
-      <h3>Close-out</h3>
-      <div>Please confirm once actions are complete. If revisit is required, arrange a suitable time for reinspection.</div>
+    <div id="engAudits">
+      <div class="rp-section-title">Audits in range (with photos)</div>
+      <div class="box audits-box">
+        ${auditsHtml}
+      </div>
     </div>
   </div>
 `;
 
 
+
 }
+function buildPrintableReportHTMLFromInspection(ins) {
+  const c = ins;
+
+  const positives = c.positives || [];
+  const findings = sortFindingsBySeverity(c.findings || []);
+  const esc = escapeHtml;
+
+  const metaHtml = `
+    <div><strong>Date:</strong> ${esc(formatDate(c.date))}</div>
+    <div><strong>Engineer:</strong> ${esc(c.engineer || "—")}</div>
+    <div><strong>Job ref:</strong> ${esc(c.jobRef || "—")}</div>
+    <div><strong>Site:</strong> ${esc(c.address || "—")}</div>
+    <div><strong>Appliance:</strong> ${esc(c.appliance || "—")}</div>
+    <div><strong>Outcome:</strong> ${esc(c.outcome || "—")}</div>
+  `;
+
+  const positivesHtml = positives.length
+    ? `<ul>${positives.map(p => `<li>${esc(p.text)}</li>`).join("")}</ul>`
+    : `<div class="muted">No positives recorded.</div>`;
+
+  const findingsHtml = findings.length
+    ? findings.map(f => `
+        <div class="rp-block">
+          <div><strong>${esc(f.title)}</strong></div>
+          <div class="rp-small">${esc(f.category)} • ${esc(f.severity)} • Due: ${esc(f.due)} • Status: ${esc(f.status || "Open")} • Tag: ${esc(f.tag || "OTHER")}</div>
+          ${f.why ? `<div class="rp-small"><strong>Why it matters:</strong> ${esc(f.why)}</div>` : ""}
+          ${f.action ? `<div class="rp-small"><strong>Action:</strong> ${esc(f.action)}</div>` : ""}
+          ${f.notes ? `<div class="rp-small"><strong>Notes:</strong> ${esc(f.notes)}</div>` : ""}
+          ${photoHtml(f, "#e2e2e2")}
+        </div>
+      `).join("")
+    : `<div class="muted">No findings recorded.</div>`;
+
+  return `
+    ${getWatermarkHTML()}
+    <div class="print-content">
+      <h1>Inspection Feedback Report</h1>
+
+      <div class="muted">
+        ${metaHtml}
+      </div>
+
+      <div class="box">
+        <h3>Summary</h3>
+        <div>${esc(summaryLine(c))}</div>
+      </div>
+
+      <div class="box">
+        <h3>What was done well</h3>
+        ${positivesHtml}
+      </div>
+
+      <div class="box findings-box">
+  <h3>Findings & required actions</h3>
+  ${findingsHtml}
+</div>
+
+
+      <div class="box">
+        <h3>Close-out</h3>
+        <div>Please confirm once actions are complete. If revisit is required, arrange a suitable time for reinspection.</div>
+      </div>
+    </div>
+  `;
+}
+
 function buildPrintableEngineerHTML() {
   refreshEngineerDropdown();
 
@@ -1207,15 +1324,19 @@ function buildPrintableEngineerHTML() {
 
           const findingsHtml = findings.length
             ? findings.map(f => `
-                <div class="rp-block">
+              <div class="rp-block" style="margin-top:10px; padding-top:2px; padding-bottom:10px; break-inside:avoid; page-break-inside:avoid;">
+
+
                   <div><strong>${esc(f.title || "(No title)")}</strong></div>
-                  <div class="rp-small">
+                  <div class="rp-small" style="line-height:1.35; margin-top:2px;">
+
                     ${esc(f.category || "—")} • ${esc(f.severity || "—")}
                     • Due: ${esc(f.due || "—")}
                     • Status: ${esc(f.status || "Open")}
                     • Tag: ${esc(f.tag || "OTHER")}
                   </div>
-                  ${f.action ? `<div class="rp-small"><strong>Action:</strong> ${esc(f.action)}</div>` : ""}
+                ${f.action ? `<div class="rp-small" style="margin-top:4px; line-height:1.35;"><strong>Action:</strong> ${esc(f.action)}</div>` : ""}
+
                  ${photoHtml(f, "#e2e2e2")}
 
 
@@ -1224,7 +1345,7 @@ function buildPrintableEngineerHTML() {
             : `<div class="rp-small">No findings on this audit.</div>`;
 
           return `
-            <div class="box">
+            <div class="box audit-box">
               <h3>${esc(a.engineer || "Engineer")} • ${esc(a.jobRef || "No job ref")} • ${esc(formatDate(a.date))}</h3>
               <div class="rp-small">
                 Outcome: ${esc(a.outcome || "—")} • Positives: ${(a.positives || []).length} • Findings: ${findings.length} • Photos: ${photosCount}
@@ -1250,12 +1371,18 @@ function buildPrintableEngineerHTML() {
 
       <div class="box">
         <h3>Summary</h3>
-        <pre style="white-space:pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size:12.5px; line-height:1.45; margin:0;">${esc(summaryText)}</pre>
+      <div style="white-space:pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size:12.5px; line-height:1.45; margin:0; padding:0;">${esc(summaryText)}</div>
+
       </div>
 
-      <div class="rp-section-title">Audits in range (with photos)</div>
-      ${auditsHtml}
-    </div>
+       <div class="page-break-before"></div>
+
+<div class="rp-section-title">Audits in range (with photos)</div>
+<div class="box audits-box">
+  ${auditsHtml}
+</div>
+
+
   `;
 }
 
@@ -1412,21 +1539,27 @@ function filterAuditsForEngineer(engineerName) {
 }
 
 function buildEngineerSummary(engineer, audits) {
-  const outcomes = { "Pass": 0, "Pass with actions": 0, "Requires revisit": 0 };
+  const outcomes = {
+  "Work & Documentation Correct": 0,
+  "Work FAIL - Documentation PASS": 0,
+  "Work PASS - Documentation FAIL": 0,
+  "Work FAIL - Documentation FAIL": 0
+};
+
   const severityCounts = { Critical: 0, Major: 0, Minor: 0, Advisory: 0 };
   const categoryCounts = {};
   const tagCounts = {};
   const paperworkTagCounts = {};
   const trend = [];
 
-  let totalFindings = 0;
+   let totalFindings = 0;
   let totalPositives = 0;
 
-  let scoreSum = 0;
-  let scoreMin = 999;
-  let scoreMax = -999;
+  let scoreSum = 0; // ✅ add this
 
   audits.forEach(a => {
+    scoreSum += scoreAudit(a); // ✅ add this
+
     outcomes[a.outcome] = (outcomes[a.outcome] || 0) + 1;
 
     const positives = a.positives || [];
@@ -1435,16 +1568,10 @@ function buildEngineerSummary(engineer, audits) {
     totalPositives += positives.length;
     totalFindings += findings.length;
 
-    const score = scoreAudit(a);
-    scoreSum += score;
-    scoreMin = Math.min(scoreMin, score);
-    scoreMax = Math.max(scoreMax, score);
-
     trend.push({
       date: a.date,
       jobRef: a.jobRef || "",
       findings: findings.length,
-      score
     });
 
     findings.forEach(f => {
@@ -1473,7 +1600,8 @@ function buildEngineerSummary(engineer, audits) {
   const trendLines = trend
     .slice()
     .sort((a,b) => (a.date || "").localeCompare(b.date || ""))
-    .map(t => `- ${formatDate(t.date)} • ${t.findings} finding(s) • Score ${t.score}${t.jobRef ? ` • ${t.jobRef}` : ""}`);
+    .map(t => `- ${formatDate(t.date)} • ${t.findings} finding(s)${t.jobRef ? ` • ${t.jobRef}` : ""}`);
+
 
   const coaching = buildCoachingParagraph(engineer, topTags, topCats);
 
@@ -1484,12 +1612,17 @@ function buildEngineerSummary(engineer, audits) {
   lines.push(`Range: ${rangeLabel()}`);
   lines.push("—");
 
-  lines.push("SCORECARD");
-  lines.push(`Average score: ${avgScore} (Best ${scoreMax}, Worst ${scoreMin})`);
-  lines.push(`Outcomes: Pass ${outcomes["Pass"]} • Pass with actions ${outcomes["Pass with actions"]} • Requires revisit ${outcomes["Requires revisit"]}`);
-  lines.push(`Totals: ${totalFindings} findings • ${totalPositives} positives`);
-  lines.push(`Severity: Critical ${severityCounts.Critical} • Major ${severityCounts.Major} • Minor ${severityCounts.Minor} • Advisory ${severityCounts.Advisory}`);
-  lines.push("");
+ lines.push("OUTCOME SUMMARY");
+lines.push(
+  `Work & Documentation Correct: ${outcomes["Work & Documentation Correct"]} • ` +
+  `Work FAIL / Docs PASS: ${outcomes["Work FAIL - Documentation PASS"]} • ` +
+  `Work PASS / Docs FAIL: ${outcomes["Work PASS - Documentation FAIL"]} • ` +
+  `Work FAIL / Docs FAIL: ${outcomes["Work FAIL - Documentation FAIL"]}`
+);
+lines.push(`Totals: ${totalFindings} findings • ${totalPositives} positives`);
+lines.push(`Severity: Critical ${severityCounts.Critical} • Major ${severityCounts.Major} • Minor ${severityCounts.Minor} • Advisory ${severityCounts.Advisory}`);
+lines.push("");
+
 
   lines.push("TOP 5 RECURRING ISSUES (by Issue Tag)");
   if (!topTags.length) lines.push("- No tagged issues found (start using Issue Tag).");
@@ -1526,21 +1659,20 @@ function buildEngineerSummary(engineer, audits) {
   return { text: lines.join("\n"), audits };
 }
 
-function buildMateyEngineerVerbal(engineer, avgScore, topTags, severityCounts) {
+function buildMateyEngineerVerbal(engineer, _avgScore, topTags, severityCounts) {
   const top2 = topTags.slice(0,2).map(([k]) => k);
   const majors = severityCounts.Major || 0;
   const criticals = severityCounts.Critical || 0;
 
   const bits = [];
   bits.push(`Alright ${engineer}, I’ve pulled together the ${rangeLabel()} worth of audits.`);
-  bits.push(`Overall you’re around a ${avgScore}/100 on consistency — which is decent, we can push it higher.`);
-  if (criticals > 0) bits.push(`There were ${criticals} critical item(s) in there — those are the ones we need to eliminate completely.`);
-  if (majors > 0) bits.push(`Main thing is cutting down the majors — you’ve had ${majors} across the set.`);
+  if (criticals > 0) bits.push(`There were ${criticals} critical item(s) — those need eliminating completely.`);
+  if (majors > 0) bits.push(`You’ve had ${majors} major item(s) — main thing is reducing those down.`);
   if (top2.length) bits.push(`The two repeat ones I keep seeing are: ${top2.join(" and ")}.`);
-  bits.push(`It’s good work — it’ll just be better if we tighten those up every time, and you’ll fly through audits.`);
-  bits.push(`If you want, we can go through a couple of examples together and I’ll show you exactly what I’m looking for.`);
+  bits.push(`Good work overall — if we tighten those up every time, you’ll fly through audits.`);
   return bits.join(" ");
 }
+
 
 function buildCoachingParagraph(engineer, topTags, topCats) {
   const topTag = topTags[0]?.[0] || null;
@@ -1739,7 +1871,7 @@ function buildReportTextFromInspection(ins) {
   return lines.join("\n");
 }
 
-function emailSelectedReports() {
+async function emailSelectedReports() {
   const selectedIds = Array.from(document.querySelectorAll(".saved-select:checked"))
     .map(cb => cb.getAttribute("data-select"))
     .filter(Boolean);
@@ -1758,36 +1890,62 @@ function emailSelectedReports() {
     return;
   }
 
-  // Build combined body
-  const combined = selectedAudits.map((a, idx) => {
-    const header =
-      `==============================\n` +
-      `REPORT ${idx + 1} of ${selectedAudits.length}\n` +
-      `${a.engineer || "—"}${a.jobRef ? ` • ${a.jobRef}` : ""}${a.date ? ` • ${formatDate(a.date)}` : ""}\n` +
-      `==============================\n\n`;
+  try {
+    const files = [];
 
-    return header + buildReportTextFromInspection(a);
-  }).join("\n\n");
+    // Build PDFs one-by-one (reliable on mobile)
+    for (const a of selectedAudits) {
+   const engineerName = (a.engineer || "Engineer").trim();
+const jobRef = (a.jobRef || "No Job Ref").trim();
+const datePretty = formatDate(a.date).replaceAll("/", "-"); // dd-mm-yyyy
 
-  const to = ""; // optional: put a default email here later
-  const subject = `Inspection Feedback Reports (${selectedAudits.length})`;
+// Remove characters that break filenames
+const clean = (s) => s
+  .replace(/[<>:"/\\|?*\x00-\x1F]/g, "") // illegal filename chars
+  .replace(/\s+/g, " ")
+  .trim();
 
-  const mailto = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(combined)}`;
+const filename = `${clean(engineerName)} - ${clean(jobRef)} - ${datePretty}.pdf`;
 
-  // If too long for mailto, copy + open a short draft
-  if (mailto.length > 1800) {
-    copyToClipboard(combined);
-    const shortBody =
-      `Hi,\n\n` +
-      `I’m sending ${selectedAudits.length} inspection feedback reports.\n` +
-      `The full reports have been copied to your clipboard — please paste them into this email.\n\n` +
-      `Thanks,\n`;
-    const fallback = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(shortBody)}`;
-    window.location.href = fallback;
-  } else {
-    window.location.href = mailto;
+
+      const html = buildPrintableReportHTMLFromInspection(a);
+   const pdfBlob = await buildPdfFromHtml(html, filename);
+
+
+
+      files.push(new File([pdfBlob], filename, { type: "application/pdf" }));
+    }
+
+    // Share sheet (best: pick Mail and it attaches PDFs)
+    if (navigator.canShare && navigator.canShare({ files }) && navigator.share) {
+      await navigator.share({
+        title: `Inspection Reports (${files.length})`,
+        text: "Inspection report PDFs attached.",
+        files
+      });
+      return;
+    }
+
+    // Fallback: download all PDFs (desktop / older browsers)
+    for (const file of files) {
+      const url = URL.createObjectURL(file);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = file.name;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      // small delay so multiple downloads work reliably
+      await new Promise(r => setTimeout(r, 250));
+    }
+
+    alert("PDFs downloaded. Attach them to your email.");
+  } catch (err) {
+    console.error(err);
+    alert("Could not create/share the PDFs. Check console for details.");
   }
 }
+
 
 // ---------- Helpers ----------
 function setTab(name) {
@@ -1867,6 +2025,64 @@ function exportAllJson() {
   const data = JSON.stringify(state.db, null, 2);
   downloadTextFile("ppc-inspections-export.json", data);
 }
+// ======================= HTML EXPORT (single long sheet) =======================
+const EXPORT_CSS = `
+  :root { color-scheme: light; }
+  body { margin:0; padding:24px; background:#fff; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#111; }
+  .print-content { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 12px; }
+  h3 { margin: 0 0 8px; }
+  .muted { color:#444; font-size: 13px; line-height: 1.4; }
+  .box { border:1px solid #d7d7d7; border-radius: 14px; padding: 12px; margin: 12px 0; }
+  .rp-section-title { font-weight: 700; margin: 14px 0 6px; }
+  .rp-small { font-size: 13px; line-height: 1.4; color:#222; }
+  .rp-block { border:1px solid #d7d7d7; border-radius: 14px; padding: 12px; margin: 10px 0; }
+  ul { margin: 8px 0 0 18px; }
+  img { max-width: 100%; height: auto; }
+
+  /* Watermark */
+  .print-watermark { position: fixed; top: 14px; right: 14px; opacity: 0.18; pointer-events: none; z-index: 10; }
+  .print-watermark img { max-width: 220px; height: auto; }
+`;
+
+function wrapAsStandaloneHtml(innerHtml, title = "PPC Report") {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${escapeHtml(title)}</title>
+<style>${EXPORT_CSS}</style>
+</head>
+<body>
+${innerHtml}
+</body>
+</html>`;
+}
+
+async function shareOrDownloadHtmlFile(fullHtmlDoc, filename) {
+  const blob = new Blob([fullHtmlDoc], { type: "text/html;charset=utf-8" });
+  const file = new File([blob], filename, { type: "text/html" });
+
+  // Share sheet first (mobile best)
+  if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+    await navigator.share({
+      title: filename,
+      text: "HTML report attached.",
+      files: [file]
+    });
+    return;
+  }
+
+  // Fallback: download
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+// ============================================================================//
 
 function clearAll() {
   const ok = confirm("Clear ALL saved inspections? This cannot be undone.");
@@ -1955,10 +2171,29 @@ function setPhotoPreview(dataUrl) {
 function photoHtml(f, borderColor) {
   const src = (f && (f.photoUrl || f.photoDataUrl)) ? (f.photoUrl || f.photoDataUrl) : "";
   if (!src) return "";
-  return `<div style="margin-top:8px;">
-    <img src="${src}" style="max-width:100%; border-radius:12px; border:1px solid ${borderColor};" />
-  </div>`;
+
+  return `
+    <div style="margin-top:8px;">
+      <img
+        src="${src}"
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"
+        style="
+          display:block;
+          width:100%;
+          max-width:420px;
+          height:auto;
+          max-height:280px;
+          object-fit:contain;
+          border-radius:12px;
+          border:1px solid ${borderColor};
+        "
+      />
+    </div>
+  `;
 }
+
+
 async function waitForImages(root, timeoutMs = 3000) {
   const imgs = Array.from(root.querySelectorAll("img"));
   if (!imgs.length) return;
@@ -1981,6 +2216,104 @@ function escapeHtml(str) {
     .replaceAll('"',"&quot;")
     .replaceAll("'","&#039;");
 }
+// ✅ PDF that matches the PRINT PREVIEW (renders printArea, screenshots it, slices into pages)
+// ✅ PDF that matches the PRINT PREVIEW (renders printArea, screenshots it, slices into real pages)
+// Works in iOS Mail / share previews (no negative Y drawing)
+async function buildPdfFromPrintPreview(html, filename = "report.pdf") {
+  const pa = el("printArea");
+
+  // Save current state so we can restore cleanly
+  const prevHidden = pa.classList.contains("hidden");
+  const prevHtml = pa.innerHTML;
+  const prevStyle = pa.style.cssText;
+
+  // 1) Render the print HTML into printArea
+  pa.innerHTML = html;
+  pa.classList.remove("hidden");
+
+  // Force it to be measurable/visible for html2canvas on all browsers
+  pa.style.cssText = prevStyle + `
+    display:block !important;
+    position:fixed !important;
+    left:0 !important;
+    top:0 !important;
+    z-index:999999 !important;
+    width:794px !important;      /* ~A4 content width at 96dpi */
+    max-width:none !important;
+    background:#ffffff !important;
+    opacity:1 !important;
+    pointer-events:none !important;
+  `;
+
+  document.body.classList.add("pdf-export");
+
+  // 2) Wait for layout + images
+  await new Promise(requestAnimationFrame);
+  await waitForImages(pa, 8000);
+  await new Promise(r => setTimeout(r, 150));
+
+  // 3) Screenshot the rendered print area
+  const canvas = await html2canvas(pa, {
+    scale: 2,
+    useCORS: true,
+    allowTaint: true,
+    backgroundColor: "#ffffff",
+    scrollX: 0,
+    scrollY: 0,
+    windowWidth: pa.scrollWidth,
+    windowHeight: pa.scrollHeight
+  });
+
+  // 4) Slice into A4 pages (NO negative Y)
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ orientation: "p", unit: "pt", format: "a4" });
+
+  const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+
+  // If we fit the screenshot width to the PDF page width,
+  // how many source pixels tall correspond to one PDF page?
+  const pageHeightPx = Math.floor(canvas.width * (pageH / pageW));
+
+  let y = 0;
+  let pageIndex = 0;
+
+  while (y < canvas.height) {
+    const sliceH = Math.min(pageHeightPx, canvas.height - y);
+
+    const pageCanvas = document.createElement("canvas");
+    pageCanvas.width = canvas.width;
+    pageCanvas.height = sliceH;
+
+    const ctx = pageCanvas.getContext("2d");
+    ctx.drawImage(
+      canvas,
+      0, y, canvas.width, sliceH,   // source rect
+      0, 0, canvas.width, sliceH    // destination rect
+    );
+
+    const imgData = pageCanvas.toDataURL("image/jpeg", 0.92);
+
+    if (pageIndex > 0) pdf.addPage();
+
+    // Render at top-left, scaled to page width
+    const renderH = (sliceH * pageW) / canvas.width;
+    pdf.addImage(imgData, "JPEG", 0, 0, pageW, renderH);
+
+    y += sliceH;
+    pageIndex++;
+  }
+
+  // 5) Cleanup / restore
+  document.body.classList.remove("pdf-export");
+  pa.style.cssText = prevStyle;
+  pa.innerHTML = prevHtml;
+  if (prevHidden) pa.classList.add("hidden");
+
+  return pdf.output("blob");
+}
+
+
 // 🧩 Build a PDF blob from given HTML string
 async function buildPdfFromHtml(html, filename = "report.pdf") {
   const { jsPDF } = window.jspdf;
@@ -2001,8 +2334,53 @@ async function buildPdfFromHtml(html, filename = "report.pdf") {
     x: 0,
     y: 0,
     width: 570,
-    windowWidth: 800
+    windowWidth: 760
   });
 
+  return doc.output("blob");
+}
+// ✅ Engineer PDF: force "Audits" to start on a new PDF page (matches print preview)
+async function buildEngineerPdfSplit(html, filename = "engineer.pdf") {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF("p", "pt", "a4");
+
+  // Render into temporary container
+  const container = document.createElement("div");
+  container.style.width = "800px";
+  container.innerHTML = html;
+  document.body.appendChild(container);
+
+  const top = container.querySelector("#engTop");
+  const audits = container.querySelector("#engAudits");
+
+  if (!top || !audits) {
+    // fallback to normal if wrappers not found
+    document.body.removeChild(container);
+    return await buildPdfFromHtml(html, filename);
+  }
+
+  // Helper to render a node into the existing doc
+  const renderNode = (node, addPageFirst) => new Promise((resolve) => {
+    if (addPageFirst) doc.addPage();
+
+    doc.html(node, {
+      callback: () => resolve(),
+      margin: [20, 20, 20, 20],
+      autoPaging: "text",
+      x: 0,
+      y: 0,
+      width: 570,
+      windowWidth: 800,
+      html2canvas: { scale: 2, useCORS: true }
+    });
+  });
+
+  // Page 1: Top section
+  await renderNode(top, false);
+
+  // Page 2+: Audits section (forced new page)
+  await renderNode(audits, true);
+
+  document.body.removeChild(container);
   return doc.output("blob");
 }
