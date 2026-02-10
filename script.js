@@ -23,7 +23,8 @@ const state = {
 
 // ================== Defects Library (CSV -> typeahead) ==================
 const DEFECTS_STORAGE_KEY = "ppc_defects_library_v1";
-const DEFECTS_CSV_URL = "./Defects.csv"; // <-- GitHub-hosted CSV in same folder
+const DEFECTS_CSV_URL = "https://lexington1988.github.io/feedbackapp/Defects.csv";
+ // <-- GitHub-hosted CSV in same folder
 
 // Each defect can be as simple as: { title: "Flue not supported near elbow" }
 // (Optionally later we can support category/tag/why/action columns too.)
@@ -66,27 +67,47 @@ function parseDefectsCsv(csvText) {
   const rows = csvToRows(csvText);
   if (!rows.length) return [];
 
-  const first = rows[0].map(x => (x || "").trim());
-  const looksLikeHeader = first.some(h => /title|defect|finding/i.test(h));
+  const header = rows[0].map(x => String(x || "").trim());
+  const hasHeader = header.some(h => /title|defect|finding/i.test(h));
 
-  let startIndex = 0;
-  let titleIndex = 0;
+  // column helper
+  const colIndex = (name, fallback) => {
+    const i = header.findIndex(h => h.toLowerCase() === name.toLowerCase());
+    return i >= 0 ? i : fallback;
+  };
 
-  if (looksLikeHeader) {
-    startIndex = 1;
-    titleIndex = first.findIndex(h => /title|defect|finding/i.test(h));
-    if (titleIndex < 0) titleIndex = 0;
-  }
+  // If no header, assume first 5 columns are:
+  // title,category,severity,tag,why,action (action would be col 5)
+  const idx = hasHeader
+    ? {
+        title: colIndex("title", 0),
+        category: colIndex("category", 1),
+        severity: colIndex("severity", 2),
+        tag: colIndex("tag", 3),
+        why: colIndex("why", 4),
+        action: colIndex("action", 5),
+      }
+    : { title: 0, category: 1, severity: 2, tag: 3, why: 4, action: 5 };
+
+  const start = hasHeader ? 1 : 0;
 
   const out = [];
-  for (let i = startIndex; i < rows.length; i++) {
-    const cols = rows[i];
-    const title = (cols[titleIndex] || "").trim();
+  for (let i = start; i < rows.length; i++) {
+    const cols = rows[i] || [];
+    const title = String(cols[idx.title] || "").trim();
     if (!title) continue;
-    out.push({ title });
+
+    out.push({
+      title,
+      category: String(cols[idx.category] || "").trim(),
+      severity: String(cols[idx.severity] || "").trim(), // CSV has ID/AR/NCS/Advisory
+      tag: String(cols[idx.tag] || "").trim(),
+      why: String(cols[idx.why] || "").trim(),
+      action: String(cols[idx.action] || "").trim(),
+    });
   }
 
-  // de-dupe (case-insensitive)
+  // de-dupe by title (case-insensitive)
   const map = new Map();
   out.forEach(d => {
     const key = d.title.trim().toLowerCase();
@@ -95,6 +116,7 @@ function parseDefectsCsv(csvText) {
 
   return Array.from(map.values());
 }
+
 
 // Robust CSV row splitter (handles quotes/commas)
 function csvToRows(text) {
@@ -166,7 +188,7 @@ function initDefectsTypeahead() {
     }
 
     box.innerHTML = items
-      .slice(0, 8)
+      .slice(0, 12)
       .map((d, idx) => {
         const safeTitle = escapeHtml(d.title);
         const meta = typed ? `Tap to use` : `Suggested`;
@@ -186,38 +208,105 @@ function initDefectsTypeahead() {
         const chosen = items[i];
         if (!chosen) return;
 
-        input.value = chosen.title;
-        hide();
-        box.innerHTML = "";
+       input.value = chosen.title;
 
-        // keep focus so you can keep typing in next fields on mobile
-        input.focus();
+// Populate other fields if present
+if (chosen.category && el("findingCategory")) {
+  el("findingCategory").value = chosen.category;
+}
+
+// Map CSV severity (ID/AR/NCS/Advisory) -> your select values (Critical/Major/Minor/Advisory)
+if (chosen.severity && el("findingSeverity")) {
+  const s = chosen.severity.trim().toUpperCase();
+  const mapped =
+    s === "ID" ? "Critical" :
+    s === "AR" ? "Major" :
+    s === "NCS" ? "Minor" :
+    s === "ADVISORY" ? "Advisory" :
+    ""; // unknown
+
+  if (mapped) el("findingSeverity").value = mapped;
+}
+
+// Tags: your HTML options are strings like "FLUE SUPPORT", etc.
+if (chosen.tag && el("findingTag")) {
+  el("findingTag").value = chosen.tag;
+}
+
+if (chosen.why && el("findingWhy")) el("findingWhy").value = chosen.why;
+if (chosen.action && el("findingAction")) el("findingAction").value = chosen.action;
+
+hide();
+box.innerHTML = "";
+
+// keep focus so you can keep typing in next fields on mobile
+input.focus();
+
       });
     });
 
     show();
   };
 
-  const getMatches = (typed) => {
-    const q = String(typed || "").trim().toLowerCase();
-    if (!q) return [];
+ const getMatches = (typed) => {
+  const raw = String(typed || "").trim();
+  if (!raw) return [];
 
-    // "contains" match first, but prioritise startsWith
-    const starts = [];
-    const contains = [];
+  // Normalize: lowercase, remove punctuation, collapse spaces
+  const norm = (s) =>
+    String(s || "")
+      .toLowerCase()
+      .replace(/[_/\\\-(),.]+/g, " ")   // treat punctuation as spaces
+      .replace(/\s+/g, " ")
+      .trim();
 
-    for (const d of defectsLibrary || []) {
-      const t = (d.title || "").toLowerCase();
-      if (!t) continue;
+  const qNorm = norm(raw);
+  if (!qNorm) return [];
 
-      if (t.startsWith(q)) starts.push(d);
-      else if (t.includes(q)) contains.push(d);
+  const qTokens = qNorm.split(" ").filter(Boolean);
 
-      if (starts.length + contains.length >= 24) break; // cap work
+  const scored = [];
+
+  for (const d of defectsLibrary || []) {
+    const title = String(d.title || "").trim();
+    if (!title) continue;
+
+    const tNorm = norm(title);
+    if (!tNorm) continue;
+
+    // If user typed 1 word: show if that word appears anywhere
+    // If user typed multiple words: prefer titles that contain ALL words (any order)
+    let tokenHits = 0;
+    for (const tok of qTokens) {
+      if (tNorm.includes(tok)) tokenHits++;
     }
 
-    return starts.concat(contains);
-  };
+    if (tokenHits === 0) continue; // nothing matched at all
+
+    const allTokensMatched = tokenHits === qTokens.length;
+
+    // Extra scoring
+    const starts = tNorm.startsWith(qNorm) ? 1 : 0;
+    const pos = tNorm.indexOf(qTokens[0]); // earlier is better
+    const posScore = pos < 0 ? 9999 : pos;
+
+    // Higher score is better; we sort later
+    const score =
+      (allTokensMatched ? 1000 : 0) + // big boost if all words match
+      (tokenHits * 100) +             // reward more matched words
+      (starts * 50) -                 // reward startsWith
+      Math.min(50, posScore / 2);     // slightly reward early position
+
+    scored.push({ d, score });
+  }
+
+  // Sort best-first
+  scored.sort((a, b) => b.score - a.score);
+
+  // Return top results (increase if you like)
+  return scored.slice(0, 24).map(x => x.d);
+};
+
 
   // input typing
   input.addEventListener("input", () => {
@@ -1818,6 +1907,25 @@ function buildEngineerSummary(engineer, audits) {
   const categoryCounts = {};
   const tagCounts = {};
   const paperworkTagCounts = {};
+
+// ✅ Defects (picked from Defects CSV library)
+const defectCounts = {};
+
+// Normalise titles to match even if spacing/punctuation differs slightly
+const normDefectTitle = (s) =>
+  String(s || "")
+    .toLowerCase()
+    .replace(/[_/\\\-(),.]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+// Build a Set of all defect titles from Defects.csv (so we only count those)
+const defectsCsvTitleSet = new Set(
+  (defectsLibrary || [])
+    .map(d => normDefectTitle(d.title))
+    .filter(Boolean)
+);
+
   const trend = [];
 
    let totalFindings = 0;
@@ -1849,12 +1957,21 @@ function buildEngineerSummary(engineer, audits) {
       const cat = f.category || "Other";
       categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
 
-      const tag = (f.tag || "OTHER").toUpperCase();
-      tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+    const tag = (f.tag || "OTHER").toUpperCase();
+tagCounts[tag] = (tagCounts[tag] || 0) + 1;
 
-      if (tag.startsWith("PAPERWORK_") || cat === "Benchmark / paperwork") {
-        paperworkTagCounts[tag] = (paperworkTagCounts[tag] || 0) + 1;
-      }
+if (tag.startsWith("PAPERWORK_") || cat === "Benchmark / paperwork") {
+  paperworkTagCounts[tag] = (paperworkTagCounts[tag] || 0) + 1;
+}
+
+// ✅ Count defects that match a Defects.csv title
+const tNorm = normDefectTitle(f.title);
+if (tNorm && defectsCsvTitleSet.has(tNorm)) {
+  // Store using the original title wording from the audit
+  const key = String(f.title || "").trim();
+  defectCounts[key] = (defectCounts[key] || 0) + 1;
+}
+
     });
   });
 
@@ -1915,13 +2032,21 @@ lines.push("");
   else topTags.forEach(([k,v], i) => lines.push(`${i+1}. ${k} (x${v})`));
   lines.push("");
 
-  lines.push("TOP CATEGORIES");
-  if (!topCats.length) lines.push("- No category data.");
-  else topCats.forEach(([k,v], i) => lines.push(`${i+1}. ${k} (x${v})`));
-  lines.push("");
+ const topDefects = topN(defectCounts, 5);
+
+lines.push("MOST COMMON DEFECTS NOT RECORDED");
+if (!defectsCsvTitleSet.size) {
+  lines.push("- Defects library not loaded yet (check Defects.csv path/name).");
+} else if (!topDefects.length) {
+  lines.push("- No Additional Defects Found.");
+} else {
+  topDefects.forEach(([k, v], i) => lines.push(`${i + 1}. ${k} (x${v})`));
+}
+lines.push("");
+
 
   lines.push("COMMON PAPERWORK ISSUES");
-  if (!topPaperwork.length) lines.push("- None flagged as paperwork tags yet.");
+  if (!topPaperwork.length) lines.push("- No Issues With Paperwork Found.");
   else topPaperwork.forEach(([k,v]) => lines.push(`- ${k} (x${v})`));
   lines.push("");
 
