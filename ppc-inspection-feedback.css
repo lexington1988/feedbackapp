@@ -1032,3 +1032,39 @@ body.light .ghost-text{
   object-fit: contain;
   display: block;
 }
+/* Defect typeahead suggestions (mobile friendly) */
+.suggestions {
+  margin-top: 8px;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 12px;
+  overflow: auto;
+  max-height: 220px;
+  background: #fff;
+}
+
+body.light .suggestions { background: #fff; }
+body:not(.light) .suggestions { background: rgba(20,20,25,0.95); border-color: rgba(255,255,255,0.15); }
+
+.suggestions.hidden { display: none; }
+
+.suggestion-item {
+  padding: 12px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+}
+
+body:not(.light) .suggestion-item { border-bottom-color: rgba(255,255,255,0.10); }
+
+.suggestion-item:last-child { border-bottom: none; }
+
+.suggestion-item strong {
+  font-size: 14px;
+}
+
+.suggestion-item .meta {
+  font-size: 12px;
+  opacity: 0.8;
+}
