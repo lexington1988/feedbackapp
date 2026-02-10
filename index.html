@@ -186,11 +186,16 @@
   <button id="exportAllBtn" class="btn ghost" type="button">Export JSON</button>
   <button id="emailSelectedBtn" class="btn" type="button">Email Selected</button>
 
+  <!-- ✅ NEW: Defect library import -->
+  <input id="defectsCsvInput" type="file" accept=".csv,text/csv" class="hidden" />
+  <button id="importDefectsBtn" class="btn ghost" type="button">Import Defects CSV</button>
+
   <!-- ✅ discreet counter -->
   <span id="selectedCount" class="selected-count hidden">0 Selected</span>
 
   <button id="clearAllBtn" class="btn danger" type="button">Clear All</button>
 </div>
+
 
 
 
@@ -272,9 +277,15 @@
         <option>Ventilation</option>
         <option>Condensate</option>
         <option>Electrical / isolation</option>
-        <option>Benchmark / paperwork</option>
+        <option>Documentation</option>
         <option>Workmanship</option>
         <option>Manufacturer instructions</option>
+        <option>Safety</option>
+        <option>CO Alarm</option>
+        <option>ECV/AECV</option>
+        <option>Bonding</option>
+        <option>Gas meter</option>
+        <option>Cooker</option>
         <option>Other</option>
       </select>
     </label>
@@ -292,26 +303,41 @@
     <label class="field">
       <span>Issue Tag (for trends)</span>
       <select id="findingTag">
-        <option value="FLUE_SUPPORT">FLUE_SUPPORT</option>
-        <option value="FLUE_TERMINATION">FLUE_TERMINATION</option>
-        <option value="COMBUSTION_RECORDING">COMBUSTION_RECORDING</option>
-        <option value="GAS_PRESSURE">GAS_PRESSURE</option>
-        <option value="CONDENSATE_ROUTING">CONDENSATE_ROUTING</option>
-        <option value="VENTILATION_CHECKS">VENTILATION_CHECKS</option>
-        <option value="PAPERWORK_BENCHMARK">PAPERWORK_BENCHMARK</option>
-        <option value="PAPERWORK_COMMISSIONING">PAPERWORK_COMMISSIONING</option>
-        <option value="WORKMANSHIP_TIDINESS">WORKMANSHIP_TIDINESS</option>
-        <option value="MANUFACTURER_MI">MANUFACTURER_MI</option>
+        <option value="FLUE ROUTE/INSTALLATION">FLUE ROUTE/INSTALLATION</option>
+        <option value="FLUE TERMINATION">FLUE TERMINATION</option>
+        <option value="COMBUSTION RECORDING">COMBUSTION RECORDING</option>
+        <option value="GAS PRESSURE">GAS PRESSURE</option>
+        <option value="CONDENSATE ROUTING">CONDENSATE</option>
+        <option value="VENTILATION CHECKS">VENTILATION</option>
+        <option value="DOCUMENTATION">DOCUMENTATION</option>
+        <option value="PAPERWORK COMMISSIONING">PAPERWORK COMMISSIONING</option>
+        <option value="WORKMANSHIP">WORKMANSHIP</option>
+        <option 
+   value="CO ALARM">CO ALARM</option>
+        <option  
+     value="ECV/AECV">ECV/AECV</option>
+        <option  
+    value="GAS SAFETY">GAS SAFETY</option>
+        <option               
+   value="MANUFACTURER MI">MANUFACTURER MI</option>
+        <option value="OTHER">BONDING</option>
+        <option value="OTHER">COOKER</option>
+        <option value="OTHER">GAS METER</option>
+        <option value="OTHER">ELECTRICAL</option>
         <option value="OTHER">OTHER</option>
       </select>
     </label>
-
     
 
     <label class="field" style="grid-column: 1 / -1;">
-      <span>Finding (what you saw)</span>
-      <input id="findingTitle" type="text" placeholder="e.g., Flue not adequately supported near elbow" />
-    </label>
+  <span>Finding (what you saw)</span>
+  <input id="findingTitle" type="text" placeholder="e.g., Flue not adequately supported near elbow" autocomplete="off" />
+<div id="defectSuggestions" class="suggestions hidden"></div>
+
+  <!-- ✅ Mobile-friendly suggestions (tap to select) -->
+  <div id="defectSuggestions" class="suggestions hidden" role="listbox" aria-label="Defect suggestions"></div>
+</label>
+
   </div>
 
   <label class="field">
