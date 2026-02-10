@@ -8,6 +8,7 @@
 const STORAGE_KEY = "ppc_inspection_feedback_v1";
 const CLOUDINARY_CLOUD_NAME = "dnz3fuyjx";
 const CLOUDINARY_UPLOAD_PRESET = "feedback";
+const ENGINEER_DRAFTS_KEY = "ppc_engineer_summary_drafts_v1";
 
 const el = (id) => document.getElementById(id);
 const uid = () => Math.random().toString(16).slice(2) + Date.now().toString(16);
@@ -19,6 +20,261 @@ const state = {
   modalPhotoDataUrl: "", // local preview
   modalPhotoUrl: ""      // ✅ Cloudinary URL (saved in the finding)
 };
+
+// ================== Defects Library (CSV -> typeahead) ==================
+const DEFECTS_STORAGE_KEY = "ppc_defects_library_v1";
+const DEFECTS_CSV_URL = "./Defects.csv"; // <-- GitHub-hosted CSV in same folder
+
+// Each defect can be as simple as: { title: "Flue not supported near elbow" }
+// (Optionally later we can support category/tag/why/action columns too.)
+let defectsLibrary = [];
+
+// Load from localStorage first, then try to fetch from GitHub CSV
+async function initDefectsLibrary() {
+  // 1) local cache
+  try {
+    const raw = localStorage.getItem(DEFECTS_STORAGE_KEY);
+    if (raw) defectsLibrary = JSON.parse(raw) || [];
+  } catch {
+    defectsLibrary = [];
+  }
+
+  // 2) fetch hosted CSV (non-blocking, refreshes library)
+  try {
+    const list = await fetchDefectsCsvFromUrl(DEFECTS_CSV_URL);
+    if (list.length) {
+      defectsLibrary = list;
+      localStorage.setItem(DEFECTS_STORAGE_KEY, JSON.stringify(defectsLibrary));
+    }
+  } catch (err) {
+    // Silent fail is ok (offline / first load / wrong filename)
+    console.warn("Defects CSV fetch failed:", err);
+  }
+}
+
+async function fetchDefectsCsvFromUrl(url) {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`CSV fetch failed: ${res.status}`);
+  const text = await res.text();
+  return parseDefectsCsv(text);
+}
+
+// Very small CSV parser that supports:
+// - header row OR single-column no-header
+// - quoted values
+function parseDefectsCsv(csvText) {
+  const rows = csvToRows(csvText);
+  if (!rows.length) return [];
+
+  const first = rows[0].map(x => (x || "").trim());
+  const looksLikeHeader = first.some(h => /title|defect|finding/i.test(h));
+
+  let startIndex = 0;
+  let titleIndex = 0;
+
+  if (looksLikeHeader) {
+    startIndex = 1;
+    titleIndex = first.findIndex(h => /title|defect|finding/i.test(h));
+    if (titleIndex < 0) titleIndex = 0;
+  }
+
+  const out = [];
+  for (let i = startIndex; i < rows.length; i++) {
+    const cols = rows[i];
+    const title = (cols[titleIndex] || "").trim();
+    if (!title) continue;
+    out.push({ title });
+  }
+
+  // de-dupe (case-insensitive)
+  const map = new Map();
+  out.forEach(d => {
+    const key = d.title.trim().toLowerCase();
+    if (!map.has(key)) map.set(key, d);
+  });
+
+  return Array.from(map.values());
+}
+
+// Robust CSV row splitter (handles quotes/commas)
+function csvToRows(text) {
+  const rows = [];
+  let row = [];
+  let cur = "";
+  let inQuotes = false;
+
+  const s = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    const next = s[i + 1];
+
+    if (ch === '"' && inQuotes && next === '"') {
+      cur += '"';
+      i++;
+      continue;
+    }
+
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if (ch === "," && !inQuotes) {
+      row.push(cur);
+      cur = "";
+      continue;
+    }
+
+    if (ch === "\n" && !inQuotes) {
+      row.push(cur);
+      rows.push(row);
+      row = [];
+      cur = "";
+      continue;
+    }
+
+    cur += ch;
+  }
+
+  // last cell
+  if (cur.length || row.length) {
+    row.push(cur);
+    rows.push(row);
+  }
+
+  // remove empty trailing rows
+  return rows
+    .map(r => r.map(c => String(c ?? "")))
+    .filter(r => r.some(c => c.trim().length));
+}
+
+// ----------------- Typeahead UI -----------------
+function initDefectsTypeahead() {
+  const input = el("findingTitle");
+  const box = el("defectSuggestions");
+  if (!input || !box) return;
+
+  const show = () => box.classList.remove("hidden");
+  const hide = () => box.classList.add("hidden");
+
+  const render = (items, typed) => {
+    if (!items.length) {
+      hide();
+      box.innerHTML = "";
+      return;
+    }
+
+    box.innerHTML = items
+      .slice(0, 8)
+      .map((d, idx) => {
+        const safeTitle = escapeHtml(d.title);
+        const meta = typed ? `Tap to use` : `Suggested`;
+        return `
+          <div class="suggestion-item" role="option" data-idx="${idx}">
+            <strong>${safeTitle}</strong>
+            <div class="meta">${meta}</div>
+          </div>
+        `;
+      })
+      .join("");
+
+    // tap/click to select
+    box.querySelectorAll(".suggestion-item").forEach(node => {
+      node.addEventListener("click", () => {
+        const i = Number(node.getAttribute("data-idx"));
+        const chosen = items[i];
+        if (!chosen) return;
+
+        input.value = chosen.title;
+        hide();
+        box.innerHTML = "";
+
+        // keep focus so you can keep typing in next fields on mobile
+        input.focus();
+      });
+    });
+
+    show();
+  };
+
+  const getMatches = (typed) => {
+    const q = String(typed || "").trim().toLowerCase();
+    if (!q) return [];
+
+    // "contains" match first, but prioritise startsWith
+    const starts = [];
+    const contains = [];
+
+    for (const d of defectsLibrary || []) {
+      const t = (d.title || "").toLowerCase();
+      if (!t) continue;
+
+      if (t.startsWith(q)) starts.push(d);
+      else if (t.includes(q)) contains.push(d);
+
+      if (starts.length + contains.length >= 24) break; // cap work
+    }
+
+    return starts.concat(contains);
+  };
+
+  // input typing
+  input.addEventListener("input", () => {
+    const typed = input.value || "";
+    const matches = getMatches(typed);
+    render(matches, typed);
+  });
+
+  // hide when leaving field
+  input.addEventListener("blur", () => {
+    // small delay to allow click selection
+    setTimeout(hide, 150);
+  });
+
+  // optional: show top suggestions when focused with existing text
+  input.addEventListener("focus", () => {
+    const typed = input.value || "";
+    const matches = getMatches(typed);
+    if (matches.length) render(matches, typed);
+  });
+}
+
+// ----------------- Optional: manual Import button -----------------
+function initDefectsImportButton() {
+  const btn = el("importDefectsBtn");
+  const fileInput = el("defectsCsvInput");
+  if (!btn || !fileInput) return;
+
+  btn.addEventListener("click", () => fileInput.click());
+
+  fileInput.addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const list = parseDefectsCsv(text);
+
+      if (!list.length) {
+        alert("No defects found in the CSV. Check the column / rows.");
+        return;
+      }
+
+      defectsLibrary = list;
+      localStorage.setItem(DEFECTS_STORAGE_KEY, JSON.stringify(defectsLibrary));
+      alert(`Imported ${defectsLibrary.length} defects.`);
+    } catch (err) {
+      console.error(err);
+      alert("Could not import that CSV. Check console for details.");
+    } finally {
+      fileInput.value = "";
+    }
+  });
+}
+// ===================================================================
+
+
 
 
 
@@ -130,6 +386,12 @@ window.addEventListener("DOMContentLoaded", init);
 
 function init() {
 
+    // Defects CSV + typeahead
+  initDefectsLibrary().then(() => {
+    initDefectsTypeahead();
+  });
+  initDefectsImportButton();
+
   const today = new Date();
   el("dateInput").value = today.toISOString().slice(0, 10);
 
@@ -170,6 +432,12 @@ if (el("loginBtn")) {
       console.error(err);
       alert("Login failed. Check email/password in Firebase Auth.");
     }
+  });
+}
+// ✅ Persist engineer summary edits so they affect print/share next time
+if (el("engineerOutput")) {
+  el("engineerOutput").addEventListener("input", () => {
+    saveEngineerDraftFromBox();
   });
 }
 
@@ -274,6 +542,20 @@ if (el("findingPhotoLibrary")) el("findingPhotoLibrary").value = "";
 
   el("copyVerbalBtn").addEventListener("click", () => copyToClipboard(el("verbalOutput").value)
 );
+  // ✅ Persist verbal edits + use last line as Close-out override
+el("verbalOutput").addEventListener("input", () => {
+  const text = el("verbalOutput").value;
+
+  // Save the entire edited verbal script for next time
+  state.current.verbalOverride = text;
+
+  // Use the last non-empty line as the Close-out line
+  state.current.closeOutOverride = lastNonEmptyLine(text);
+
+  // Update report immediately
+  renderReportPreview();
+});
+
   el("copyReportBtn").addEventListener("click", () => copyToClipboard(buildReportText()));
 el("emailReportBtn").addEventListener("click", async () => {
   try {
@@ -333,7 +615,8 @@ if (el("shareReportHtmlBtn")) {
 if (el("shareEngineerHtmlBtn")) {
   el("shareEngineerHtmlBtn").addEventListener("click", async () => {
     try {
-      generateEngineerSummary(); // keep it up to date
+     ensureEngineerSummaryReady(); // uses edits if present; generates only if empty
+
 
       const engineer = el("engineerSelect")?.value?.trim() || "Engineer";
       const range = (rangeLabel() || "").replace(/\s+/g, "_");
@@ -394,13 +677,15 @@ el("clearAllBtn").addEventListener("click", clearAll);
     "Send Engineer PDF?\n\nOK = Send (share/email PDF)\nCancel = Print / Save PDF"
   );
 
+
   // =========================
   // OK = SEND PDF
   // =========================
   if (send) {
     try {
       // Ensure summary is up to date
-      generateEngineerSummary();
+      ensureEngineerSummaryReady();
+
 
       const engineer = el("engineerSelect")?.value?.trim() || "Engineer";
       const range = (rangeLabel() || "").replace(/\s+/g, "_");
@@ -446,7 +731,8 @@ el("clearAllBtn").addEventListener("click", clearAll);
   document.querySelectorAll("#printArea").forEach((node, i) => {
     if (i > 0) node.remove();
   });
-generateEngineerSummary();
+ensureEngineerSummaryReady();
+
   const pa = el("printArea");
  pa.innerHTML = "";
 pa.innerHTML = buildPrintableEngineerHTML();
@@ -515,9 +801,12 @@ function makeNewInspection() {
     date: el("dateInput")?.value || new Date().toISOString().slice(0,10),
     outcome: "Work & Documentation Correct",
     positives: [],
-    findings: []
+    findings: [],
+    verbalOverride: "",
+    closeOutOverride: ""
   };
 }
+
 
 function loadDb() {
   try {
@@ -692,9 +981,12 @@ function renderFindings() {
     row.innerHTML = `
       <div class="left">
         <div class="title">${escapeHtml(f.title || "(No title)")}</div>
-        <div class="meta">${escapeHtml(f.category)} • Due: ${escapeHtml(f.due)} • Status: ${escapeHtml(f.status || "Open")}</div>
+      <div class="meta">${escapeHtml(f.category)} • ${escapeHtml(severityLabel(f.severity))} • Tag: ${escapeHtml(f.tag || "OTHER")}</div>
+
+
         <div class="badges">
-          <span class="badge ${sevClass}">${escapeHtml(f.severity)}</span>
+          <span class="badge ${sevClass}">${escapeHtml(severityLabel(f.severity))}</span>
+
           <span class="badge">${escapeHtml(f.category)}</span>
           <span class="badge">Tag: ${escapeHtml(f.tag || "OTHER")}</span>
         </div>
@@ -924,10 +1216,30 @@ function deleteModalItem() {
 
 // ---------- Outputs ----------
 function renderOutputs() {
- el("verbalOutput").value = buildVerbalScript();
+  // If the user has edited the verbal box, keep their edits
+  const generated = buildVerbalScript();
+  const hasOverride = (state.current?.verbalOverride || "").trim().length > 0;
+
+  el("verbalOutput").value = hasOverride ? state.current.verbalOverride : generated;
 
   renderReportPreview();
 }
+
+function closeOutLineForStyle(style, hasFindings) {
+  const s = (style || "matey").toLowerCase();
+
+  // Match the Verbal logic when there are NO findings
+  if (!hasFindings) {
+    if (s === "matey") return "Nothing for me to pull you up on — keep doing what you’re doing.";
+    return "No findings recorded.";
+  }
+
+  // Match the Verbal "close" lines when there ARE findings
+  if (s === "neutral") return "Please address the items above and confirm once completed.";
+  if (s === "direct") return "Sort these items by the due date and confirm completion.";
+  return "Get those sorted and give me a shout — I’m happy to re-check / review it with you.";
+}
+
 
 function buildVerbalScript() {
   pullFormIntoCurrent();
@@ -990,7 +1302,8 @@ function buildVerbalScript() {
 
     findings.slice(0, length === "quick" ? 3 : 12).forEach((f, idx) => {
       if (style === "matey") lines.push(`${idx + 1}) ${toneBits.betterIf}: ${f.title}.`);
-      else lines.push(`${idx + 1}) ${f.title} (${f.category}, ${f.severity}, due: ${f.due}).`);
+      else lines.push(`${idx + 1}) ${f.title} (${f.category}, ${f.severity}).`);
+
 
       if (length === "full") {
         if (f.why) lines.push(`   • Why it matters: ${f.why}`);
@@ -1047,7 +1360,12 @@ function renderReportPreview() {
     parts.push(`
       <div class="rp-block">
         <div><strong>${escapeHtml(f.title)}</strong></div>
-        <div class="rp-small">${escapeHtml(f.category)} • ${escapeHtml(f.severity)} • Due: ${escapeHtml(f.due)} • Status: ${escapeHtml(f.status || "Open")} • Tag: ${escapeHtml(f.tag || "OTHER")}</div>
+    <div class="rp-small">
+  ${escapeHtml(f.category)} • <strong>${escapeHtml(severityLabel(f.severity))}</strong> • Tag: ${escapeHtml(f.tag || "OTHER")}
+</div>
+
+
+
         ${f.why ? `<div class="rp-small"><strong>Why it matters:</strong> ${escapeHtml(f.why)}</div>` : ""}
         ${f.action ? `<div class="rp-small"><strong>Action:</strong> ${escapeHtml(f.action)}</div>` : ""}
         ${f.notes ? `<div class="rp-small"><strong>Notes:</strong> ${escapeHtml(f.notes)}</div>` : ""}
@@ -1059,8 +1377,14 @@ function renderReportPreview() {
 }
 
 
-  parts.push(`<div class="rp-section-title">Close-out</div>`);
-  parts.push(`<div class="rp-small">Please confirm once actions are complete. If revisit is required, arrange a suitable time for reinspection.</div>`);
+const style = el("verbalStyleSelect")?.value || "matey";
+const hasFindings = findings.length > 0;
+
+parts.push(`<div class="rp-section-title">Close-out</div>`);
+parts.push(`<div class="rp-small">${escapeHtml(getCloseOutForCurrent(style, hasFindings))}</div>`);
+
+
+
 
   el("reportBody").innerHTML = parts.join("");
 }
@@ -1097,7 +1421,9 @@ function buildReportText() {
   } else {
     findings.forEach((f, i) => {
       lines.push(`${i + 1}. ${f.title}`);
-      lines.push(`   Category: ${f.category} | Severity: ${f.severity} | Due: ${f.due} | Status: ${f.status || "Open"} | Tag: ${f.tag || "OTHER"}`);
+    lines.push(`   Category: ${f.category} | Severity: ${severityLabel(f.severity)} | Tag: ${f.tag || "OTHER"}`);
+
+
       if (f.why) lines.push(`   Why it matters: ${f.why}`);
       if (f.action) lines.push(`   Action: ${f.action}`);
       if (f.notes) lines.push(`   Notes: ${f.notes}`);
@@ -1194,7 +1520,12 @@ function buildPrintableReportHTMLFromInspection(ins) {
     ? findings.map(f => `
         <div class="rp-block">
           <div><strong>${esc(f.title)}</strong></div>
-          <div class="rp-small">${esc(f.category)} • ${esc(f.severity)} • Due: ${esc(f.due)} • Status: ${esc(f.status || "Open")} • Tag: ${esc(f.tag || "OTHER")}</div>
+       <div class="rp-small">
+  ${esc(f.category)} • <strong>${esc(severityLabel(f.severity))}</strong> • Tag: ${esc(f.tag || "OTHER")}
+</div>
+
+
+
           ${f.why ? `<div class="rp-small"><strong>Why it matters:</strong> ${esc(f.why)}</div>` : ""}
           ${f.action ? `<div class="rp-small"><strong>Action:</strong> ${esc(f.action)}</div>` : ""}
           ${f.notes ? `<div class="rp-small"><strong>Notes:</strong> ${esc(f.notes)}</div>` : ""}
@@ -1228,10 +1559,10 @@ function buildPrintableReportHTMLFromInspection(ins) {
 </div>
 
 
-      <div class="box">
-        <h3>Close-out</h3>
-        <div>Please confirm once actions are complete. If revisit is required, arrange a suitable time for reinspection.</div>
-      </div>
+   <div class="box">
+  <h3>Close-out</h3>
+  <div>${esc((c.closeOutOverride || "").trim() || closeOutLineForStyle(el("verbalStyleSelect")?.value || "matey", findings.length > 0))}</div>
+</div>
     </div>
   `;
 }
@@ -1264,10 +1595,10 @@ function buildPrintableEngineerHTML() {
                   <div><strong>${esc(f.title || "(No title)")}</strong></div>
                   <div class="rp-small" style="line-height:1.35; margin-top:2px;">
 
-                    ${esc(f.category || "—")} • ${esc(f.severity || "—")}
-                    • Due: ${esc(f.due || "—")}
-                    • Status: ${esc(f.status || "Open")}
-                    • Tag: ${esc(f.tag || "OTHER")}
+                  ${esc(f.category || "—")} • ${esc(severityLabel(f.severity || "—"))}
+
+• Tag: ${esc(f.tag || "OTHER")}
+
                   </div>
                 ${f.action ? `<div class="rp-small" style="margin-top:4px; line-height:1.35;"><strong>Action:</strong> ${esc(f.action)}</div>` : ""}
 
@@ -1375,6 +1706,7 @@ function refreshEngineerDropdown() {
     if (match) sel.value = match.value;
   } else if (previous) {
     sel.value = previous;
+    loadEngineerDraftIntoBox();
   }
 }
 
@@ -1408,6 +1740,8 @@ function onRangeChange() {
   if (showCustom) {
     const today = new Date().toISOString().slice(0, 10);
     if (!el("rangeTo").value) el("rangeTo").value = today;
+    // load draft for this engineer+range if it exists
+loadEngineerDraftIntoBox();
   }
 }
 
@@ -1428,7 +1762,7 @@ function generateEngineerSummary() {
 
   const summary = buildEngineerSummary(engineer, audits);
  el("engineerOutput").value = summary.text;
-
+saveEngineerDraftFromBox();
 }
 
 function filterAuditsForEngineer(engineerName) {
@@ -1546,15 +1880,33 @@ function buildEngineerSummary(engineer, audits) {
   lines.push(`Range: ${rangeLabel()}`);
   lines.push("—");
 
- lines.push("OUTCOME SUMMARY");
-lines.push(
-  `Work & Documentation Correct: ${outcomes["Work & Documentation Correct"]} • ` +
-  `Work FAIL / Docs PASS: ${outcomes["Work FAIL - Documentation PASS"]} • ` +
-  `Work PASS / Docs FAIL: ${outcomes["Work PASS - Documentation FAIL"]} • ` +
-  `Work FAIL / Docs FAIL: ${outcomes["Work FAIL - Documentation FAIL"]}`
-);
-lines.push(`Totals: ${totalFindings} findings • ${totalPositives} positives`);
-lines.push(`Severity: Critical ${severityCounts.Critical} • Major ${severityCounts.Major} • Minor ${severityCounts.Minor} • Advisory ${severityCounts.Advisory}`);
+function padRight(str, len) {
+  str = String(str);
+  return str.length >= len ? str : str + " ".repeat(len - str.length);
+}
+
+lines.push("OUTCOME SUMMARY");
+
+const totalAudits =
+  (outcomes["Work & Documentation Correct"] || 0) +
+  (outcomes["Work FAIL - Documentation PASS"] || 0) +
+  (outcomes["Work PASS - Documentation FAIL"] || 0) +
+  (outcomes["Work FAIL - Documentation FAIL"] || 0);
+
+const workCorrect =
+  (outcomes["Work & Documentation Correct"] || 0) +
+  (outcomes["Work PASS - Documentation FAIL"] || 0);
+
+const docsCorrect =
+  (outcomes["Work & Documentation Correct"] || 0) +
+  (outcomes["Work FAIL - Documentation PASS"] || 0);
+
+lines.push(`Work Correct - ${workCorrect}/${totalAudits}`);
+lines.push(`Documentation Correct - ${docsCorrect}/${totalAudits}`);
+
+lines.push(`Totals: ${totalFindings} Defects Found • ${totalPositives} positives`);
+lines.push(`Severity: ID ${severityCounts.Critical} • AR ${severityCounts.Major} • NCS ${severityCounts.Minor} • Advisory ${severityCounts.Advisory}`);
+
 lines.push("");
 
 
@@ -1631,6 +1983,67 @@ function rangeLabel() {
   if (r === "90d") return "last 90 days";
   if (r === "custom") return "custom range";
   return r;
+}
+function loadEngineerDrafts() {
+  try {
+    return JSON.parse(localStorage.getItem(ENGINEER_DRAFTS_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveEngineerDrafts(drafts) {
+  localStorage.setItem(ENGINEER_DRAFTS_KEY, JSON.stringify(drafts || {}));
+}
+
+function engineerDraftKey() {
+  const engineer = (el("engineerSelect")?.value || "").trim();
+  const range = (el("rangeSelect")?.value || "last5").trim();
+
+  // include custom dates in key so drafts don’t collide
+  const from = (el("rangeFrom")?.value || "").trim();
+  const to = (el("rangeTo")?.value || "").trim();
+
+  return `${normalizeEngineer(engineer)}__${range}__${from}__${to}`;
+}
+
+function loadEngineerDraftIntoBox() {
+  const out = el("engineerOutput");
+  if (!out) return;
+
+  const drafts = loadEngineerDrafts();
+  const key = engineerDraftKey();
+  const saved = (drafts[key] || "").trim();
+
+  if (saved) {
+    out.value = saved;
+    return true;
+  }
+  return false;
+}
+
+function saveEngineerDraftFromBox() {
+  const out = el("engineerOutput");
+  if (!out) return;
+
+  const drafts = loadEngineerDrafts();
+  drafts[engineerDraftKey()] = out.value || "";
+  saveEngineerDrafts(drafts);
+}
+
+// Used before printing/sharing: don’t overwrite edits
+function ensureEngineerSummaryReady() {
+  const out = el("engineerOutput");
+  if (!out) return;
+
+  // If we already have text (draft or edited), keep it
+  if ((out.value || "").trim()) return;
+
+  // Otherwise try load saved draft, else generate once
+  if (loadEngineerDraftIntoBox()) return;
+
+  generateEngineerSummary(); // generates and fills out.value
+  saveEngineerDraftFromBox(); // store generated as initial draft
 }
 
 function scoreAudit(audit) {
@@ -1791,7 +2204,8 @@ function buildReportTextFromInspection(ins) {
   } else {
     findings.forEach((f, i) => {
       lines.push(`${i + 1}. ${f.title}`);
-      lines.push(`   Category: ${f.category} | Severity: ${f.severity} | Due: ${f.due || "—"} | Status: ${f.status || "Open"} | Tag: ${f.tag || "OTHER"}`);
+     lines.push(`   Category: ${f.category} | Severity: ${severityLabel(f.severity)} | Tag: ${f.tag || "OTHER"}`);
+
       if (f.why) lines.push(`   Why it matters: ${f.why}`);
       if (f.action) lines.push(`   Action: ${f.action}`);
       if (f.notes) lines.push(`   Notes: ${f.notes}`);
@@ -1893,9 +2307,33 @@ function setTab(name) {
   if (name === "report") renderReportPreview();
   if (name === "saved") renderSavedList();
   if (name === "engineers") {
-    refreshEngineerDropdown(); // ✅ always refresh when opening Engineers
-    if (state.db.inspections.length) generateEngineerSummary();
-  }
+  refreshEngineerDropdown(); 
+  // ✅ Load saved draft for current engineer/range (do NOT overwrite by regenerating)
+  loadEngineerDraftIntoBox();
+}
+
+}
+function lastNonEmptyLine(text) {
+  const lines = String(text || "").split("\n").map(l => l.trim()).filter(Boolean);
+  return lines.length ? lines[lines.length - 1] : "";
+}
+
+function getCloseOutForCurrent(style, hasFindings) {
+  // If user has edited close-out, always use it
+  const custom = (state.current?.closeOutOverride || "").trim();
+  if (custom) return custom;
+
+  // Otherwise use your normal verbal-derived default
+  return closeOutLineForStyle(style, hasFindings);
+}
+
+function severityLabel(sev) {
+  const s = String(sev || "").toLowerCase();
+  if (s === "critical") return "ID";
+  if (s === "major") return "AR";
+  if (s === "minor") return "NCS";
+  if (s === "advisory") return "Advisory";
+  return sev || "—";
 }
 
 function sortFindingsBySeverity(findings) {
@@ -1998,7 +2436,7 @@ async function shareOrDownloadHtmlFile(fullHtmlDoc, filename) {
   const blob = new Blob([fullHtmlDoc], { type: "text/html;charset=utf-8" });
   const file = new File([blob], filename, { type: "text/html" });
 
-  // 1) Share sheet first (best on mobile)
+  // Share sheet first (mobile best)
   if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
     await navigator.share({
       title: filename,
@@ -2008,45 +2446,14 @@ async function shareOrDownloadHtmlFile(fullHtmlDoc, filename) {
     return;
   }
 
-  // 2) Windows/Chrome/Edge: "Save As..." picker (most reliable on desktop)
-  // This avoids the flaky <a download> behaviour in PWAs / managed environments.
-  if (window.showSaveFilePicker) {
-    const handle = await window.showSaveFilePicker({
-      suggestedName: filename,
-      types: [
-        {
-          description: "HTML file",
-          accept: { "text/html": [".html"] }
-        }
-      ]
-    });
-
-    const writable = await handle.createWritable();
-    await writable.write(blob);
-    await writable.close();
-    return;
-  }
-
-  // 3) Classic download fallback
+  // Fallback: download
   const url = URL.createObjectURL(blob);
-  try {
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.rel = "noopener";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  } finally {
-    // 4) Last resort: open in a new tab so user can Ctrl+S / Save page as...
-    // (Useful when downloads are blocked)
-    setTimeout(() => {
-      try { window.open(url, "_blank", "noopener,noreferrer"); } catch {}
-      setTimeout(() => URL.revokeObjectURL(url), 30000);
-    }, 200);
-  }
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
-
 // ============================================================================//
 
 function clearAll() {
