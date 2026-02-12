@@ -170,6 +170,253 @@ function csvToRows(text) {
     .map(r => r.map(c => String(c ?? "")))
     .filter(r => r.some(c => c.trim().length));
 }
+// ================== Boiler Library (CSV -> typeahead for Appliance) ==================
+const BOILERS_STORAGE_KEY = "ppc_boilers_library_v1";
+const BOILERS_CSV_URL = "https://raw.githubusercontent.com/lexington1988/feedbackapp/main/service_info_full.csv";
+
+
+let boilersLibrary = []; // { display, make, model }
+
+async function initBoilersLibrary() {
+  // 1) local cache
+  try {
+    const raw = localStorage.getItem(BOILERS_STORAGE_KEY);
+    if (raw) boilersLibrary = JSON.parse(raw) || [];
+  } catch {
+    boilersLibrary = [];
+  }
+
+  // 2) fetch hosted CSV (refresh library)
+  try {
+    const list = await fetchBoilersCsvFromUrl(BOILERS_CSV_URL);
+    if (list.length) {
+      boilersLibrary = list;
+      localStorage.setItem(BOILERS_STORAGE_KEY, JSON.stringify(boilersLibrary));
+    }
+  } catch (err) {
+    console.warn("Boilers CSV fetch failed:", err);
+  }
+}
+
+async function fetchBoilersCsvFromUrl(url) {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`CSV fetch failed: ${res.status}`);
+  const text = await res.text();
+  return parseBoilersCsv(text);
+}
+
+// Re-uses your csvToRows(text) helper
+function parseBoilersCsv(csvText) {
+  const rows = csvToRows(csvText);
+  if (!rows.length) return [];
+
+  const header = rows[0].map(x => String(x || "").trim());
+  const lowerHeader = header.map(h => h.toLowerCase());
+
+  // Try to find common column names
+ const idxMake = lowerHeader.findIndex(h => h === "make" || h.includes("manufacturer"));
+const idxModel = lowerHeader.findIndex(h => h === "model" || h.includes("appliance") || h.includes("boiler"));
+const idxGc = lowerHeader.findIndex(h => h === "gc number" || h === "gc" || h.includes("gc"));
+const idxDisplay = lowerHeader.findIndex(h => h === "display" || h.includes("make/model") || h.includes("make model"));
+
+
+  // If there is no obvious header, assume single-column of boiler names
+  const hasHeader = lowerHeader.some(h => h.includes("make") || h.includes("model") || h.includes("boiler") || h.includes("appliance"));
+
+  const start = hasHeader ? 1 : 0;
+
+  const out = [];
+  for (let i = start; i < rows.length; i++) {
+    const cols = rows[i] || [];
+
+    // 1) Prefer a dedicated display column if present
+    let display = idxDisplay >= 0 ? String(cols[idxDisplay] || "").trim() : "";
+
+    // 2) Else build display from make + model if found
+    const make = idxMake >= 0 ? String(cols[idxMake] || "").trim() : "";
+const model = idxModel >= 0 ? String(cols[idxModel] || "").trim() : "";
+const gc = idxGc >= 0 ? String(cols[idxGc] || "").trim() : "";
+
+
+    if (!display) {
+      if (make && model) display = `${make} ${model}`.trim();
+      else display = String(cols[0] || "").trim(); // fallback single col
+    }
+
+    if (!display) continue;
+
+  out.push({
+  display,
+  make,
+  model,
+  gc
+});
+
+  }
+
+  // de-dupe by display (case-insensitive)
+  const map = new Map();
+  out.forEach(b => {
+    const key = b.display.trim().toLowerCase();
+    if (!map.has(key)) map.set(key, b);
+  });
+
+  return Array.from(map.values());
+}
+
+// ----------------- Boiler Typeahead UI -----------------
+function initBoilerTypeahead() {
+  const input = el("applianceInput");
+  const box = el("boilerSuggestions");
+  if (!input || !box) return;
+
+  const show = () => box.classList.remove("hidden");
+  const hide = () => box.classList.add("hidden");
+
+  // Basic inline styling if you don’t already have it
+  // (Remove if you already style #boilerSuggestions via CSS)
+  box.style.position = "relative"; // harmless; your CSS can override
+
+  const render = (items) => {
+    if (!items.length) {
+      hide();
+      box.innerHTML = "";
+      return;
+    }
+
+      box.innerHTML = items
+      .slice(0, 12)
+      .map((b, idx) => {
+        const gcLine = (b.gc && String(b.gc).trim())
+          ? `GC: ${escapeHtml(b.gc)}`
+          : "Tap to use";
+
+        return `
+          <div class="suggestion-item" role="option" data-idx="${idx}">
+            <strong>${escapeHtml(b.display)}</strong>
+            <div class="meta">${gcLine}</div>
+          </div>
+        `;
+      })
+      .join("");
+
+
+    box.querySelectorAll(".suggestion-item").forEach(node => {
+      node.addEventListener("click", () => {
+        const i = Number(node.getAttribute("data-idx"));
+        const chosen = items[i];
+        if (!chosen) return;
+
+        input.value = chosen.display;
+
+        // Keep state in sync + update outputs
+        if (state.current) state.current.appliance = chosen.display;
+        renderOutputs();
+
+        hide();
+        box.innerHTML = "";
+        input.focus();
+      });
+    });
+
+    show();
+  };
+
+ const getMatches = (typed) => {
+  const raw = String(typed || "").trim();
+  if (!raw) return [];
+
+  const norm = (s) =>
+    String(s || "")
+      .toLowerCase()
+      .replace(/[_/\\\-(),.]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  // digits-only version (for GC searching)
+  const digitsOnly = (s) => String(s || "").replace(/\D+/g, "");
+
+  const qNorm = norm(raw);
+  if (!qNorm) return [];
+
+  const qDigits = digitsOnly(raw);          // e.g. "473"
+  const qTokens = qNorm.split(" ").filter(Boolean);
+
+  const scored = [];
+
+  for (const b of boilersLibrary || []) {
+    const disp = String(b.display || "").trim();
+    if (!disp) continue;
+
+    const make = String(b.make || "").trim();
+    const model = String(b.model || "").trim();
+    const gcRaw = String(b.gc || "").trim();
+
+    // ✅ Search across display + make + model + gc
+    const haystackNorm = norm(`${disp} ${make} ${model} ${gcRaw}`);
+    const gcDigits = digitsOnly(gcRaw);
+
+    // --- Numeric search behaviour (GC) ---
+    // If the user typed digits (like "473"), match against GC digits too.
+    // We allow "contains" so partials work anywhere in the GC number.
+    // If you prefer "startsWith" only, change includes -> startsWith.
+    let tokenHits = 0;
+
+    if (qDigits.length) {
+      if (gcDigits.includes(qDigits)) {
+        // Big boost if it matches the GC number
+        tokenHits += 3;
+      }
+    }
+
+    // --- Text token matching (make/model) ---
+    for (const tok of qTokens) {
+      if (haystackNorm.includes(tok)) tokenHits++;
+    }
+
+    if (tokenHits === 0) continue;
+
+    const allTokensMatched = qTokens.length ? (qTokens.every(t => haystackNorm.includes(t))) : false;
+
+    const starts = haystackNorm.startsWith(qNorm) ? 1 : 0;
+    const pos = haystackNorm.indexOf(qTokens[0] || qNorm);
+    const posScore = pos < 0 ? 9999 : pos;
+
+    const gcStartsBoost =
+      (qDigits.length && gcDigits.startsWith(qDigits)) ? 250 : 0;
+
+    const score =
+      (allTokensMatched ? 1000 : 0) +
+      (tokenHits * 100) +
+      (starts * 50) +
+      gcStartsBoost -
+      Math.min(50, posScore / 2);
+
+    scored.push({ b, score });
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, 24).map(x => x.b);
+};
+
+
+  input.addEventListener("input", () => {
+    const typed = input.value || "";
+    const matches = getMatches(typed);
+    render(matches);
+  });
+
+  input.addEventListener("blur", () => {
+    setTimeout(hide, 150);
+  });
+
+  input.addEventListener("focus", () => {
+    const typed = input.value || "";
+    const matches = getMatches(typed);
+    if (matches.length) render(matches);
+  });
+}
+// =====================================================================
 
 // ----------------- Typeahead UI -----------------
 function initDefectsTypeahead() {
@@ -187,19 +434,16 @@ function initDefectsTypeahead() {
       return;
     }
 
-    box.innerHTML = items
-      .slice(0, 12)
-      .map((d, idx) => {
-        const safeTitle = escapeHtml(d.title);
-        const meta = typed ? `Tap to use` : `Suggested`;
-        return `
-          <div class="suggestion-item" role="option" data-idx="${idx}">
-            <strong>${safeTitle}</strong>
-            <div class="meta">${meta}</div>
-          </div>
-        `;
-      })
-      .join("");
+   box.innerHTML = items
+  .slice(0, 12)
+  .map((b, idx) => `
+    <div class="suggestion-item" role="option" data-idx="${idx}">
+      <strong>${escapeHtml(b.display)}</strong>
+      ${b.gc ? `<div class="meta">GC: ${escapeHtml(b.gc)}</div>` : `<div class="meta">Tap to use</div>`}
+    </div>
+  `)
+  .join("");
+
 
     // tap/click to select
     box.querySelectorAll(".suggestion-item").forEach(node => {
@@ -248,64 +492,76 @@ input.focus();
     show();
   };
 
- const getMatches = (typed) => {
-  const raw = String(typed || "").trim();
-  if (!raw) return [];
+  const getMatches = (typed) => {
+    const raw = String(typed || "").trim();
+    if (!raw) return [];
 
-  // Normalize: lowercase, remove punctuation, collapse spaces
-  const norm = (s) =>
-    String(s || "")
-      .toLowerCase()
-      .replace(/[_/\\\-(),.]+/g, " ")   // treat punctuation as spaces
-      .replace(/\s+/g, " ")
-      .trim();
+    // Normal text: keeps word-order flexible
+    const norm = (s) =>
+      String(s || "")
+        .toLowerCase()
+        .replace(/[_/\\\-(),.]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
 
-  const qNorm = norm(raw);
-  if (!qNorm) return [];
+    // GC: remove anything that isn't a letter/number so
+    // "47-044-59" matches "4704459"
+    const normGc = (s) =>
+      String(s || "")
+        .toLowerCase()
+        .replace(/[^0-9a-z]/g, "");
 
-  const qTokens = qNorm.split(" ").filter(Boolean);
+    const qNorm = norm(raw);
+    const qGc = normGc(raw);
 
-  const scored = [];
+    const qTokens = qNorm.split(" ").filter(Boolean);
 
-  for (const d of defectsLibrary || []) {
-    const title = String(d.title || "").trim();
-    if (!title) continue;
+    const scored = [];
 
-    const tNorm = norm(title);
-    if (!tNorm) continue;
+    for (const b of boilersLibrary || []) {
+      const disp = String(b.display || "").trim();
+      if (!disp) continue;
 
-    // If user typed 1 word: show if that word appears anywhere
-    // If user typed multiple words: prefer titles that contain ALL words (any order)
-    let tokenHits = 0;
-    for (const tok of qTokens) {
-      if (tNorm.includes(tok)) tokenHits++;
+      // Searchable boiler text (make + model + display)
+      const textNorm = norm(`${b.make || ""} ${b.model || ""} ${disp}`);
+      const bGc = normGc(b.gc || "");
+
+      let score = 0;
+
+      // ---- Text token scoring (flexible word order)
+      let tokenHits = 0;
+      for (const tok of qTokens) {
+        if (tok && textNorm.includes(tok)) tokenHits++;
+      }
+
+      if (tokenHits > 0) {
+        const allTokensMatched = tokenHits === qTokens.length;
+        const starts = textNorm.startsWith(qNorm) ? 1 : 0;
+        const pos = qTokens[0] ? textNorm.indexOf(qTokens[0]) : 9999;
+        const posScore = pos < 0 ? 9999 : pos;
+
+        score += (allTokensMatched ? 1000 : 0);
+        score += (tokenHits * 100);
+        score += (starts * 50);
+        score -= Math.min(50, posScore / 2);
+      }
+
+      // ---- GC matching (very strong boost)
+      // If user typed something numeric-ish, this will quickly jump the right boiler to the top
+      if (qGc && bGc && bGc.includes(qGc)) {
+        score += 2000;
+        if (bGc === qGc) score += 2000; // exact match
+      }
+
+      if (score <= 0) continue;
+
+      scored.push({ b, score });
     }
 
-    if (tokenHits === 0) continue; // nothing matched at all
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, 24).map(x => x.b);
+  };
 
-    const allTokensMatched = tokenHits === qTokens.length;
-
-    // Extra scoring
-    const starts = tNorm.startsWith(qNorm) ? 1 : 0;
-    const pos = tNorm.indexOf(qTokens[0]); // earlier is better
-    const posScore = pos < 0 ? 9999 : pos;
-
-    // Higher score is better; we sort later
-    const score =
-      (allTokensMatched ? 1000 : 0) + // big boost if all words match
-      (tokenHits * 100) +             // reward more matched words
-      (starts * 50) -                 // reward startsWith
-      Math.min(50, posScore / 2);     // slightly reward early position
-
-    scored.push({ d, score });
-  }
-
-  // Sort best-first
-  scored.sort((a, b) => b.score - a.score);
-
-  // Return top results (increase if you like)
-  return scored.slice(0, 24).map(x => x.d);
-};
 
 
   // input typing
@@ -328,6 +584,10 @@ input.focus();
     if (matches.length) render(matches, typed);
   });
 }
+// Boilers CSV + typeahead
+initBoilersLibrary().then(() => {
+  initBoilerTypeahead();
+});
 
 // ----------------- Optional: manual Import button -----------------
 function initDefectsImportButton() {
@@ -1191,10 +1451,15 @@ function openModal(type, id = null) {
     if (el("findingAction")) el("findingAction").value = existing.action || "";
     if (el("findingNotes")) el("findingNotes").value = existing.notes || "";
 
-    // Photo
-    state.modalPhotoDataUrl = existing.photoDataUrl || "";
-    if (el("findingPhoto")) el("findingPhoto").value = "";
-    setPhotoPreview(state.modalPhotoDataUrl);
+  // Photo (prefer cloud URL, fall back to local dataUrl if you ever have one)
+state.modalPhotoDataUrl = existing.photoDataUrl || "";
+state.modalPhotoUrl = existing.photoUrl || "";
+
+if (el("findingPhoto")) el("findingPhoto").value = "";
+
+// Preview: show cloud URL if present, otherwise dataUrl
+setPhotoPreview(state.modalPhotoUrl || state.modalPhotoDataUrl);
+
   }
 
   if (el("findingTitle")) el("findingTitle").focus();
@@ -1328,6 +1593,82 @@ function closeOutLineForStyle(style, hasFindings) {
   if (s === "direct") return "Sort these items by the due date and confirm completion.";
   return "Get those sorted and give me a shout — I’m happy to re-check / review it with you.";
 }
+function buildCloseOutFromInspection(c, style) {
+  const s = String(style || "matey").toLowerCase();
+  const positives = c?.positives || [];
+  const findings = sortFindingsBySeverity(c?.findings || []);
+  const hasFindings = findings.length > 0;
+
+  // If no findings, keep your existing no-findings behaviour
+  if (!hasFindings) {
+    if (s === "matey") return "Nothing for me to pull you up on — keep doing what you’re doing.";
+    return "No findings recorded.";
+  }
+
+  // ----- Positive theme detection (same logic style as Engineer summary) -----
+  const blob = positives
+    .map(p => String((p && p.text) || "").toLowerCase())
+    .join(" | ");
+
+  const hasPaperwork =
+    /\blgsr\b|\bbenchmark\b|\bpaperwork\b|\bcertificate\b|\brecord\b|\bdetail\b|\baccurate\b|\baccuracy\b/.test(blob);
+
+  const hasCleanWork =
+    /\bclean\b|\btidy\b|\bspotless\b|\bneat\b|\bwell\s*serviced\b|\bserviced\b|\bto\s*spec\b|\bspecification\b|\btrap\b|\binjector\b/.test(blob);
+
+  const hasTenantPraise =
+    /\btenant\b|\bcustomer\b|\bclient\b|\bhomeowner\b|\bcompliment\b|\bcomplimentary\b|\bhappy\b|\bpleased\b|\bsatisfied\b/.test(blob);
+
+  const hasThoroughness =
+    /\bawkward\b|\bnot\s*many\b|\bpicked\s*up\b|\battention\b|\bdetail\b|\bthorough\b|\bexcellent\b|\bvery\s*good\b/.test(blob);
+
+  // ----- Pick top 2 improvement focus points from findings -----
+  const focus = [];
+  const seen = new Set();
+
+  for (const f of findings) {
+    const t = String(f?.title || "").trim();
+    if (!t) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    focus.push(t);
+    if (focus.length >= 2) break;
+  }
+
+  // ----- Build 1–2 short paragraphs (not an essay) -----
+  const parts = [];
+
+  // Paragraph 1: positives
+  const p1 = [];
+  if (s === "matey") p1.push("Overall, good work.");
+  else if (s === "direct") p1.push("Overall: good standard, with a few items to correct.");
+  else p1.push("Overall, a good standard of work with a few improvements required.");
+
+  if (hasCleanWork) p1.push("The work itself is coming across clean, tidy, and to spec.");
+  if (hasPaperwork) p1.push("Your LGSR/paperwork is being completed accurately with a good level of detail.");
+  if (hasTenantPraise) p1.push("Tenant/customer feedback is positive — people are happy with the work and how it’s been left.");
+  if (hasThoroughness) p1.push("You’re also picking up on the awkward details that others can miss, which is exactly what we want.");
+
+  parts.push(p1.join(" "));
+
+  // Paragraph 2: focus + close
+  const p2 = [];
+  if (focus.length) {
+    if (s === "direct") p2.push(`Focus on: ${focus.join(" • ")}.`);
+    else p2.push(`Main bits to tighten up: ${focus.join(" • ")}.`);
+  } else {
+    if (s === "direct") p2.push("Focus on the items listed above.");
+    else p2.push("Main bits to tighten up are the items listed above.");
+  }
+
+  // Your favourite line (matey style ending, but works fine across styles)
+  p2.push(`If those are treated as “every job checks”, you’ll fly through audits.`);
+
+  parts.push(p2.join(" "));
+
+  return parts.join("\n\n");
+}
 
 
 function buildVerbalScript() {
@@ -1403,8 +1744,10 @@ function buildVerbalScript() {
     });
 
     lines.push("");
-    lines.push(style === "matey" ? "If you sort those, the job will be bang on." : toneBits.close);
-    if (style === "matey") lines.push(toneBits.close);
+      lines.push("");
+    // Close-out (match the report close-out message)
+    lines.push(buildCloseOutFromInspection(c, style));
+
   } else {
     lines.push("");
     lines.push(style === "matey"
@@ -1432,14 +1775,15 @@ function renderReportPreview() {
   const findings = sortFindingsBySeverity(c.findings || []);
 
   const parts = [];
-  parts.push(`<div class="rp-section-title">Summary</div>`);
-  parts.push(`<div class="rp-small">${escapeHtml(summaryLine(c))}</div>`);
+ 
 
+
+
+ if (positives.length) {
   parts.push(`<div class="rp-section-title">What was done well</div>`);
-  parts.push(!positives.length
-    ? `<div class="rp-small">No positives recorded.</div>`
-    : `<ul class="rp-list">${positives.map(p => `<li>${escapeHtml(p.text)}</li>`).join("")}</ul>`
-  );
+  parts.push(`<ul class="rp-list">${positives.map(p => `<li>${escapeHtml(p.text)}</li>`).join("")}</ul>`);
+}
+
 
   parts.push(`<div class="rp-section-title">Findings & required actions</div>`);
   if (!findings.length) {
@@ -1470,10 +1814,7 @@ const style = el("verbalStyleSelect")?.value || "matey";
 const hasFindings = findings.length > 0;
 
 parts.push(`<div class="rp-section-title">Close-out</div>`);
-parts.push(`<div class="rp-small">${escapeHtml(getCloseOutForCurrent(style, hasFindings))}</div>`);
-
-
-
+parts.push(`<div class="rp-small">${escapeHtml(getCloseOutForCurrent(style, hasFindings, c))}</div>`);
 
   el("reportBody").innerHTML = parts.join("");
 }
@@ -1602,8 +1943,12 @@ function buildPrintableReportHTMLFromInspection(ins) {
   `;
 
   const positivesHtml = positives.length
-    ? `<ul>${positives.map(p => `<li>${esc(p.text)}</li>`).join("")}</ul>`
-    : `<div class="muted">No positives recorded.</div>`;
+  ? `<div class="box">
+       <h3>What was done well</h3>
+       <ul>${positives.map(p => `<li>${esc(p.text)}</li>`).join("")}</ul>
+     </div>`
+  : ``;
+
 
   const findingsHtml = findings.length
     ? findings.map(f => `
@@ -1634,13 +1979,12 @@ function buildPrintableReportHTMLFromInspection(ins) {
 
       <div class="box">
         <h3>Summary</h3>
-        <div>${esc(summaryLine(c))}</div>
+        <div>${esc(summaryLine(c, { hideZeroPositives: true }))}</div>
+
       </div>
 
-      <div class="box">
-        <h3>What was done well</h3>
-        ${positivesHtml}
-      </div>
+      ${positivesHtml}
+
 
       <div class="box findings-box">
   <h3>Findings & required actions</h3>
@@ -1650,7 +1994,8 @@ function buildPrintableReportHTMLFromInspection(ins) {
 
    <div class="box">
   <h3>Close-out</h3>
-  <div>${esc((c.closeOutOverride || "").trim() || closeOutLineForStyle(el("verbalStyleSelect")?.value || "matey", findings.length > 0))}</div>
+  <div>${esc((c.closeOutOverride || "").trim() || buildCloseOutFromInspection(c, el("verbalStyleSelect")?.value || "matey"))}</div>
+
 </div>
     </div>
   `;
@@ -1861,20 +2206,26 @@ function filterAuditsForEngineer(engineerName) {
     .filter(a => normalizeEngineer(a.engineer || "") === target)
     .sort((a,b) => (a.date || "").localeCompare(b.date || ""));
 
-  const range = el("rangeSelect").value;
+   const range = el("rangeSelect").value;
   const today = new Date();
 
   if (range === "last5") return all.slice(-5);
-  if (range === "last10") return all.slice(-10);
+  if (range === "last6") return all.slice(-6);
 
-  if (range === "30d" || range === "90d") {
-    const days = range === "30d" ? 30 : 90;
-    const cutoff = new Date(today);
-    cutoff.setDate(cutoff.getDate() - days);
+  // Quarter filtering (uses current year)
+  if (range === "qCurrent" || range === "q1" || range === "q2" || range === "q3" || range === "q4") {
+    const year = today.getFullYear();
+    const q =
+      range === "qCurrent" ? getCurrentQuarter(today) :
+      range === "q1" ? 1 :
+      range === "q2" ? 2 :
+      range === "q3" ? 3 : 4;
+
+    const { start, end } = getQuarterRange(year, q);
 
     return all.filter(a => {
       const d = parseDateSafe(a.date);
-      return d && d >= cutoff && d <= today;
+      return d && d >= start && d <= end;
     });
   }
 
@@ -1893,6 +2244,7 @@ function filterAuditsForEngineer(engineerName) {
   }
 
   return all;
+
 }
 
 function buildEngineerSummary(engineer, audits) {
@@ -1906,7 +2258,9 @@ function buildEngineerSummary(engineer, audits) {
   const severityCounts = { Critical: 0, Major: 0, Minor: 0, Advisory: 0 };
   const categoryCounts = {};
   const tagCounts = {};
-  const paperworkTagCounts = {};
+   const paperworkTagCounts = {}; // legacy bucket (we'll keep it)
+  const documentationDefectCounts = {}; // ✅ counts defect titles for Documentation
+
 
 // ✅ Defects (picked from Defects CSV library)
 const defectCounts = {};
@@ -1926,23 +2280,58 @@ const defectsCsvTitleSet = new Set(
     .filter(Boolean)
 );
 
-  const trend = [];
+    const trend = [];
 
-   let totalFindings = 0;
+  // ✅ Positives (keep original wording, count duplicates)
+  const positiveMap = new Map(); // key(normalised) -> { text, count }
+
+
+  // ✅ count repeated positives cleanly (case/spacing insensitive)
+  const positiveCounts = {};
+
+  let totalFindings = 0;
   let totalPositives = 0;
 
   let scoreSum = 0; // ✅ add this
+
 
   audits.forEach(a => {
     scoreSum += scoreAudit(a); // ✅ add this
 
     outcomes[a.outcome] = (outcomes[a.outcome] || 0) + 1;
 
-    const positives = a.positives || [];
+        const positives = a.positives || [];
     const findings = a.findings || [];
 
     totalPositives += positives.length;
     totalFindings += findings.length;
+
+    // ✅ Count positives (case/spacing insensitive, but store original text)
+    positives.forEach(p => {
+      const raw = String(p?.text || "").trim();
+      if (!raw) return;
+
+      const key = raw
+        .toLowerCase()
+        .replace(/[_/\\\-(),.]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      const prev = positiveMap.get(key);
+      if (prev) prev.count += 1;
+      else positiveMap.set(key, { text: raw, count: 1 });
+    });
+
+
+    // ✅ count positives by text (no optional chaining)
+    positives.forEach(p => {
+      const raw = String((p && p.text) || "").trim();
+      if (!raw) return;
+
+      const key = raw.toLowerCase().replace(/\s+/g, " ");
+      positiveCounts[key] = (positiveCounts[key] || 0) + 1;
+    });
+
 
     trend.push({
       date: a.date,
@@ -1960,9 +2349,20 @@ const defectsCsvTitleSet = new Set(
     const tag = (f.tag || "OTHER").toUpperCase();
 tagCounts[tag] = (tagCounts[tag] || 0) + 1;
 
-if (tag.startsWith("PAPERWORK_") || cat === "Benchmark / paperwork") {
-  paperworkTagCounts[tag] = (paperworkTagCounts[tag] || 0) + 1;
-}
+            // ✅ Documentation bucket (replaces old paperwork/benchmark logic)
+      const isDocumentation =
+        tag === "DOCUMENTATION" ||
+        String(cat || "").trim().toLowerCase() === "documentation";
+
+      if (isDocumentation) {
+        // Count individual defect titles (what you actually want to show)
+        const titleKey = String(f.title || "").trim();
+        if (titleKey) {
+          documentationDefectCounts[titleKey] = (documentationDefectCounts[titleKey] || 0) + 1;
+        }
+      }
+
+
 
 // ✅ Count defects that match a Defects.csv title
 const tNorm = normDefectTitle(f.title);
@@ -1979,8 +2379,10 @@ if (tNorm && defectsCsvTitleSet.has(tNorm)) {
   const avgScore = auditCount ? Math.round(scoreSum / auditCount) : 0;
 
   const topTags = topN(tagCounts, 5);
-  const topPaperwork = topN(paperworkTagCounts, 3);
+    const topDocumentationDefects = topN(documentationDefectCounts, 5);
+
   const topCats = topN(categoryCounts, 5);
+const topDefects = topN(defectCounts, 5);
 
   const trendLines = trend
     .slice()
@@ -2025,14 +2427,65 @@ lines.push(`Totals: ${totalFindings} Defects Found • ${totalPositives} positiv
 lines.push(`Severity: ID ${severityCounts.Critical} • AR ${severityCounts.Major} • NCS ${severityCounts.Minor} • Advisory ${severityCounts.Advisory}`);
 
 lines.push("");
+// ✅ MERGED SUMMARY 
+lines.push("SUMMARY");
 
+const positiveEntries = Array.from(positiveMap.values())
+  .sort((a, b) => b.count - a.count);
 
-  lines.push("TOP 5 RECURRING ISSUES (by Issue Tag)");
-  if (!topTags.length) lines.push("- No tagged issues found (start using Issue Tag).");
-  else topTags.forEach(([k,v], i) => lines.push(`${i+1}. ${k} (x${v})`));
+if (!positiveEntries.length) {
+  lines.push("No positives recorded in this range.");
   lines.push("");
+} else {
+  // Build a combined text blob for simple theme detection
+  const blob = positiveEntries
+    .map(p => String(p.text || "").toLowerCase())
+    .join(" | ");
 
- const topDefects = topN(defectCounts, 5);
+  const hasPaperwork =
+    /\blgsr\b|\bbenchmark\b|\bpaperwork\b|\bcertificate\b|\brecord\b|\bdetail\b|\baccurate\b|\baccuracy\b/.test(blob);
+
+  const hasCleanWork =
+    /\bclean\b|\btidy\b|\bspotless\b|\bneat\b|\bwell\s*serviced\b|\bserviced\b|\bto\s*spec\b|\bspecification\b|\btrap\b|\binjector\b/.test(blob);
+
+  const hasTenantPraise =
+    /\btenant\b|\bcustomer\b|\bclient\b|\bhomeowner\b|\bcompliment\b|\bcomplimentary\b|\bhappy\b|\bpleased\b|\bsatisfied\b/.test(blob);
+
+  const hasThoroughness =
+    /\bawkward\b|\bnot\s*many\b|\bpicked\s*up\b|\battention\b|\bdetail\b|\bthorough\b|\bexcellent\b|\bvery\s*good\b/.test(blob);
+
+  // Paragraph 1: positives
+  const parts = [];
+  parts.push(`Strong standards across these audits.`);
+
+  if (hasCleanWork) parts.push(`The work itself is coming across clean, tidy, and to spec.`);
+  if (hasPaperwork) parts.push(`Your LGSR/paperwork is being completed accurately with a good level of detail.`);
+  if (hasTenantPraise) parts.push(`There are also clear positives around tenant/customer satisfaction — people are happy with the work and how it’s been left.`);
+  if (hasThoroughness) parts.push(`You’re also picking up on the awkward details that others can miss, which is exactly what we want.`);
+
+  parts.push(`Keep that as your baseline every job — it makes audits straightforward.`);
+
+  lines.push(parts.join(" "));
+  lines.push("");
+}
+
+// Paragraph 2: improvements / coaching (kept detailed, not too brief)
+lines.push(buildCoachSpeak(engineer, avgScore, topTags, topCats, topDefects, severityCounts));
+lines.push("");
+
+
+
+
+
+// ✅ Positives section (top 5 repeated)
+const topPositives = topN(positiveCounts, 5);
+
+
+lines.push("TOP 5 RECURRING ISSUES (by Issue Tag)");
+if (!topTags.length) lines.push("- No tagged issues found (start using Issue Tag).");
+else topTags.forEach(([k,v], i) => lines.push(`${i+1}. ${k} (x${v})`));
+lines.push("");
+
 
 lines.push("MOST COMMON DEFECTS NOT RECORDED");
 if (!defectsCsvTitleSet.size) {
@@ -2045,43 +2498,139 @@ if (!defectsCsvTitleSet.size) {
 lines.push("");
 
 
-  lines.push("COMMON PAPERWORK ISSUES");
-  if (!topPaperwork.length) lines.push("- No Issues With Paperwork Found.");
-  else topPaperwork.forEach(([k,v]) => lines.push(`- ${k} (x${v})`));
+   lines.push("COMMON DOCUMENTATION DEFECTS");
+  if (!topDocumentationDefects.length) lines.push("- No documentation defects found.");
+  else topDocumentationDefects.forEach(([title, n], i) => lines.push(`${i + 1}. ${title} (x${n})`));
   lines.push("");
+
 
   lines.push("TREND (Findings + Score by audit)");
   if (!trendLines.length) lines.push("- No audits.");
   else lines.push(...trendLines);
   lines.push("");
 
-  lines.push("COACHING SUMMARY (supportive)");
-  lines.push(coaching);
-  lines.push("");
-
-  lines.push("MATEY VERBAL SUMMARY (you can read this out)");
-  lines.push(buildMateyEngineerVerbal(engineer, avgScore, topTags, severityCounts));
-  lines.push("");
-
   lines.push("NOTES");
-  lines.push("- Scores are a simple consistency measure (100 minus severity penalties).");
-  lines.push("- Trends are best when Issue Tags are used consistently.");
+
 
   return { text: lines.join("\n"), audits };
 }
 
-function buildMateyEngineerVerbal(engineer, _avgScore, topTags, severityCounts) {
-  const top2 = topTags.slice(0,2).map(([k]) => k);
+function buildCoachSpeak(engineer, avgScore, topTags, topCats, topDefects, severityCounts) {
+  const topCat = topCats[0]?.[0] || "";
+
   const majors = severityCounts.Major || 0;
   const criticals = severityCounts.Critical || 0;
 
+  // ✅ Prefer common DEFECT TITLES (up to 3). Fallback to tags if none.
+  const defect1 = topDefects?.[0]?.[0] || "";
+  const defect2 = topDefects?.[1]?.[0] || "";
+  const defect3 = topDefects?.[2]?.[0] || "";
+
+  const tag1 = topTags?.[0]?.[0] || "";
+  const tag2 = topTags?.[1]?.[0] || "";
+  const tag3 = topTags?.[2]?.[0] || "";
+
+  const defectFocus = [defect1, defect2, defect3].filter(Boolean).join(", ");
+  const tagFocus = [tag1, tag2, tag3].filter(Boolean).join(" + ");
+
   const bits = [];
-  bits.push(`Alright ${engineer}, I’ve pulled together the ${rangeLabel()} worth of audits.`);
-  if (criticals > 0) bits.push(`There were ${criticals} critical item(s) — those need eliminating completely.`);
-  if (majors > 0) bits.push(`You’ve had ${majors} major item(s) — main thing is reducing those down.`);
-  if (top2.length) bits.push(`The two repeat ones I keep seeing are: ${top2.join(" and ")}.`);
-  bits.push(`Good work overall — if we tighten those up every time, you’ll fly through audits.`);
+
+  // Straight in (no "Alright <name>")
+  if (topCat) bits.push(`Most findings are landing under ${topCat}.`);
+
+  if (criticals > 0) {
+    bits.push(`There were ${criticals} ID item(s) in this period — those are the ones we need to eliminate completely.`);
+  }
+  if (majors > 0) {
+    bits.push(`You’ve had ${majors} AR item(s) — the main win is reducing those down over the next set of audits.`);
+  }
+
+  if (defectFocus) {
+  bits.push(`The repeat themes I’m seeing are ${defectFocus}. If those are treated as “every job checks”, you’ll fly through audits.`);
+} else if (tagFocus) {
+  bits.push(`The repeat themes I’m seeing are ${tagFocus}. If those are treated as “every job checks”, you’ll fly through audits.`);
+} else {
+  bits.push(`Nothing is standing out as a repeat theme — keep the consistency going.`);
+}
+
+
   return bits.join(" ");
+}
+
+
+function buildPositiveFeedbackParagraph(engineer, positiveCounts) {
+  const name = engineer || "Engineer";
+
+  // Sort by frequency and keep top inputs (we're summarising, not listing)
+  const items = Object.entries(positiveCounts || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 18)
+    .map(([k]) => String(k || "").trim())
+    .filter(Boolean);
+
+  if (!items.length) {
+    return `No positives recorded in this range — if you want, start adding one quick “what went well” line on each audit so you get credit for the good stuff too.`;
+  }
+
+  // Helper: case-insensitive "contains any"
+  const hasAny = (text, words) => {
+    const t = text.toLowerCase();
+    return words.some(w => t.includes(w));
+  };
+
+  // Theme detection tuned to YOUR real examples
+  const themeHits = {
+    lgsr: 0,
+    thorough: 0,
+    workmanship: 0,
+    customer: 0,
+    overall: 0
+  };
+
+  items.forEach(t => {
+    const lower = t.toLowerCase();
+
+    if (hasAny(lower, ["lgsr", "record", "paperwork", "detail", "accurate", "accuracy", "perfect"])) themeHits.lgsr++;
+    if (hasAny(lower, ["additional defects", "awkward defects", "picked up", "would have picked up", "few additional", "not many others"])) themeHits.thorough++;
+    if (hasAny(lower, ["spotless", "tidy", "clean", "well serviced", "serviced", "to specification", "to spec"])) themeHits.workmanship++;
+    if (hasAny(lower, ["tenant", "customer", "happy", "complimentary"])) themeHits.customer++;
+    if (hasAny(lower, ["perfect", "no issues", "no issues at all", "great work"])) themeHits.overall++;
+  });
+
+  // Pick top 2 themes (best signal)
+  const ordered = Object.entries(themeHits)
+    .filter(([,n]) => n > 0)
+    .sort((a,b) => b[1] - a[1])
+    .map(([k]) => k);
+
+  const primary = ordered[0] || "overall";
+  const secondary = ordered[1] || null;
+
+  const themePhrase = (key) => {
+    if (key === "lgsr") return "your LGSR paperwork being accurate, detailed, and well recorded";
+    if (key === "thorough") return "your thoroughness — picking up the awkward defects that others often miss";
+    if (key === "workmanship") return "the standard of the work itself — clean, tidy, and to spec";
+    if (key === "customer") return "how you leave the customer feeling — confident and happy with the work";
+    return "your overall standard being consistently solid";
+  };
+
+  // Pull 2 short “example” phrases to make it feel real, without listing everything
+  const niceExamples = items
+    .map(s => s.replace(/\s+/g, " ").trim())
+    .filter(s => s.length <= 90) // avoid mega lines
+    .slice(0, 2)
+    .map(s => s.charAt(0).toUpperCase() + s.slice(1));
+
+  const exampleBit =
+    niceExamples.length === 0 ? "" :
+    niceExamples.length === 1 ? ` Example: “${niceExamples[0]}.”` :
+    ` Examples: “${niceExamples[0]}” and “${niceExamples[1]}.”`;
+
+  // Build the paragraph
+  const p1 = `Alright ${name} — the positives coming through in this range are mainly around ${themePhrase(primary)}${secondary ? `, and also ${themePhrase(secondary)}` : ""}.`;
+  const p2 = `Keep that as your baseline on every job — it’s exactly what makes audits straightforward.${exampleBit}`;
+
+  return `${p1} ${p2}`;
 }
 
 
@@ -2102,13 +2651,40 @@ function buildCoachingParagraph(engineer, topTags, topCats) {
 
 function rangeLabel() {
   const r = el("rangeSelect")?.value || "last5";
-  if (r === "last5") return "last 5 Audits";
-  if (r === "last10") return "last 10 Audits";
-  if (r === "30d") return "last 30 days";
-  if (r === "90d") return "last 90 days";
-  if (r === "custom") return "custom range";
+
+  if (r === "last5") return "Last 5 audits";
+  if (r === "last6") return "Last 6 audits";
+
+  if (r === "qCurrent") return quarterLabel(getCurrentQuarter());
+  if (r === "q1") return "Quarter 1 (Jan–Mar)";
+  if (r === "q2") return "Quarter 2 (Apr–Jun)";
+  if (r === "q3") return "Quarter 3 (Jul–Sep)";
+  if (r === "q4") return "Quarter 4 (Oct–Dec)";
+
+  if (r === "custom") return "Custom range";
   return r;
 }
+
+function quarterLabel(q) {
+  if (q === 1) return "Quarter 1 (Jan–Mar)";
+  if (q === 2) return "Quarter 2 (Apr–Jun)";
+  if (q === 3) return "Quarter 3 (Jul–Sep)";
+  return "Quarter 4 (Oct–Dec)";
+}
+
+function getCurrentQuarter(date = new Date()) {
+  const m = date.getMonth(); // 0-11
+  return Math.floor(m / 3) + 1; // 1-4
+}
+
+function getQuarterRange(year, q) {
+  // q: 1-4
+  const startMonth = (q - 1) * 3;         // 0,3,6,9
+  const start = new Date(year, startMonth, 1, 0, 0, 0, 0);
+  const end = new Date(year, startMonth + 3, 0, 23, 59, 59, 999); // last day of quarter
+  return { start, end };
+}
+
 function loadEngineerDrafts() {
   try {
     return JSON.parse(localStorage.getItem(ENGINEER_DRAFTS_KEY) || "{}") || {};
@@ -2443,14 +3019,20 @@ function lastNonEmptyLine(text) {
   return lines.length ? lines[lines.length - 1] : "";
 }
 
-function getCloseOutForCurrent(style, hasFindings) {
+function getCloseOutForCurrent(style, hasFindings, inspection = null) {
   // If user has edited close-out, always use it
   const custom = (state.current?.closeOutOverride || "").trim();
   if (custom) return custom;
 
-  // Otherwise use your normal verbal-derived default
+  const c = inspection || state.current;
+
+  // ✅ New smart close-out (positives + improvements)
+  if (c) return buildCloseOutFromInspection(c, style);
+
+  // Fallback (should rarely happen)
   return closeOutLineForStyle(style, hasFindings);
 }
+
 
 function severityLabel(sev) {
   const s = String(sev || "").toLowerCase();
@@ -2466,7 +3048,9 @@ function sortFindingsBySeverity(findings) {
   return [...findings].sort((a,b) => (order[a.severity] ?? 99) - (order[b.severity] ?? 99));
 }
 
-function summaryLine(c) {
+function summaryLine(c, opts = {}) {
+  const { hideZeroPositives = false } = opts;
+
   const findings = c.findings || [];
   const counts = { Critical: 0, Major: 0, Minor: 0, Advisory: 0 };
   findings.forEach(f => { if (counts[f.severity] !== undefined) counts[f.severity]++; });
@@ -2474,12 +3058,23 @@ function summaryLine(c) {
   const posCount = (c.positives || []).length;
 
   const bits = [];
-  bits.push(`${posCount} positive${posCount === 1 ? "" : "s"}`);
+
+  // ✅ Only show positives if > 0 (when the option is enabled)
+  if (!(hideZeroPositives && posCount === 0)) {
+    bits.push(`${posCount} positive${posCount === 1 ? "" : "s"}`);
+  }
+
   bits.push(`${findings.length} finding${findings.length === 1 ? "" : "s"}`);
-  const sevBits = Object.keys(counts).filter(k => counts[k] > 0).map(k => `${counts[k]} ${k}`);
+
+  const sevBits = Object.keys(counts)
+    .filter(k => counts[k] > 0)
+    .map(k => `${counts[k]} ${k}`);
+
   if (sevBits.length) bits.push(`(${sevBits.join(", ")})`);
+
   return bits.join(" • ");
 }
+
 
 function formatDate(yyyyMmDd) {
   if (!yyyyMmDd) return "—";
