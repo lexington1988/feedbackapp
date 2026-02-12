@@ -434,16 +434,19 @@ function initDefectsTypeahead() {
       return;
     }
 
-   box.innerHTML = items
-  .slice(0, 12)
-  .map((b, idx) => `
-    <div class="suggestion-item" role="option" data-idx="${idx}">
-      <strong>${escapeHtml(b.display)}</strong>
-      ${b.gc ? `<div class="meta">GC: ${escapeHtml(b.gc)}</div>` : `<div class="meta">Tap to use</div>`}
-    </div>
-  `)
-  .join("");
-
+    box.innerHTML = items
+      .slice(0, 12)
+      .map((d, idx) => {
+        const safeTitle = escapeHtml(d.title);
+        const meta = typed ? `Tap to use` : `Suggested`;
+        return `
+          <div class="suggestion-item" role="option" data-idx="${idx}">
+            <strong>${safeTitle}</strong>
+            <div class="meta">${meta}</div>
+          </div>
+        `;
+      })
+      .join("");
 
     // tap/click to select
     box.querySelectorAll(".suggestion-item").forEach(node => {
@@ -452,40 +455,32 @@ function initDefectsTypeahead() {
         const chosen = items[i];
         if (!chosen) return;
 
-       input.value = chosen.title;
+        input.value = chosen.title;
 
-// Populate other fields if present
-if (chosen.category && el("findingCategory")) {
-  el("findingCategory").value = chosen.category;
-}
+        // Populate other fields if present
+        if (chosen.category && el("findingCategory")) el("findingCategory").value = chosen.category;
 
-// Map CSV severity (ID/AR/NCS/Advisory) -> your select values (Critical/Major/Minor/Advisory)
-if (chosen.severity && el("findingSeverity")) {
-  const s = chosen.severity.trim().toUpperCase();
-  const mapped =
-    s === "ID" ? "Critical" :
-    s === "AR" ? "Major" :
-    s === "NCS" ? "Minor" :
-    s === "ADVISORY" ? "Advisory" :
-    ""; // unknown
+        // Map CSV severity (ID/AR/NCS/Advisory) -> your select values
+        if (chosen.severity && el("findingSeverity")) {
+          const s = chosen.severity.trim().toUpperCase();
+          const mapped =
+            s === "ID" ? "Critical" :
+            s === "AR" ? "Major" :
+            s === "NCS" ? "Minor" :
+            s === "ADVISORY" ? "Advisory" :
+            "";
+          if (mapped) el("findingSeverity").value = mapped;
+        }
 
-  if (mapped) el("findingSeverity").value = mapped;
-}
+        // Tags
+        if (chosen.tag && el("findingTag")) el("findingTag").value = chosen.tag;
 
-// Tags: your HTML options are strings like "FLUE SUPPORT", etc.
-if (chosen.tag && el("findingTag")) {
-  el("findingTag").value = chosen.tag;
-}
+        if (chosen.why && el("findingWhy")) el("findingWhy").value = chosen.why;
+        if (chosen.action && el("findingAction")) el("findingAction").value = chosen.action;
 
-if (chosen.why && el("findingWhy")) el("findingWhy").value = chosen.why;
-if (chosen.action && el("findingAction")) el("findingAction").value = chosen.action;
-
-hide();
-box.innerHTML = "";
-
-// keep focus so you can keep typing in next fields on mobile
-input.focus();
-
+        hide();
+        box.innerHTML = "";
+        input.focus();
       });
     });
 
@@ -496,7 +491,7 @@ input.focus();
     const raw = String(typed || "").trim();
     if (!raw) return [];
 
-    // Normal text: keeps word-order flexible
+    // Normalize: lowercase, remove punctuation, collapse spaces
     const norm = (s) =>
       String(s || "")
         .toLowerCase()
@@ -504,90 +499,68 @@ input.focus();
         .replace(/\s+/g, " ")
         .trim();
 
-    // GC: remove anything that isn't a letter/number so
-    // "47-044-59" matches "4704459"
-    const normGc = (s) =>
-      String(s || "")
-        .toLowerCase()
-        .replace(/[^0-9a-z]/g, "");
-
     const qNorm = norm(raw);
-    const qGc = normGc(raw);
+    if (!qNorm) return [];
 
     const qTokens = qNorm.split(" ").filter(Boolean);
 
     const scored = [];
 
-    for (const b of boilersLibrary || []) {
-      const disp = String(b.display || "").trim();
-      if (!disp) continue;
+    // ✅ IMPORTANT: search defectsLibrary (NOT boilersLibrary)
+    for (const d of defectsLibrary || []) {
+      const title = String(d.title || "").trim();
+      if (!title) continue;
 
-      // Searchable boiler text (make + model + display)
-      const textNorm = norm(`${b.make || ""} ${b.model || ""} ${disp}`);
-      const bGc = normGc(b.gc || "");
+      const tNorm = norm(title);
+      if (!tNorm) continue;
 
-      let score = 0;
-
-      // ---- Text token scoring (flexible word order)
       let tokenHits = 0;
       for (const tok of qTokens) {
-        if (tok && textNorm.includes(tok)) tokenHits++;
+        if (tNorm.includes(tok)) tokenHits++;
       }
+      if (tokenHits === 0) continue;
 
-      if (tokenHits > 0) {
-        const allTokensMatched = tokenHits === qTokens.length;
-        const starts = textNorm.startsWith(qNorm) ? 1 : 0;
-        const pos = qTokens[0] ? textNorm.indexOf(qTokens[0]) : 9999;
-        const posScore = pos < 0 ? 9999 : pos;
+      const allTokensMatched = tokenHits === qTokens.length;
+      const starts = tNorm.startsWith(qNorm) ? 1 : 0;
+      const pos = tNorm.indexOf(qTokens[0]);
+      const posScore = pos < 0 ? 9999 : pos;
 
-        score += (allTokensMatched ? 1000 : 0);
-        score += (tokenHits * 100);
-        score += (starts * 50);
-        score -= Math.min(50, posScore / 2);
-      }
+      const score =
+        (allTokensMatched ? 1000 : 0) +
+        (tokenHits * 100) +
+        (starts * 50) -
+        Math.min(50, posScore / 2);
 
-      // ---- GC matching (very strong boost)
-      // If user typed something numeric-ish, this will quickly jump the right boiler to the top
-      if (qGc && bGc && bGc.includes(qGc)) {
-        score += 2000;
-        if (bGc === qGc) score += 2000; // exact match
-      }
-
-      if (score <= 0) continue;
-
-      scored.push({ b, score });
+      scored.push({ d, score });
     }
 
     scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, 24).map(x => x.b);
+    return scored.slice(0, 24).map(x => x.d);
   };
 
-
-
-  // input typing
   input.addEventListener("input", () => {
+    // ✅ hide boiler suggestions when typing a defect
+    const boilerBox = el("boilerSuggestions");
+    if (boilerBox) {
+      boilerBox.classList.add("hidden");
+      boilerBox.innerHTML = "";
+    }
+
     const typed = input.value || "";
     const matches = getMatches(typed);
     render(matches, typed);
   });
 
-  // hide when leaving field
   input.addEventListener("blur", () => {
-    // small delay to allow click selection
     setTimeout(hide, 150);
   });
 
-  // optional: show top suggestions when focused with existing text
   input.addEventListener("focus", () => {
     const typed = input.value || "";
     const matches = getMatches(typed);
     if (matches.length) render(matches, typed);
   });
 }
-// Boilers CSV + typeahead
-initBoilersLibrary().then(() => {
-  initBoilerTypeahead();
-});
 
 // ----------------- Optional: manual Import button -----------------
 function initDefectsImportButton() {
@@ -735,9 +708,15 @@ window.addEventListener("DOMContentLoaded", init);
 
 function init() {
 
-    // Defects CSV + typeahead
-  initDefectsLibrary().then(() => {
-    initDefectsTypeahead();
+   // Defects CSV + typeahead
+initDefectsLibrary().then(() => {
+  initDefectsTypeahead();
+});
+
+// Boilers CSV + typeahead
+initBoilersLibrary().then(() => {
+  initBoilerTypeahead();
+
   });
   initDefectsImportButton();
 
