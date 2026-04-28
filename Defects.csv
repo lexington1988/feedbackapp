@@ -180,3 +180,5 @@ Appliance not serviced to Manufacturer's Specifications,Workmanship,Advisory,WOR
 Appliance not reassembled correctly not effecting safe operation,Workmanship,Advisory,WORKMANSHIP ,,,,,,,
 Smoke/heat alarm missing/expired,Workmanship,Advisory,WORKMANSHIP ,,,,,,,
 Invalid certificate (Auditor reissued),Workmanship,Advisory,WORKMANSHIP ,,,,,,,
+Meter capped at meter inlet (VOID) where process states outlet,Workmanship,Advisory,WORKMANSHIP,,,,,,,
+
