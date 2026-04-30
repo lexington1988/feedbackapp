@@ -12,7 +12,17 @@ const ENGINEER_DRAFTS_KEY = "ppc_engineer_summary_drafts_v1";
 
 const el = (id) => document.getElementById(id);
 const uid = () => Math.random().toString(16).slice(2) + Date.now().toString(16);
+function closeMobileKeyboard(input = null) {
+  setTimeout(() => {
+    if (input && typeof input.blur === "function") {
+      input.blur();
+    }
 
+    if (document.activeElement && typeof document.activeElement.blur === "function") {
+      document.activeElement.blur();
+    }
+  }, 100);
+}
 const state = {
   current: null,
   editingModal: null,
@@ -176,7 +186,7 @@ const BOILERS_CSV_URL = "https://raw.githubusercontent.com/lexington1988/feedbac
 
 
 let boilersLibrary = []; // { display, make, model }
-
+let suppressBoilerSuggestionsUntil = 0;
 async function initBoilersLibrary() {
   // 1) local cache
   try {
@@ -308,14 +318,14 @@ function initBoilerTypeahead() {
         if (!chosen) return;
 
         input.value = chosen.display;
-
+suppressBoilerSuggestionsUntil = Date.now() + 800;
         // Keep state in sync + update outputs
         if (state.current) state.current.appliance = chosen.display;
         renderOutputs();
 
-        hide();
-        box.innerHTML = "";
-        input.focus();
+       hide();
+box.innerHTML = "";
+closeMobileKeyboard(input);
       });
     });
 
@@ -409,20 +419,46 @@ function initBoilerTypeahead() {
   input.addEventListener("blur", () => {
     setTimeout(hide, 150);
   });
+input.addEventListener("pointerdown", () => {
+  if (Date.now() < suppressBoilerSuggestionsUntil) {
+    hide();
+    box.innerHTML = "";
+  }
+});
+ input.addEventListener("focus", () => {
+  if (Date.now() < suppressBoilerSuggestionsUntil) {
+    hide();
+    box.innerHTML = "";
+    return;
+  }
 
-  input.addEventListener("focus", () => {
-    const typed = input.value || "";
-    const matches = getMatches(typed);
-    if (matches.length) render(matches);
-  });
+  const typed = input.value || "";
+  const matches = getMatches(typed);
+  if (matches.length) render(matches);
+});
 }
 // =====================================================================
 
 // ----------------- Typeahead UI -----------------
 function initDefectsTypeahead() {
   const input = el("findingTitle");
-  const box = el("defectSuggestions");
-  if (!input || !box) return;
+const box = el("defectSuggestions");
+if (!input || !box) return;
+
+// Repeat issue warning
+let repeatIndicator = el("repeatIssueIndicator");
+
+if (!repeatIndicator) {
+  repeatIndicator = document.createElement("div");
+  repeatIndicator.id = "repeatIssueIndicator";
+  repeatIndicator.className = "hidden";
+  repeatIndicator.style.marginTop = "6px";
+  repeatIndicator.style.fontWeight = "bold";
+  repeatIndicator.style.color = "#b45309";
+  repeatIndicator.style.fontSize = "0.9rem";
+
+  input.insertAdjacentElement("afterend", repeatIndicator);
+}
 
   const show = () => box.classList.remove("hidden");
   const hide = () => box.classList.add("hidden");
@@ -456,7 +492,7 @@ function initDefectsTypeahead() {
         if (!chosen) return;
 
         input.value = chosen.title;
-
+updateRepeatIssueIndicator();
         // Populate other fields if present
         if (chosen.category && el("findingCategory")) el("findingCategory").value = chosen.category;
 
@@ -479,8 +515,8 @@ function initDefectsTypeahead() {
         if (chosen.action && el("findingAction")) el("findingAction").value = chosen.action;
 
         hide();
-        box.innerHTML = "";
-        input.focus();
+box.innerHTML = "";
+closeMobileKeyboard(input);
       });
     });
 
@@ -539,6 +575,7 @@ function initDefectsTypeahead() {
   };
 
   input.addEventListener("input", () => {
+    updateRepeatIssueIndicator();
     // ✅ hide boiler suggestions when typing a defect
     const boilerBox = el("boilerSuggestions");
     if (boilerBox) {
@@ -719,7 +756,8 @@ initBoilersLibrary().then(() => {
 
   });
   initDefectsImportButton();
-
+if (el("rangeSelect")) el("rangeSelect").value = "qCurrent";
+  
   const today = new Date();
   el("dateInput").value = today.toISOString().slice(0, 10);
 
@@ -739,6 +777,8 @@ initBoilersLibrary().then(() => {
   el("addPositiveBtn").addEventListener("click", () => openModal("positive"));
   el("addFindingBtn").addEventListener("click", () => openModal("finding"));
 
+  initQuickPositiveTemplates();
+  
   el("closeModalBtn").addEventListener("click", closeModal);
   el("cancelModalBtn").addEventListener("click", closeModal);
   el("modalBackdrop").addEventListener("click", closeModal);
@@ -995,9 +1035,28 @@ el("clearAllBtn").addEventListener("click", clearAll);
 
 
   // Engineers tab
-  if (el("rangeSelect")) {
-    el("rangeSelect").addEventListener("change", onRangeChange);
-    el("generateEngineerBtn").addEventListener("click", generateEngineerSummary);
+if (el("rangeSelect")) {
+  el("rangeSelect").addEventListener("change", () => {
+  onRangeChange();
+  loadOrGenerateEngineerSummary();
+});
+
+if (el("engineerSelect")) {
+  el("engineerSelect").addEventListener("change", () => {
+    loadOrGenerateEngineerSummary();
+  });
+}
+
+    el("generateEngineerBtn").addEventListener("click", () => {
+  const currentText = el("engineerOutput")?.value?.trim();
+
+  if (currentText) {
+    const ok = confirm("Generate a fresh summary? This will replace your current edited notes for this engineer/range.");
+    if (!ok) return;
+  }
+
+  generateEngineerSummary();
+});
     el("copyEngineerBtn").addEventListener("click", () => copyToClipboard(el("engineerOutput").value)
 );
    el("printEngineerBtn").addEventListener("click", async () => {
@@ -1096,7 +1155,9 @@ setTimeout(() => window.print(), 50);
 
   // Ghost updates as you type
   el("engineerInput").addEventListener("input", renderEngineerGhost);
-
+el("engineerInput").addEventListener("change", () => {
+  commitEngineerSelection(el("engineerInput").value, true);
+});
   // Tab or → accepts ghost suggestion
   el("engineerInput").addEventListener("keydown", (e) => {
     if ((e.key === "Tab" || e.key === "ArrowRight") && acceptEngineerGhost()) {
@@ -1264,12 +1325,81 @@ function renderLists() {
   renderPositives();
   renderFindings();
 }
+function initQuickPositiveTemplates() {
+  const positivesList = el("positivesList");
+  if (!positivesList) return;
 
+  if (document.getElementById("quickPositiveTemplates")) return;
+
+  const wrap = document.createElement("div");
+  wrap.id = "quickPositiveTemplates";
+  wrap.style.display = "flex";
+  wrap.style.flexWrap = "wrap";
+  wrap.style.gap = "8px";
+  wrap.style.margin = "10px 0 12px";
+
+  const templates = [
+    "Clean and tidy work",
+    "No additional defects found",
+    "Good attention to detail",
+    "Appliance well serviced",
+    "Tenant happy with work",
+    "LGSR completed accurately"
+  ];
+
+  templates.forEach(text => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn ghost small";
+    btn.textContent = text;
+
+    btn.addEventListener("click", () => {
+      if (!state.current) return;
+
+      state.current.positives.push({
+        id: uid(),
+        text
+      });
+
+      renderLists();
+      renderOutputs();
+    });
+
+    wrap.appendChild(btn);
+  });
+
+  positivesList.parentNode.insertBefore(wrap, positivesList);
+}
+function updateNoPositivesWarning() {
+  const positivesList = el("positivesList");
+  if (!positivesList) return;
+
+  let warning = el("noPositivesWarning");
+
+  if (!warning) {
+    warning = document.createElement("div");
+    warning.id = "noPositivesWarning";
+    warning.style.margin = "8px 0 10px";
+    warning.style.padding = "10px 12px";
+    warning.style.borderRadius = "12px";
+    warning.style.background = "rgba(245, 158, 11, 0.12)";
+    warning.style.color = "#92400e";
+    warning.style.fontWeight = "bold";
+    warning.style.fontSize = "0.9rem";
+    warning.textContent = "⚠️ No positives added — add at least one where possible.";
+
+    positivesList.parentNode.insertBefore(warning, positivesList);
+  }
+
+  const hasPositives = (state.current?.positives || []).length > 0;
+  warning.classList.toggle("hidden", hasPositives);
+}
 function renderPositives() {
   const list = el("positivesList");
   list.innerHTML = "";
   const positives = state.current.positives || [];
-
+updateNoPositivesWarning();
+  
   el("positivesEmpty").classList.toggle("hidden", positives.length > 0);
 
   positives.forEach(p => {
@@ -1334,41 +1464,153 @@ function renderSavedList() {
   const container = el("savedList");
   container.innerHTML = "";
 
-  const items = state.db.inspections || [];
-  el("savedEmpty").classList.toggle("hidden", items.length > 0);
+  const allItems = state.db.inspections || [];
 
-  items.forEach(ins => {
-    const card = document.createElement("div");
-    card.className = "saved-card";
+  let filterWrap = document.getElementById("savedEngineerFilterWrap");
 
-    const title = `${ins.engineer || "Unnamed engineer"} • ${ins.jobRef || "No job ref"}`;
-    const meta = `${formatDate(ins.date)} • ${ins.outcome || "Outcome"} • ${ins.findings?.length || 0} findings`;
+  if (!filterWrap) {
+    filterWrap = document.createElement("div");
+    filterWrap.id = "savedEngineerFilterWrap";
+    filterWrap.style.margin = "0 0 14px 0";
+    filterWrap.style.display = "flex";
+    filterWrap.style.flexDirection = "column";
+    filterWrap.style.gap = "6px";
 
-    card.innerHTML = `
-      <div>
-        <h4>${escapeHtml(title)}</h4>
-        <p>${escapeHtml(meta)}</p>
-      </div>
-
-      <div class="badges">
-        <label class="select-toggle" title="Select for email">
-          <input class="saved-select" type="checkbox" data-select="${ins.id}" />
-          <span class="select-icon" aria-hidden="true">✉️</span>
-        </label>
-
-        <button class="btn ghost small" type="button" data-load="${ins.id}">Load</button>
-        <button class="btn danger small" type="button" data-del="${ins.id}">Delete</button>
-      </div>
+    filterWrap.innerHTML = `
+      <label for="savedEngineerFilter" style="font-weight:bold; color:#5b2396;">
+        Filter by engineer
+      </label>
+      <select id="savedEngineerFilter" style="
+        width:100%;
+        padding:12px;
+        border-radius:14px;
+        border:1px solid #ddd;
+        font-weight:bold;
+        background:white;
+      ">
+        <option value="">All Engineers</option>
+      </select>
     `;
 
-    card.querySelector("[data-load]").addEventListener("click", () => loadInspectionById(ins.id));
-    card.querySelector("[data-del]").addEventListener("click", () => deleteInspectionById(ins.id));
+    container.parentNode.insertBefore(filterWrap, container);
+  }
 
-    const cb = card.querySelector(".saved-select");
-    if (cb) cb.addEventListener("change", updateSelectedCount);
+  const filterSelect = document.getElementById("savedEngineerFilter");
+  const previousValue = filterSelect ? filterSelect.value : "";
 
-    container.appendChild(card);
+  const engineers = Array.from(
+    new Map(
+      allItems
+        .map(i => (i.engineer || "").trim())
+        .filter(Boolean)
+        .map(name => [normalizeEngineer(name), name])
+    ).values()
+  ).sort((a, b) => a.localeCompare(b));
+
+  if (filterSelect) {
+    filterSelect.innerHTML = `<option value="">All Engineers</option>`;
+
+    engineers.forEach(name => {
+      const opt = document.createElement("option");
+      opt.value = normalizeEngineer(name);
+      opt.textContent = name;
+      filterSelect.appendChild(opt);
+    });
+
+    filterSelect.value = previousValue;
+
+    filterSelect.onchange = () => {
+      renderSavedList();
+    };
+  }
+
+  const selectedEngineer = filterSelect ? filterSelect.value : "";
+
+  const items = selectedEngineer
+    ? allItems.filter(ins => normalizeEngineer(ins.engineer || "") === selectedEngineer)
+    : allItems;
+
+  el("savedEmpty").classList.toggle("hidden", items.length > 0);
+
+  if (!items.length) {
+    refreshEngineerDropdown();
+    refreshEngineerDatalist();
+    updateSelectedCount();
+    return;
+  }
+
+  const grouped = new Map();
+
+  items.forEach(ins => {
+    const engineer = ins.engineer || "Unnamed engineer";
+    const key = normalizeEngineer(engineer) || "unnamed";
+    if (!grouped.has(key)) grouped.set(key, { name: engineer, audits: [] });
+    grouped.get(key).audits.push(ins);
   });
+
+  Array.from(grouped.values())
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .forEach(group => {
+      group.audits.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+      const section = document.createElement("div");
+      section.className = "saved-engineer-section";
+      section.style.marginBottom = "14px";
+
+      section.innerHTML = `
+        <details ${selectedEngineer ? "open" : ""}>
+          <summary style="
+            cursor:pointer;
+            font-weight:bold;
+            color:#5b2396;
+            background:rgba(106,13,173,0.08);
+            padding:12px;
+            border-radius:14px;
+            margin-bottom:10px;
+          ">
+            ${escapeHtml(group.name)} — ${group.audits.length} audit${group.audits.length === 1 ? "" : "s"}
+          </summary>
+          <div class="saved-engineer-cards"></div>
+        </details>
+      `;
+
+      const cardsWrap = section.querySelector(".saved-engineer-cards");
+
+      group.audits.forEach(ins => {
+        const card = document.createElement("div");
+        card.className = "saved-card";
+
+        const title = `${ins.jobRef || "No job ref"}`;
+        const meta = `${formatDate(ins.date)} • ${ins.outcome || "Outcome"} • ${ins.findings?.length || 0} findings`;
+
+        card.innerHTML = `
+          <div>
+            <h4>${escapeHtml(title)}</h4>
+            <p>${escapeHtml(meta)}</p>
+          </div>
+
+          <div class="badges">
+            <label class="select-toggle" title="Select for email">
+              <input class="saved-select" type="checkbox" data-select="${ins.id}" />
+              <span class="select-icon" aria-hidden="true">✉️</span>
+            </label>
+
+            <button class="btn ghost small" type="button" data-load="${ins.id}">Load</button>
+            <button class="btn danger small" type="button" data-del="${ins.id}">Delete</button>
+          </div>
+        `;
+
+        card.querySelector("[data-load]").addEventListener("click", () => loadInspectionById(ins.id));
+        card.querySelector("[data-del]").addEventListener("click", () => deleteInspectionById(ins.id));
+
+        const cb = card.querySelector(".saved-select");
+        if (cb) cb.addEventListener("change", updateSelectedCount);
+
+        cardsWrap.appendChild(card);
+      });
+
+      container.appendChild(section);
+    });
 
   refreshEngineerDropdown();
   refreshEngineerDatalist();
@@ -1391,7 +1633,10 @@ function resetFindingModalFields() {
   if (el("findingPhoto")) el("findingPhoto").value = "";
   setPhotoPreview("");
 }
-
+if (el("repeatIssueIndicator")) {
+  el("repeatIssueIndicator").textContent = "";
+  el("repeatIssueIndicator").classList.add("hidden");
+}
 
 
 // ---------- Modal logic ----------
@@ -1578,13 +1823,11 @@ function buildCloseOutFromInspection(c, style) {
   const findings = sortFindingsBySeverity(c?.findings || []);
   const hasFindings = findings.length > 0;
 
-  // If no findings, keep your existing no-findings behaviour
   if (!hasFindings) {
     if (s === "matey") return "Nothing for me to pull you up on — keep doing what you’re doing.";
     return "No findings recorded.";
   }
 
-  // ----- Positive theme detection (same logic style as Engineer summary) -----
   const blob = positives
     .map(p => String((p && p.text) || "").toLowerCase())
     .join(" | ");
@@ -1601,7 +1844,6 @@ function buildCloseOutFromInspection(c, style) {
   const hasThoroughness =
     /\bawkward\b|\bnot\s*many\b|\bpicked\s*up\b|\battention\b|\bdetail\b|\bthorough\b|\bexcellent\b|\bvery\s*good\b/.test(blob);
 
-  // ----- Pick top 2 improvement focus points from findings -----
   const focus = [];
   const seen = new Set();
 
@@ -1615,10 +1857,8 @@ function buildCloseOutFromInspection(c, style) {
     if (focus.length >= 2) break;
   }
 
-  // ----- Build 1–2 short paragraphs (not an essay) -----
   const parts = [];
 
-  // Paragraph 1: positives
   const p1 = [];
   if (s === "matey") p1.push("Overall, good work.");
   else if (s === "direct") p1.push("Overall: good standard, with a few items to correct.");
@@ -1631,7 +1871,6 @@ function buildCloseOutFromInspection(c, style) {
 
   parts.push(p1.join(" "));
 
-  // Paragraph 2: focus + close
   const p2 = [];
   if (focus.length) {
     if (s === "direct") p2.push(`Focus on: ${focus.join(" • ")}.`);
@@ -1641,14 +1880,12 @@ function buildCloseOutFromInspection(c, style) {
     else p2.push("Main bits to tighten up are the items listed above.");
   }
 
-  // Your favourite line (matey style ending, but works fine across styles)
   p2.push(`If those are treated as “every job checks”, you’ll fly through audits.`);
 
   parts.push(p2.join(" "));
 
   return parts.join("\n\n");
 }
-
 
 function buildVerbalScript() {
   pullFormIntoCurrent();
@@ -1988,46 +2225,58 @@ function buildPrintableEngineerHTML() {
 
   const range = rangeLabel();
   const summaryText = el("engineerOutput")?.value?.trim() || "No summary generated.";
-
   const esc = escapeHtml;
+
+  const totalFindings = audits.reduce((sum, a) => sum + ((a.findings || []).length), 0);
+  const totalPositives = audits.reduce((sum, a) => sum + ((a.positives || []).length), 0);
 
   const auditsHtml = audits.length
     ? audits
         .slice()
-        .sort((a,b) => (b.date || "").localeCompare(a.date || "")) // newest first
+        .sort((a,b) => (b.date || "").localeCompare(a.date || ""))
         .map(a => {
           const findings = sortFindingsBySeverity(a.findings || []);
+          const positives = a.positives || [];
           const photosCount = findings.filter(f => !!(f.photoUrl || f.photoDataUrl)).length;
 
+          const positivesHtml = positives.length
+            ? `
+              <div class="rp-section-title">Positives</div>
+              <ul>
+                ${positives.map(p => `<li>${esc(p.text || "")}</li>`).join("")}
+              </ul>
+            `
+            : `<div class="rp-small">No positives recorded.</div>`;
 
           const findingsHtml = findings.length
             ? findings.map(f => `
-              <div class="rp-block" style="margin-top:10px; padding-top:2px; padding-bottom:10px; break-inside:avoid; page-break-inside:avoid;">
-
-
-                  <div><strong>${esc(f.title || "(No title)")}</strong></div>
-                  <div class="rp-small" style="line-height:1.35; margin-top:2px;">
-
-                  ${esc(f.category || "—")} • ${esc(severityLabel(f.severity || "—"))}
-
-• Tag: ${esc(f.tag || "OTHER")}
-
-                  </div>
-                ${f.action ? `<div class="rp-small" style="margin-top:4px; line-height:1.35;"><strong>Action:</strong> ${esc(f.action)}</div>` : ""}
-
-                 ${photoHtml(f, "#e2e2e2")}
-
-
+              <div class="rp-block" style="break-inside:avoid; page-break-inside:avoid;">
+                <div><strong>${esc(f.title || "(No title)")}</strong></div>
+                <div class="rp-small">
+                  ${esc(f.category || "—")} • <strong>${esc(severityLabel(f.severity || "—"))}</strong> • Tag: ${esc(f.tag || "OTHER")}
                 </div>
-              `).join("")
+                ${f.why ? `<div class="rp-small"><strong>Why it matters:</strong> ${esc(f.why)}</div>` : ""}
+                ${f.action ? `<div class="rp-small"><strong>Action:</strong> ${esc(f.action)}</div>` : ""}
+                ${f.notes ? `<div class="rp-small"><strong>Notes:</strong> ${esc(f.notes)}</div>` : ""}
+                ${photoHtml(f, "#e2e2e2")}
+              </div>
+            `).join("")
             : `<div class="rp-small">No findings on this audit.</div>`;
 
           return `
-            <div class="box audit-box">
-              <h3>${esc(a.engineer || "Engineer")} • ${esc(a.jobRef || "No job ref")} • ${esc(formatDate(a.date))}</h3>
-              <div class="rp-small">
-                Outcome: ${esc(a.outcome || "—")} • Positives: ${(a.positives || []).length} • Findings: ${findings.length} • Photos: ${photosCount}
+            <div class="box audit-box" style="break-inside:avoid; page-break-inside:avoid;">
+              <h3>${esc(formatDate(a.date))} — ${esc(a.jobRef || "No job ref")}</h3>
+
+              <div class="muted">
+                <div><strong>Outcome:</strong> ${esc(a.outcome || "—")}</div>
+                <div><strong>Site:</strong> ${esc(a.address || "—")}</div>
+                <div><strong>Appliance:</strong> ${esc(a.appliance || "—")}</div>
+                <div><strong>Findings:</strong> ${findings.length} • <strong>Positives:</strong> ${positives.length} • <strong>Photos:</strong> ${photosCount}</div>
               </div>
+
+              ${positivesHtml}
+
+              <div class="rp-section-title">Findings</div>
               ${findingsHtml}
             </div>
           `;
@@ -2039,28 +2288,48 @@ function buildPrintableEngineerHTML() {
     ${getWatermarkHTML()}
 
     <div class="print-content">
-      <h1>Engineer Summary Report</h1>
 
-      <div class="muted">
-        <div><strong>Engineer:</strong> ${esc(engineer)}</div>
-        <div><strong>Range:</strong> ${esc(range)}</div>
-        <div><strong>Generated:</strong> ${esc(formatDate(new Date().toISOString().slice(0,10)))}</div>
+      <div id="engTop">
+        <h1>Engineer Summary Report</h1>
+
+        <div class="box">
+          <h3>Overview</h3>
+          <div class="muted">
+            <div><strong>Engineer:</strong> ${esc(engineer)}</div>
+            <div><strong>Range:</strong> ${esc(range)}</div>
+            <div><strong>Generated:</strong> ${esc(formatDate(new Date().toISOString().slice(0,10)))}</div>
+          </div>
+        </div>
+
+        <div class="box" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; text-align:center;">
+          <div>
+            <h3>${audits.length}</h3>
+            <div class="rp-small">Audits</div>
+          </div>
+          <div>
+            <h3>${totalFindings}</h3>
+            <div class="rp-small">Findings</div>
+          </div>
+          <div>
+            <h3>${totalPositives}</h3>
+            <div class="rp-small">Positives</div>
+          </div>
+        </div>
+
+        <div class="box">
+          <h3>Feedback Summary</h3>
+          <div style="white-space:pre-wrap; font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size:13px; line-height:1.55;">
+            ${esc(summaryText)}
+          </div>
+        </div>
       </div>
 
-      <div class="box">
-        <h3>Summary</h3>
-      <div style="white-space:pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size:12.5px; line-height:1.45; margin:0; padding:0;">${esc(summaryText)}</div>
-
+      <div id="engAudits" class="page-break-before">
+        <h2>Audits Included</h2>
+        ${auditsHtml}
       </div>
 
-       <div class="page-break-before"></div>
-
-<div class="rp-section-title">Audits in range (with photos)</div>
-<div class="box audits-box">
-  ${auditsHtml}
-</div>
-
-
+    </div>
   `;
 }
 
@@ -2157,25 +2426,39 @@ function onRangeChange() {
 loadEngineerDraftIntoBox();
   }
 }
+function loadOrGenerateEngineerSummary() {
+  // If a saved edited draft exists for this engineer/range, load it
+  if (loadEngineerDraftIntoBox()) return;
 
+  // Otherwise generate a fresh summary
+  generateEngineerSummary();
+}
 function generateEngineerSummary() {
   refreshEngineerDropdown();
 
-  const engineer = el("engineerSelect")?.value?.trim();
+  const engineerSelect = el("engineerSelect");
+  if (!engineerSelect) return;
+
+  const engineer = engineerSelect.value?.trim();
+
   if (!engineer) {
     alert("No engineer selected.");
     return;
   }
 
+  // 🔥 IMPORTANT: ONLY use dropdown value — ignore current inspection
   const audits = filterAuditsForEngineer(engineer);
+
   if (!audits.length) {
-    el("engineerOutput").innerText = "No audits found for this engineer in the selected range.";
+    el("engineerOutput").value = "No audits found for this engineer in the selected range.";
     return;
   }
 
   const summary = buildEngineerSummary(engineer, audits);
- el("engineerOutput").value = summary.text;
-saveEngineerDraftFromBox();
+
+  el("engineerOutput").value = summary.text;
+
+  saveEngineerDraftFromBox();
 }
 
 function filterAuditsForEngineer(engineerName) {
@@ -2406,45 +2689,55 @@ lines.push(`Totals: ${totalFindings} Defects Found • ${totalPositives} positiv
 lines.push(`Severity: ID ${severityCounts.Critical} • AR ${severityCounts.Major} • NCS ${severityCounts.Minor} • Advisory ${severityCounts.Advisory}`);
 
 lines.push("");
-// ✅ MERGED SUMMARY 
-lines.push("SUMMARY");
+// ✅ Improved positives summary
+lines.push("KEY STRENGTHS");
 
 const positiveEntries = Array.from(positiveMap.values())
   .sort((a, b) => b.count - a.count);
 
 if (!positiveEntries.length) {
-  lines.push("No positives recorded in this range.");
+  lines.push("- No positives recorded in this range.");
   lines.push("");
 } else {
-  // Build a combined text blob for simple theme detection
   const blob = positiveEntries
     .map(p => String(p.text || "").toLowerCase())
     .join(" | ");
 
-  const hasPaperwork =
-    /\blgsr\b|\bbenchmark\b|\bpaperwork\b|\bcertificate\b|\brecord\b|\bdetail\b|\baccurate\b|\baccuracy\b/.test(blob);
+  const strengths = [];
 
-  const hasCleanWork =
-    /\bclean\b|\btidy\b|\bspotless\b|\bneat\b|\bwell\s*serviced\b|\bserviced\b|\bto\s*spec\b|\bspecification\b|\btrap\b|\binjector\b/.test(blob);
+  if (/\blgsr\b|\bbenchmark\b|\bpaperwork\b|\bcertificate\b|\brecord\b|\baccurate\b|\baccuracy\b|\bdetail\b/.test(blob)) {
+    strengths.push("LGSR / paperwork completed accurately with good detail");
+  }
 
-  const hasTenantPraise =
-    /\btenant\b|\bcustomer\b|\bclient\b|\bhomeowner\b|\bcompliment\b|\bcomplimentary\b|\bhappy\b|\bpleased\b|\bsatisfied\b/.test(blob);
+  if (/\bclean\b|\btidy\b|\bspotless\b|\bneat\b|\bwell\s*serviced\b|\bserviced\b|\bto\s*spec\b|\bspecification\b/.test(blob)) {
+    strengths.push("Clean, tidy workmanship carried out to specification");
+  }
 
-  const hasThoroughness =
-    /\bawkward\b|\bnot\s*many\b|\bpicked\s*up\b|\battention\b|\bdetail\b|\bthorough\b|\bexcellent\b|\bvery\s*good\b/.test(blob);
+  if (/\btenant\b|\bcustomer\b|\bclient\b|\bhappy\b|\bcompliment\b|\bcomplimentary\b|\bpleased\b|\bsatisfied\b/.test(blob)) {
+    strengths.push("Positive customer / tenant feedback");
+  }
 
-  // Paragraph 1: positives
-  const parts = [];
-  parts.push(`Strong standards across these audits.`);
+  if (/\bawkward\b|\bpicked\s*up\b|\battention\b|\bthorough\b|\bnot\s*many\s*others\b|\badditional\s*defects\b/.test(blob)) {
+    strengths.push("Good attention to detail and identifying less obvious defects");
+  }
 
-  if (hasCleanWork) parts.push(`The work itself is coming across clean, tidy, and to spec.`);
-  if (hasPaperwork) parts.push(`Your LGSR/paperwork is being completed accurately with a good level of detail.`);
-  if (hasTenantPraise) parts.push(`There are also clear positives around tenant/customer satisfaction — people are happy with the work and how it’s been left.`);
-  if (hasThoroughness) parts.push(`You’re also picking up on the awkward details that others can miss, which is exactly what we want.`);
+  if (!strengths.length) {
+    strengths.push("Consistent positive feedback across audits");
+  }
 
-  parts.push(`Keep that as your baseline every job — it makes audits straightforward.`);
+  strengths.slice(0, 4).forEach(s => {
+    lines.push(`- ${s}`);
+  });
 
-  lines.push(parts.join(" "));
+  lines.push("");
+
+  lines.push("REAL EXAMPLES NOTED");
+
+  positiveEntries.slice(0, 5).forEach(p => {
+    const countText = p.count > 1 ? ` (x${p.count})` : "";
+    lines.push(`- ${p.text}${countText}`);
+  });
+
   lines.push("");
 }
 
@@ -2629,7 +2922,7 @@ function buildCoachingParagraph(engineer, topTags, topCats) {
 }
 
 function rangeLabel() {
-  const r = el("rangeSelect")?.value || "last5";
+  const r = el("rangeSelect")?.value || "qCurrent";
 
   if (r === "last5") return "Last 5 audits";
   if (r === "last6") return "Last 6 audits";
@@ -2763,7 +3056,54 @@ const PRESET_ENGINEERS = [
   "Sam Ogejo",
   "Sohail Mahmood",
 ];
+function normalizeFindingTitle(title) {
+  return String(title || "")
+    .toLowerCase()
+    .replace(/[_/\\\-(),.]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
+function countRepeatFindingForEngineer(title, engineerName) {
+  const targetTitle = normalizeFindingTitle(title);
+  const targetEngineer = normalizeEngineer(engineerName);
+
+  if (!targetTitle || !targetEngineer) return 0;
+
+  let count = 0;
+
+  (state.db.inspections || []).forEach(audit => {
+    if (normalizeEngineer(audit.engineer || "") !== targetEngineer) return;
+
+    (audit.findings || []).forEach(f => {
+      if (normalizeFindingTitle(f.title || "") === targetTitle) {
+        count++;
+      }
+    });
+  });
+
+  return count;
+}
+
+function updateRepeatIssueIndicator() {
+  const input = el("findingTitle");
+  const indicator = el("repeatIssueIndicator");
+  if (!input || !indicator) return;
+
+  const title = input.value.trim();
+  const engineer = state.current?.engineer || el("engineerInput")?.value || "";
+
+  const count = countRepeatFindingForEngineer(title, engineer);
+
+  if (!title || count === 0) {
+    indicator.textContent = "";
+    indicator.classList.add("hidden");
+    return;
+  }
+
+  indicator.textContent = `⚠️ Seen ${count} time${count === 1 ? "" : "s"} before for this engineer`;
+  indicator.classList.remove("hidden");
+}
 
 // Build list from presets + saved audits (deduped)
 function getEngineerPool() {
@@ -2806,7 +3146,30 @@ function findGhostSuggestion(typed) {
   }
   return null;
 }
+function commitEngineerSelection(name, blurAfter = false) {
+  const input = el("engineerInput");
+  if (!input) return;
 
+  const exactMatch = getEngineerPool().find(p => normalizeEngineer(p) === normalizeEngineer(name));
+  if (!exactMatch) return;
+
+  input.value = exactMatch;
+
+  if (state.current) {
+    state.current.engineer = exactMatch;
+    renderOutputs();
+    renderSavedList();
+    refreshEngineerDropdown();
+  }
+
+  const ghost = el("engineerGhost");
+  if (ghost) ghost.innerHTML = "";
+
+  // This closes the native suggestion dropdown on iPad/mobile
+ if (blurAfter) {
+  closeMobileKeyboard(input);
+}
+}
 // Draw the ghost text behind the input
 function renderEngineerGhost() {
   const input = el("engineerInput");
@@ -2814,6 +3177,15 @@ function renderEngineerGhost() {
   if (!input || !ghost) return;
 
   const typed = input.value || "";
+  const pool = getEngineerPool();
+
+  const exactMatch = pool.find(p => normalizeEngineer(p) === normalizeEngineer(typed));
+
+  if (exactMatch) {
+    commitEngineerSelection(exactMatch, false);
+    return;
+  }
+
   const suggestion = findGhostSuggestion(typed);
 
   if (!suggestion) {
@@ -2825,8 +3197,6 @@ function renderEngineerGhost() {
     `<span class="typed">${escapeHtml(typed)}</span>` +
     `${escapeHtml(suggestion.slice(typed.length))}`;
 }
-
-// Accept the ghost suggestion into the input
 function acceptEngineerGhost() {
   const input = el("engineerInput");
   if (!input) return false;
@@ -2834,13 +3204,9 @@ function acceptEngineerGhost() {
   const suggestion = findGhostSuggestion(input.value || "");
   if (!suggestion) return false;
 
-  input.value = suggestion;
-  renderEngineerGhost();
+  commitEngineerSelection(suggestion, true);
   return true;
 }
-
-// If typed name matches an existing engineer (ignoring case/spaces),
-// snap it to the existing saved display name. Otherwise allow new name.
 function canonicalFromPool(name) {
   const raw = String(name || "").trim();
   if (!raw) return "";
