@@ -3047,13 +3047,13 @@ const PRESET_ENGINEERS = [
   "Ed Johnson",
   "Gary Hall",
   "Graham Black",
-  "Harrison Daly",
   "John Turlington",
   "Joshua Porter",
   "Pete Topliss",
   "Paul Teece",
   "Renjie Chen",
   "Sam Ogejo",
+  "Scott Griffiths",
   "Sohail Mahmood",
 ];
 function normalizeFindingTitle(title) {
