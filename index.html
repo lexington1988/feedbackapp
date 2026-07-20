@@ -132,6 +132,7 @@
   <button class="tab" data-tab="report" type="button">Report</button>
   <button class="tab" data-tab="saved" type="button">Saved</button>
   <button class="tab" data-tab="engineers" type="button">Engineers</button>
+  <button class="tab" data-tab="analytics" type="button">Analytics</button>
 </div>
 
 
@@ -248,15 +249,157 @@
   </div>
 
   <div class="output">
-    <textarea id="engineerOutput" class="pre" rows="16" spellcheck="false"></textarea>
+  <textarea id="engineerOutput" class="pre" rows="16" spellcheck="false"></textarea>
+</div>
 
+<div id="engineerAnalyticsPanel" class="engineer-analytics-panel">
+  <div class="engineer-analytics-empty">
+    Choose an engineer and reporting range to view their analytics.
   </div>
+</div>
+
+<!-- Engineer visual analytics -->
+<div id="engineerAnalyticsPanel" class="engineer-analytics-panel">
+  <p class="muted">
+    Choose an engineer and reporting range to view their analytics.
+  </p>
+</div>
 
   <div class="muted" style="margin-top:10px;">
     Tip: Analytics works best when you consistently use <strong>Issue Tag</strong> (e.g. PAPERWORK_BENCHMARK, FLUE_SUPPORT).
   </div>
 </div>
 
+
+
+<!-- ANALYTICS -->
+<div id="tabAnalytics" class="tab-panel">
+  <div class="analytics-toolbar">
+    <label class="field inline">
+      <span>From</span>
+      <input id="analyticsFrom" type="date" />
+    </label>
+    <label class="field inline">
+      <span>To</span>
+      <input id="analyticsTo" type="date" />
+    </label>
+    <label class="field inline">
+      <span>Engineer</span>
+      <select id="analyticsEngineer"><option value="">All engineers</option></select>
+    </label>
+    <label class="field inline">
+      <span>Category</span>
+      <select id="analyticsCategory"><option value="">All categories</option></select>
+    </label>
+    <label class="field inline">
+  <span>Severity</span>
+  <select id="analyticsSeverity">
+    <option value="">All severities</option>
+    <option value="Critical">ID</option>
+    <option value="Major">AR</option>
+    <option value="Minor">NCS</option>
+    <option value="Advisory">Advisory</option>
+  </select>
+</label>
+    <label class="field inline analytics-search">
+      <span>Defect search</span>
+      <input id="analyticsSearch" type="search" placeholder="Search title, tag or notes" />
+    </label>
+    <button id="analyticsThisMonthBtn" class="btn ghost small" type="button">This month</button>
+    <button id="analyticsThisQuarterBtn" class="btn ghost small" type="button">This quarter</button>
+    <button id="analyticsAllTimeBtn" class="btn ghost small" type="button">All time</button>
+  </div>
+
+  <div id="analyticsKpis" class="analytics-kpis"></div>
+
+  <div class="analytics-grid">
+    <section class="analytics-card">
+      <div class="analytics-card-head"><h3>Most common defects</h3><span id="topDefectsCaption" class="muted"></span></div>
+      <div id="topDefectsChart" class="analytics-chart"></div>
+    </section>
+    <section class="analytics-card">
+      <div class="analytics-card-head"><h3>Audit PASS / FAIL rate</h3><span id="passFailCaption" class="muted"></span></div>
+      <div id="passFailChart" class="analytics-chart"></div>
+    </section>
+    <section class="analytics-card">
+      <div class="analytics-card-head"><h3>Defects by category</h3></div>
+      <div id="categoryChart" class="analytics-chart"></div>
+    </section>
+    <section class="analytics-card">
+      <div class="analytics-card-head"><h3>Defects by severity</h3></div>
+      <div id="severityChart" class="analytics-chart"></div>
+    </section>
+    <section class="analytics-card analytics-wide">
+  <div class="analytics-card-head">
+    <h3>Monthly audit trend</h3>
+    <span class="muted">Pass and fail totals</span>
+  </div>
+  <div id="monthlyAuditChart" class="analytics-chart"></div>
+</section>
+
+<section
+  id="engineerPerformanceSection"
+  class="analytics-card analytics-wide engineer-performance-section"
+>
+  <div class="engineer-performance-header">
+    <div>
+      <h3>Engineer Performance Overview</h3>
+      <div
+        id="engineerPerformancePeriod"
+        class="engineer-performance-period"
+      ></div>
+    </div>
+
+    <button
+      id="engineerPresentationBtn"
+      class="btn ghost small"
+      type="button"
+    >
+      Presentation View
+    </button>
+  </div>
+
+  <div class="engineer-performance-legend" aria-label="Chart legend">
+    <span>
+      <i class="engineer-legend-swatch engineer-legend-total"></i>
+      Total audits
+    </span>
+
+    <span>
+      <i class="engineer-legend-swatch engineer-legend-pass"></i>
+      PASS
+    </span>
+
+    <span>
+      <i class="engineer-legend-swatch engineer-legend-fail"></i>
+      FAIL
+    </span>
+  </div>
+
+  <div class="engineer-performance-scroll">
+    <div
+      id="engineerPerformanceChart"
+      class="engineer-performance-chart"
+    ></div>
+  </div>
+
+  <div id="engineerPerformanceSummary" class="engineer-performance-summary"></div>
+</section>
+  </div>
+
+  <div class="analytics-actions">
+    <button id="exportAnalyticsCsvBtn" class="btn" type="button">Export defects CSV</button>
+    <button id="printAnalyticsBtn" class="btn ghost" type="button">Print / Save PDF</button>
+    <span class="muted">Analytics records are stored separately, so deleting a saved audit does not remove its historical data.</span>
+  </div>
+
+  <div class="analytics-table-wrap">
+    <table class="analytics-table">
+      <thead><tr><th>Date</th><th>Engineer</th><th>Defect</th><th>Category</th><th>Severity</th><th>Tag</th></tr></thead>
+      <tbody id="analyticsTableBody"></tbody>
+    </table>
+  </div>
+</div>
 
 <!-- MODAL: Add Positive / Finding -->
 <div id="modalBackdrop" class="backdrop hidden"></div>
@@ -421,4 +564,3 @@
  </div>
 </body>
 </html>
-
