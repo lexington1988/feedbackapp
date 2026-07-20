@@ -9,6 +9,8 @@ const STORAGE_KEY = "ppc_inspection_feedback_v1";
 const CLOUDINARY_CLOUD_NAME = "dnz3fuyjx";
 const CLOUDINARY_UPLOAD_PRESET = "feedback";
 const ENGINEER_DRAFTS_KEY = "ppc_engineer_summary_drafts_v1";
+const ANALYTICS_DEFECTS_KEY = "ppc_analytics_defects_v1";
+const ANALYTICS_AUDITS_KEY = "ppc_analytics_audits_v1";
 
 const el = (id) => document.getElementById(id);
 const uid = () => Math.random().toString(16).slice(2) + Date.now().toString(16);
@@ -30,6 +32,114 @@ const state = {
   modalPhotoDataUrl: "", // local preview
   modalPhotoUrl: ""      // ✅ Cloudinary URL (saved in the finding)
 };
+
+const analyticsState = {
+  defects: loadAnalyticsArray(ANALYTICS_DEFECTS_KEY),
+  audits: loadAnalyticsArray(ANALYTICS_AUDITS_KEY)
+};
+
+function loadAnalyticsArray(key) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveAnalyticsArchive() {
+  localStorage.setItem(ANALYTICS_DEFECTS_KEY, JSON.stringify(analyticsState.defects));
+  localStorage.setItem(ANALYTICS_AUDITS_KEY, JSON.stringify(analyticsState.audits));
+}
+
+function buildAnalyticsRecordsFromInspection(inspection) {
+  if (!inspection || !inspection.id) {
+    return {
+      auditRecord: null,
+      defectRecords: []
+    };
+  }
+
+  const savedAt = new Date().toISOString();
+
+  const auditRecord = {
+    id: inspection.id,
+    date: inspection.date || savedAt.slice(0, 10),
+    engineer: inspection.engineer || "",
+    jobRef: inspection.jobRef || "",
+    outcome: inspection.outcome || "",
+    updatedAt: savedAt
+  };
+
+  const defectRecords = (inspection.findings || []).map(
+    (finding, index) => {
+      const findingId = finding.id || String(index);
+      const sourceKey = `${inspection.id}:${findingId}`;
+
+      return {
+        sourceKey,
+        auditId: inspection.id,
+        findingId,
+        date: inspection.date || savedAt.slice(0, 10),
+        engineer: inspection.engineer || "",
+        jobRef: inspection.jobRef || "",
+        outcome: inspection.outcome || "",
+        title: finding.title || "Untitled defect",
+        category: finding.category || "Other",
+        severity: finding.severity || "Minor",
+        tag: finding.tag || "",
+        why: finding.why || "",
+        action: finding.action || "",
+        notes: finding.notes || "",
+        archivedAt: savedAt,
+        updatedAt: savedAt
+      };
+    }
+  );
+
+  return {
+    auditRecord,
+    defectRecords
+  };
+}
+
+function archiveInspectionForAnalytics(inspection) {
+  const {
+    auditRecord,
+    defectRecords
+  } = buildAnalyticsRecordsFromInspection(inspection);
+
+  if (!auditRecord) return;
+
+  const auditIndex = analyticsState.audits.findIndex(
+    item => item.id === auditRecord.id
+  );
+
+  if (auditIndex >= 0) {
+    analyticsState.audits[auditIndex] = auditRecord;
+  } else {
+    analyticsState.audits.push(auditRecord);
+  }
+
+  /*
+    Remove the previous defect records for this audit first.
+
+    This prevents an old defect remaining in analytics after it
+    has been removed from an audit and the audit is saved again.
+  */
+  analyticsState.defects = analyticsState.defects.filter(
+    item => item.auditId !== auditRecord.id
+  );
+
+  analyticsState.defects.push(...defectRecords);
+
+  saveAnalyticsArchive();
+
+  return {
+    auditRecord,
+    defectRecords
+  };
+}
 
 // ================== Defects Library (CSV -> typeahead) ==================
 const DEFECTS_STORAGE_KEY = "ppc_defects_library_v1";
@@ -687,7 +797,285 @@ function getUser() {
 }
 
 function inspectionsCol(uid) {
-  return cloudDb.collection("users").doc(uid).collection("inspections");
+  return cloudDb
+    .collection("users")
+    .doc(uid)
+    .collection("inspections");
+}
+
+function analyticsAuditsCol(uid) {
+  return cloudDb
+    .collection("users")
+    .doc(uid)
+    .collection("analyticsAudits");
+}
+
+function analyticsDefectsCol(uid) {
+  return cloudDb
+    .collection("users")
+    .doc(uid)
+    .collection("analyticsDefects");
+}
+
+function analyticsCloudDocumentId(value) {
+  return encodeURIComponent(String(value || ""));
+}
+
+function analyticsRecordTime(record) {
+  const raw =
+    record?.updatedAt ||
+    record?.archivedAt ||
+    "";
+
+  const timestamp = Date.parse(raw);
+
+  return Number.isFinite(timestamp)
+    ? timestamp
+    : 0;
+}
+
+function mergeAnalyticsRecords(
+  localRecords,
+  cloudRecords,
+  keyField
+) {
+  const merged = new Map();
+
+  (localRecords || []).forEach(record => {
+    const key = String(record?.[keyField] || "");
+    if (!key) return;
+
+    merged.set(key, record);
+  });
+
+  (cloudRecords || []).forEach(record => {
+    const key = String(record?.[keyField] || "");
+    if (!key) return;
+
+    const existing = merged.get(key);
+
+    if (
+      !existing ||
+      analyticsRecordTime(record) >=
+        analyticsRecordTime(existing)
+    ) {
+      merged.set(key, record);
+    }
+  });
+
+  return Array.from(merged.values());
+}
+
+async function commitAnalyticsCloudOperations(operations) {
+  const maximumOperationsPerBatch = 400;
+
+  for (
+    let start = 0;
+    start < operations.length;
+    start += maximumOperationsPerBatch
+  ) {
+    const batch = cloudDb.batch();
+
+    operations
+      .slice(
+        start,
+        start + maximumOperationsPerBatch
+      )
+      .forEach(operation => {
+        if (operation.type === "delete") {
+          batch.delete(operation.ref);
+        } else {
+          batch.set(
+            operation.ref,
+            operation.data,
+            { merge: true }
+          );
+        }
+      });
+
+    await batch.commit();
+  }
+}
+
+async function syncInspectionAnalyticsCloud(inspection) {
+  const user = getUser();
+
+  const {
+    auditRecord,
+    defectRecords
+  } = buildAnalyticsRecordsFromInspection(inspection);
+
+  if (!auditRecord) return;
+
+  const auditRef = analyticsAuditsCol(user.uid)
+    .doc(
+      analyticsCloudDocumentId(
+        auditRecord.id
+      )
+    );
+
+  /*
+    Read only the defects belonging to this audit.
+
+    Existing defect documents are removed before the current
+    set is written, preventing obsolete findings remaining in
+    the permanent archive after an audit is edited.
+  */
+  const existingDefectsSnapshot =
+    await analyticsDefectsCol(user.uid)
+      .where(
+        "auditId",
+        "==",
+        auditRecord.id
+      )
+      .get();
+
+  const operations = [
+    {
+      type: "set",
+      ref: auditRef,
+      data: auditRecord
+    }
+  ];
+
+  existingDefectsSnapshot.docs.forEach(document => {
+    operations.push({
+      type: "delete",
+      ref: document.ref
+    });
+  });
+
+  defectRecords.forEach(record => {
+    const defectRef = analyticsDefectsCol(user.uid)
+      .doc(
+        analyticsCloudDocumentId(
+          record.sourceKey
+        )
+      );
+
+    operations.push({
+      type: "set",
+      ref: defectRef,
+      data: record
+    });
+  });
+
+  await commitAnalyticsCloudOperations(operations);
+}
+
+async function uploadLocalAnalyticsArchiveToCloud() {
+  const user = getUser();
+  const operations = [];
+
+  analyticsState.audits.forEach(record => {
+    if (!record?.id) return;
+
+    operations.push({
+      type: "set",
+      ref: analyticsAuditsCol(user.uid)
+        .doc(
+          analyticsCloudDocumentId(
+            record.id
+          )
+        ),
+      data: record
+    });
+  });
+
+  analyticsState.defects.forEach(record => {
+    if (!record?.sourceKey) return;
+
+    operations.push({
+      type: "set",
+      ref: analyticsDefectsCol(user.uid)
+        .doc(
+          analyticsCloudDocumentId(
+            record.sourceKey
+          )
+        ),
+      data: record
+    });
+  });
+
+  if (operations.length) {
+    await commitAnalyticsCloudOperations(
+      operations
+    );
+  }
+}
+
+async function loadAnalyticsArchiveFromCloud() {
+  const user = getUser();
+
+  const [
+    auditSnapshot,
+    defectSnapshot
+  ] = await Promise.all([
+    analyticsAuditsCol(user.uid).get(),
+    analyticsDefectsCol(user.uid).get()
+  ]);
+
+  const cloudAudits = auditSnapshot.docs.map(
+    document => ({
+      id: document.id,
+      ...document.data()
+    })
+  );
+
+  const cloudDefects = defectSnapshot.docs.map(
+    document => ({
+      ...document.data()
+    })
+  );
+
+  analyticsState.audits =
+    mergeAnalyticsRecords(
+      analyticsState.audits,
+      cloudAudits,
+      "id"
+    );
+
+  analyticsState.defects =
+    mergeAnalyticsRecords(
+      analyticsState.defects,
+      cloudDefects,
+      "sourceKey"
+    );
+
+  saveAnalyticsArchive();
+
+  refreshAnalyticsFilters();
+
+  if (el("tabAnalytics")) {
+    renderAnalytics();
+  }
+}
+
+async function initialiseCloudAnalyticsArchive() {
+  const user = getUser();
+
+  /*
+    Include any full audits currently held in Firebase.
+
+    This provides a one-time migration for audits that existed
+    before the permanent cloud analytics archive was added.
+  */
+  const liveAuditsSnapshot =
+    await inspectionsCol(user.uid).get();
+
+  liveAuditsSnapshot.docs.forEach(document => {
+    archiveInspectionForAnalytics({
+      id: document.id,
+      ...document.data()
+    });
+  });
+
+  /*
+    Upload historical analytics already held on this device,
+    then combine them with records saved by other devices.
+  */
+  await uploadLocalAnalyticsArchiveToCloud();
+  await loadAnalyticsArchiveFromCloud();
 }
 
 function startCloudSync() {
@@ -700,13 +1088,21 @@ function startCloudSync() {
     .onSnapshot((snap) => {
       const inspections = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       state.db.inspections = inspections;
+      // Keep the independent analytics archive populated from cloud audits too.
+      inspections.forEach(archiveInspectionForAnalytics);
 
       // keep a local cache too
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ inspections }));
 
-      renderSavedList();
+            renderSavedList();
       refreshEngineerDropdown();
       refreshEngineerDatalist();
+
+      refreshAnalyticsFilters();
+
+      if (el("tabAnalytics")) {
+        renderAnalytics();
+      }
     });
 }
 
@@ -756,6 +1152,7 @@ initBoilersLibrary().then(() => {
 
   });
   initDefectsImportButton();
+  initAnalytics();
 if (el("rangeSelect")) el("rangeSelect").value = "qCurrent";
   
   const today = new Date();
@@ -822,15 +1219,48 @@ if (el("logoutBtn")) {
 }
 
 // When auth state changes, start/stop sync and toggle buttons
-auth.onAuthStateChanged((user) => {
+auth.onAuthStateChanged(async user => {
   if (user) {
     startCloudSync();
-    if (el("loginBtn")) el("loginBtn").classList.add("hidden");
-    if (el("logoutBtn")) el("logoutBtn").classList.remove("hidden");
+
+    if (el("loginBtn")) {
+      el("loginBtn").classList.add(
+        "hidden"
+      );
+    }
+
+    if (el("logoutBtn")) {
+      el("logoutBtn").classList.remove(
+        "hidden"
+      );
+    }
+
+    try {
+      await initialiseCloudAnalyticsArchive();
+    } catch (err) {
+      console.error(
+        "Analytics cloud sync failed:",
+        err
+      );
+
+      alert(
+        "Logged in, but the historical analytics archive could not be synchronised. Your full audits will still sync. Check Firebase permissions and the browser console."
+      );
+    }
   } else {
     stopCloudSync();
-    if (el("loginBtn")) el("loginBtn").classList.remove("hidden");
-    if (el("logoutBtn")) el("logoutBtn").classList.add("hidden");
+
+    if (el("loginBtn")) {
+      el("loginBtn").classList.remove(
+        "hidden"
+      );
+    }
+
+    if (el("logoutBtn")) {
+      el("logoutBtn").classList.add(
+        "hidden"
+      );
+    }
   }
 });
 
@@ -1267,18 +1697,32 @@ async function saveCurrentInspection() {
   if (idx >= 0) state.db.inspections[idx] = structuredClone(c);
   else state.db.inspections.unshift(structuredClone(c));
 
+  archiveInspectionForAnalytics(structuredClone(c));
   saveDb();
   renderSavedList();
   refreshEngineerDropdown();
   refreshEngineerDatalist();
 
-  // ✅ Cloud save if logged in
+   // ✅ Cloud save if logged in
   if (cloudSignedIn()) {
     try {
-      await upsertInspectionCloud(structuredClone(c));
+      const inspectionCopy =
+        structuredClone(c);
+
+      await upsertInspectionCloud(
+        inspectionCopy
+      );
+
+      await syncInspectionAnalyticsCloud(
+        inspectionCopy
+      );
     } catch (err) {
       console.error(err);
-      alert("Saved locally, but cloud save failed (check Firebase config/rules).");
+
+      alert(
+        "The audit was saved locally, but part of the cloud sync failed. Check the browser console and Firebase permissions."
+      );
+
       return;
     }
   }
@@ -2216,7 +2660,859 @@ function buildPrintableReportHTMLFromInspection(ins) {
     </div>
   `;
 }
+// =========================================================
+// ENGINEER VISUAL ANALYTICS
+// =========================================================
 
+function isFullPassAudit(audit) {
+  return String(audit?.outcome || "").trim() ===
+    "Work & Documentation Correct";
+}
+function normalizeAnalyticsDefectTitle(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[_/\\\-(),.]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getAllAuditsForEngineer(engineerName) {
+  const target = normalizeEngineer(engineerName);
+
+  return (state.db.inspections || [])
+    .filter(a => normalizeEngineer(a.engineer || "") === target)
+    .slice()
+    .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+}
+
+function getPreviousPeriodAudits(engineerName) {
+  const all = getAllAuditsForEngineer(engineerName);
+  const range = el("rangeSelect")?.value || "qCurrent";
+  const today = new Date();
+
+  if (range === "last5") {
+    return all.slice(-10, -5);
+  }
+
+  if (range === "last6") {
+    return all.slice(-12, -6);
+  }
+
+  if (
+    range === "qCurrent" ||
+    range === "q1" ||
+    range === "q2" ||
+    range === "q3" ||
+    range === "q4"
+  ) {
+    const currentYear = today.getFullYear();
+
+    const selectedQuarter =
+      range === "qCurrent"
+        ? getCurrentQuarter(today)
+        : range === "q1"
+          ? 1
+          : range === "q2"
+            ? 2
+            : range === "q3"
+              ? 3
+              : 4;
+
+    let previousQuarter = selectedQuarter - 1;
+    let previousYear = currentYear;
+
+    if (previousQuarter === 0) {
+      previousQuarter = 4;
+      previousYear--;
+    }
+
+    const { start, end } = getQuarterRange(
+      previousYear,
+      previousQuarter
+    );
+
+    return all.filter(a => {
+      const date = parseDateSafe(a.date);
+      return date && date >= start && date <= end;
+    });
+  }
+
+  if (range === "custom") {
+    const selectedFrom = parseDateSafe(el("rangeFrom")?.value);
+    const selectedTo = parseDateSafe(el("rangeTo")?.value);
+
+    if (!selectedFrom || !selectedTo) {
+      return [];
+    }
+
+    const currentStart = new Date(selectedFrom);
+    currentStart.setHours(0, 0, 0, 0);
+
+    const currentEnd = new Date(selectedTo);
+    currentEnd.setHours(23, 59, 59, 999);
+
+    const durationMilliseconds =
+      currentEnd.getTime() - currentStart.getTime() + 1;
+
+    const previousEnd = new Date(currentStart.getTime() - 1);
+
+    const previousStart = new Date(
+      previousEnd.getTime() - durationMilliseconds + 1
+    );
+
+    return all.filter(a => {
+      const date = parseDateSafe(a.date);
+      return date && date >= previousStart && date <= previousEnd;
+    });
+  }
+
+  return [];
+}
+
+function getPreviousPeriodLabel() {
+  const range = el("rangeSelect")?.value || "qCurrent";
+  const today = new Date();
+
+  if (range === "last5") {
+    return "Previous 5 audits";
+  }
+
+  if (range === "last6") {
+    return "Previous 6 audits";
+  }
+
+  if (
+    range === "qCurrent" ||
+    range === "q1" ||
+    range === "q2" ||
+    range === "q3" ||
+    range === "q4"
+  ) {
+    const selectedQuarter =
+      range === "qCurrent"
+        ? getCurrentQuarter(today)
+        : range === "q1"
+          ? 1
+          : range === "q2"
+            ? 2
+            : range === "q3"
+              ? 3
+              : 4;
+
+    const previousQuarter =
+      selectedQuarter === 1 ? 4 : selectedQuarter - 1;
+
+    const previousYear =
+      selectedQuarter === 1
+        ? today.getFullYear() - 1
+        : today.getFullYear();
+
+    return `${quarterLabel(previousQuarter)} ${previousYear}`;
+  }
+
+  if (range === "custom") {
+    return "Previous equivalent period";
+  }
+
+  return "Previous period";
+}
+
+function getEngineerMonthlyTrend(audits) {
+  const months = new Map();
+
+  (Array.isArray(audits) ? audits : []).forEach(audit => {
+    const date = parseDateSafe(audit.date);
+    if (!date) return;
+
+    const key =
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+
+    if (!months.has(key)) {
+      months.set(key, {
+        key,
+        label: date.toLocaleDateString("en-GB", {
+          month: "short",
+          year: "numeric"
+        }),
+        audits: 0,
+        passes: 0,
+        defects: 0
+      });
+    }
+
+    const month = months.get(key);
+
+    month.audits++;
+    month.defects += Array.isArray(audit.findings)
+      ? audit.findings.length
+      : 0;
+
+    if (isFullPassAudit(audit)) {
+      month.passes++;
+    }
+  });
+
+  return Array.from(months.values())
+    .sort((a, b) => a.key.localeCompare(b.key))
+    .map(month => ({
+      ...month,
+      passRate: month.audits
+        ? Math.round((month.passes / month.audits) * 100)
+        : 0
+    }));
+}
+
+function analyticsDifference(currentValue, previousValue, suffix = "") {
+  const current = Number(currentValue) || 0;
+  const previous = Number(previousValue) || 0;
+  const difference = current - previous;
+
+  if (Math.abs(difference) < 0.005) {
+    return `No change`;
+  }
+
+  const rounded = Number.isInteger(difference)
+    ? difference
+    : Number(difference.toFixed(2));
+
+  return difference > 0
+    ? `▲ +${rounded}${suffix}`
+    : `▼ ${rounded}${suffix}`;
+}
+
+function analyticsChangeClass(
+  currentValue,
+  previousValue,
+  lowerIsBetter = false
+) {
+  const current = Number(currentValue) || 0;
+  const previous = Number(previousValue) || 0;
+
+  if (Math.abs(current - previous) < 0.005) {
+    return "";
+  }
+
+  const improved = lowerIsBetter
+    ? current < previous
+    : current > previous;
+
+  return improved ? "analytics-change-good" : "analytics-change-bad";
+}
+function getEngineerAnalytics(audits) {
+  const safeAudits = Array.isArray(audits) ? audits : [];
+
+  const analytics = {
+    totalAudits: safeAudits.length,
+    passedAudits: 0,
+    failedAudits: 0,
+    passRate: 0,
+    totalDefects: 0,
+    defectsPerAudit: 0,
+
+    repeatedDefectTitles: 0,
+    repeatOccurrences: 0,
+    repeatRate: 0,
+
+    severities: {
+      ID: 0,
+      AR: 0,
+      NCS: 0,
+      Advisory: 0
+    },
+
+    defectTitles: {}
+  };
+
+  safeAudits.forEach(audit => {
+    if (isFullPassAudit(audit)) {
+      analytics.passedAudits++;
+    } else {
+      analytics.failedAudits++;
+    }
+
+    const findings = Array.isArray(audit.findings)
+      ? audit.findings
+      : [];
+
+    analytics.totalDefects += findings.length;
+
+    findings.forEach(finding => {
+      const severity =
+        String(finding.severity || "").trim();
+
+      if (severity === "Critical" || severity === "ID") {
+        analytics.severities.ID++;
+      } else if (
+        severity === "Major" ||
+        severity === "AR"
+      ) {
+        analytics.severities.AR++;
+      } else if (
+        severity === "Minor" ||
+        severity === "NCS"
+      ) {
+        analytics.severities.NCS++;
+      } else if (
+        severity.toLowerCase() === "advisory"
+      ) {
+        analytics.severities.Advisory++;
+      }
+
+      const rawTitle = String(
+        finding.title ||
+        finding.tag ||
+        "Unspecified defect"
+      ).trim();
+
+      const title = rawTitle || "Unspecified defect";
+
+      const key =
+        normalizeAnalyticsDefectTitle(title) ||
+        "unspecified defect";
+
+      if (!analytics.defectTitles[key]) {
+        analytics.defectTitles[key] = {
+          title,
+          count: 0,
+          auditIds: new Set()
+        };
+      }
+
+      analytics.defectTitles[key].count++;
+
+      if (audit.id) {
+        analytics.defectTitles[key].auditIds.add(audit.id);
+      }
+    });
+  });
+
+  analytics.passRate = analytics.totalAudits
+    ? Math.round(
+        (analytics.passedAudits / analytics.totalAudits) * 100
+      )
+    : 0;
+
+  analytics.defectsPerAudit = analytics.totalAudits
+    ? analytics.totalDefects / analytics.totalAudits
+    : 0;
+
+  const defectEntries =
+    Object.values(analytics.defectTitles);
+
+  const repeatedEntries = defectEntries.filter(
+    item => item.count > 1
+  );
+
+  analytics.repeatedDefectTitles =
+    repeatedEntries.length;
+
+  analytics.repeatOccurrences =
+    repeatedEntries.reduce(
+      (sum, item) => sum + (item.count - 1),
+      0
+    );
+
+  analytics.repeatRate = analytics.totalDefects
+    ? Math.round(
+        (
+          analytics.repeatOccurrences /
+          analytics.totalDefects
+        ) * 100
+      )
+    : 0;
+
+  analytics.topDefects = defectEntries
+    .sort((a, b) => {
+      if (b.count !== a.count) {
+        return b.count - a.count;
+      }
+
+      return a.title.localeCompare(b.title);
+    })
+    .slice(0, 5)
+    .map(item => ({
+      title: item.title,
+      count: item.count,
+      auditCount: item.auditIds.size
+    }));
+
+  analytics.monthlyTrend =
+    getEngineerMonthlyTrend(safeAudits);
+
+  return analytics;
+}
+
+function engineerAnalyticsBarRow(label, value, maximum) {
+  const safeValue = Number(value) || 0;
+  const safeMaximum = Math.max(Number(maximum) || 0, 1);
+
+  const percentage = safeValue > 0
+    ? Math.max(4, Math.round((safeValue / safeMaximum) * 100))
+    : 0;
+
+  return `
+    <div class="engineer-chart-row">
+      <div class="engineer-chart-label">
+        <span class="engineer-chart-name">${escapeHtml(label)}</span>
+        <span class="engineer-chart-value">${safeValue}</span>
+      </div>
+
+      <div class="engineer-chart-track">
+        <div
+          class="engineer-chart-fill"
+          style="width:${percentage}%"
+        ></div>
+      </div>
+    </div>
+  `;
+}
+
+function buildEngineerAnalyticsHTML(audits) {
+  const stats = getEngineerAnalytics(audits);
+
+  if (!stats.totalAudits) {
+    return `
+      <div class="engineer-analytics-empty">
+        No audit analytics are available for this engineer in the selected range.
+      </div>
+    `;
+  }
+
+  const engineer =
+    el("engineerSelect")?.value?.trim() || "";
+
+  const previousAudits =
+    getPreviousPeriodAudits(engineer);
+
+  const previousStats =
+    getEngineerAnalytics(previousAudits);
+
+  const previousLabel =
+    getPreviousPeriodLabel();
+
+  const passWidth = stats.passRate;
+  const failWidth = 100 - stats.passRate;
+
+  const severityEntries = [
+    ["ID", stats.severities.ID],
+    ["AR", stats.severities.AR],
+    ["NCS", stats.severities.NCS],
+    ["Advisory", stats.severities.Advisory]
+  ];
+
+  const maximumSeverity = Math.max(
+    1,
+    ...severityEntries.map(item => item[1])
+  );
+
+  const severityRows = severityEntries
+    .map(([label, count]) =>
+      engineerAnalyticsBarRow(
+        label,
+        count,
+        maximumSeverity
+      )
+    )
+    .join("");
+
+  const maximumDefect = Math.max(
+    1,
+    ...stats.topDefects.map(item => item.count)
+  );
+
+  const topDefectRows = stats.topDefects.length
+    ? stats.topDefects
+        .map(item =>
+          engineerAnalyticsBarRow(
+            item.title,
+            item.count,
+            maximumDefect
+          )
+        )
+        .join("")
+    : `<div class="rp-small">No defects were recorded.</div>`;
+
+  const repeatDefectRows = stats.topDefects
+    .filter(item => item.count > 1)
+    .map(item => `
+      <div class="engineer-chart-row">
+        <div class="engineer-chart-label">
+          <span class="engineer-chart-name">
+            ${escapeHtml(item.title)}
+          </span>
+
+          <span class="engineer-chart-value">
+            ${item.count} occurrences
+          </span>
+        </div>
+
+        <div class="rp-small">
+          Repeat occurrences: ${item.count - 1}
+        </div>
+      </div>
+    `)
+    .join("");
+
+  const maximumMonthlyDefects = Math.max(
+    1,
+    ...stats.monthlyTrend.map(month => month.defects)
+  );
+
+  const monthlyTrendRows = stats.monthlyTrend.length
+    ? stats.monthlyTrend.map(month => {
+        const defectWidth = month.defects > 0
+          ? Math.max(
+              4,
+              Math.round(
+                (
+                  month.defects /
+                  maximumMonthlyDefects
+                ) * 100
+              )
+            )
+          : 0;
+
+        return `
+          <div class="engineer-month-row">
+            <div class="engineer-month-heading">
+              <strong>${escapeHtml(month.label)}</strong>
+
+              <span>
+                ${month.audits} audit${month.audits === 1 ? "" : "s"}
+                • ${month.defects} defect${month.defects === 1 ? "" : "s"}
+                • ${month.passRate}% PASS
+              </span>
+            </div>
+
+            <div class="engineer-chart-track">
+              <div
+                class="engineer-chart-fill"
+                style="width:${defectWidth}%"
+              ></div>
+            </div>
+          </div>
+        `;
+      }).join("")
+    : `
+      <div class="rp-small">
+        No dated audits are available for the monthly trend.
+      </div>
+    `;
+
+  const comparisonHtml = previousStats.totalAudits
+    ? `
+      <div class="engineer-comparison-heading">
+        <span>Selected period</span>
+        <span>${escapeHtml(previousLabel)}</span>
+        <span>Change</span>
+      </div>
+
+      <div class="engineer-comparison-row">
+        <strong>Audits</strong>
+
+        <span>
+          ${stats.totalAudits} vs ${previousStats.totalAudits}
+        </span>
+
+        <span>
+          ${analyticsDifference(
+            stats.totalAudits,
+            previousStats.totalAudits
+          )}
+        </span>
+      </div>
+
+      <div class="engineer-comparison-row">
+        <strong>PASS rate</strong>
+
+        <span>
+          ${stats.passRate}% vs ${previousStats.passRate}%
+        </span>
+
+        <span class="${analyticsChangeClass(
+          stats.passRate,
+          previousStats.passRate
+        )}">
+          ${analyticsDifference(
+            stats.passRate,
+            previousStats.passRate,
+            " pts"
+          )}
+        </span>
+      </div>
+
+      <div class="engineer-comparison-row">
+        <strong>Total defects</strong>
+
+        <span>
+          ${stats.totalDefects} vs ${previousStats.totalDefects}
+        </span>
+
+        <span class="${analyticsChangeClass(
+          stats.totalDefects,
+          previousStats.totalDefects,
+          true
+        )}">
+          ${analyticsDifference(
+            stats.totalDefects,
+            previousStats.totalDefects
+          )}
+        </span>
+      </div>
+
+      <div class="engineer-comparison-row">
+        <strong>Defects per audit</strong>
+
+        <span>
+          ${stats.defectsPerAudit.toFixed(2)}
+          vs
+          ${previousStats.defectsPerAudit.toFixed(2)}
+        </span>
+
+        <span class="${analyticsChangeClass(
+          stats.defectsPerAudit,
+          previousStats.defectsPerAudit,
+          true
+        )}">
+          ${analyticsDifference(
+            stats.defectsPerAudit,
+            previousStats.defectsPerAudit
+          )}
+        </span>
+      </div>
+
+      <div class="engineer-comparison-row">
+        <strong>Repeat rate</strong>
+
+        <span>
+          ${stats.repeatRate}%
+          vs
+          ${previousStats.repeatRate}%
+        </span>
+
+        <span class="${analyticsChangeClass(
+          stats.repeatRate,
+          previousStats.repeatRate,
+          true
+        )}">
+          ${analyticsDifference(
+            stats.repeatRate,
+            previousStats.repeatRate,
+            " pts"
+          )}
+        </span>
+      </div>
+    `
+    : `
+      <div class="rp-small">
+        No audits were found for ${escapeHtml(previousLabel.toLowerCase())}.
+      </div>
+    `;
+
+  return `
+    <div class="engineer-analytics-report">
+      <h2 class="engineer-analytics-heading">
+        Engineer Analytics
+      </h2>
+
+      <div class="engineer-kpi-grid">
+        <div class="engineer-kpi-card">
+          <span class="engineer-kpi-value">
+            ${stats.totalAudits}
+          </span>
+
+          <span class="engineer-kpi-label">
+            Audits
+          </span>
+        </div>
+
+        <div class="engineer-kpi-card">
+          <span class="engineer-kpi-value">
+            ${stats.passRate}%
+          </span>
+
+          <span class="engineer-kpi-label">
+            Full pass rate
+          </span>
+        </div>
+
+        <div class="engineer-kpi-card">
+          <span class="engineer-kpi-value">
+            ${stats.totalDefects}
+          </span>
+
+          <span class="engineer-kpi-label">
+            Total defects
+          </span>
+        </div>
+
+        <div class="engineer-kpi-card">
+          <span class="engineer-kpi-value">
+            ${stats.defectsPerAudit.toFixed(2)}
+          </span>
+
+          <span class="engineer-kpi-label">
+            Defects per audit
+          </span>
+        </div>
+
+        <div class="engineer-kpi-card">
+          <span class="engineer-kpi-value">
+            ${stats.repeatOccurrences}
+          </span>
+
+          <span class="engineer-kpi-label">
+            Repeat occurrences
+          </span>
+        </div>
+
+        <div class="engineer-kpi-card">
+          <span class="engineer-kpi-value">
+            ${stats.repeatRate}%
+          </span>
+
+          <span class="engineer-kpi-label">
+            Repeat defect rate
+          </span>
+        </div>
+      </div>
+
+      <div class="engineer-chart-grid">
+        <div class="engineer-chart-card">
+          <h3>PASS / FAIL audits</h3>
+
+          <div class="engineer-pass-fail-bar">
+            ${
+              passWidth > 0
+                ? `
+                  <div
+                    class="engineer-pass-section"
+                    style="width:${passWidth}%"
+                    title="${stats.passedAudits} full passes"
+                  >
+                    ${passWidth >= 18 ? `${passWidth}% PASS` : ""}
+                  </div>
+                `
+                : ""
+            }
+
+            ${
+              failWidth > 0
+                ? `
+                  <div
+                    class="engineer-fail-section"
+                    style="width:${failWidth}%"
+                    title="${stats.failedAudits} failed audits"
+                  >
+                    ${failWidth >= 18 ? `${failWidth}% FAIL` : ""}
+                  </div>
+                `
+                : ""
+            }
+          </div>
+
+          <div class="engineer-chart-legend">
+            <span>PASS: ${stats.passedAudits}</span>
+            <span>FAIL: ${stats.failedAudits}</span>
+          </div>
+        </div>
+
+        <div class="engineer-chart-card">
+          <h3>Defects by severity</h3>
+          ${severityRows}
+        </div>
+
+        <div
+          class="engineer-chart-card"
+          style="grid-column:1 / -1;"
+        >
+          <h3>Most common defects</h3>
+          ${topDefectRows}
+        </div>
+
+        <div
+          class="engineer-chart-card"
+          style="grid-column:1 / -1;"
+        >
+          <h3>Repeat defect analysis</h3>
+
+          <div class="engineer-repeat-summary">
+            <div>
+              <strong>${stats.repeatedDefectTitles}</strong>
+              <span>Repeated defect types</span>
+            </div>
+
+            <div>
+              <strong>${stats.repeatOccurrences}</strong>
+              <span>Repeat occurrences</span>
+            </div>
+
+            <div>
+              <strong>${stats.repeatRate}%</strong>
+              <span>Repeat rate</span>
+            </div>
+          </div>
+
+          ${
+            repeatDefectRows ||
+            `
+              <div class="rp-small">
+                No repeated defect titles were found in this period.
+              </div>
+            `
+          }
+        </div>
+
+        <div
+          class="engineer-chart-card"
+          style="grid-column:1 / -1;"
+        >
+          <h3>Monthly trend</h3>
+
+          <div class="rp-small engineer-chart-note">
+            Bar length represents the number of defects recorded.
+          </div>
+
+          ${monthlyTrendRows}
+        </div>
+
+        <div
+          class="engineer-chart-card"
+          style="grid-column:1 / -1;"
+        >
+          <h3>
+            Comparison with previous period
+          </h3>
+
+          <div class="rp-small engineer-chart-note">
+            Compared with ${escapeHtml(previousLabel)}.
+          </div>
+
+          ${comparisonHtml}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderEngineerAnalytics() {
+  const panel = el("engineerAnalyticsPanel");
+  if (!panel) return;
+
+  const engineer = el("engineerSelect")?.value?.trim();
+
+  if (!engineer) {
+    panel.innerHTML = `
+      <div class="engineer-analytics-empty">
+        Choose an engineer to view their analytics.
+      </div>
+    `;
+    return;
+  }
+
+  const audits = filterAuditsForEngineer(engineer);
+  panel.innerHTML = buildEngineerAnalyticsHTML(audits);
+}
 function buildPrintableEngineerHTML() {
   refreshEngineerDropdown();
 
@@ -2315,6 +3611,8 @@ function buildPrintableEngineerHTML() {
             <div class="rp-small">Positives</div>
           </div>
         </div>
+
+                ${buildEngineerAnalyticsHTML(audits)}
 
         <div class="box">
           <h3>Feedback Summary</h3>
@@ -2427,11 +3725,13 @@ loadEngineerDraftIntoBox();
   }
 }
 function loadOrGenerateEngineerSummary() {
-  // If a saved edited draft exists for this engineer/range, load it
-  if (loadEngineerDraftIntoBox()) return;
+  // Preserve any manually edited engineer summary.
+  if (!loadEngineerDraftIntoBox()) {
+    generateEngineerSummary();
+  }
 
-  // Otherwise generate a fresh summary
-  generateEngineerSummary();
+  // Update the visual analytics shown beneath the summary.
+  renderEngineerAnalytics();
 }
 function generateEngineerSummary() {
   refreshEngineerDropdown();
@@ -2458,7 +3758,8 @@ function generateEngineerSummary() {
 
   el("engineerOutput").value = summary.text;
 
-  saveEngineerDraftFromBox();
+saveEngineerDraftFromBox();
+renderEngineerAnalytics();
 }
 
 function filterAuditsForEngineer(engineerName) {
@@ -2674,16 +3975,20 @@ const totalAudits =
   (outcomes["Work PASS - Documentation FAIL"] || 0) +
   (outcomes["Work FAIL - Documentation FAIL"] || 0);
 
-const workCorrect =
-  (outcomes["Work & Documentation Correct"] || 0) +
-  (outcomes["Work PASS - Documentation FAIL"] || 0);
+const passAudits =
+  outcomes["Work & Documentation Correct"] || 0;
 
-const docsCorrect =
-  (outcomes["Work & Documentation Correct"] || 0) +
-  (outcomes["Work FAIL - Documentation PASS"] || 0);
+const failAudits =
+  Math.max(0, totalAudits - passAudits);
 
-lines.push(`Work Correct - ${workCorrect}/${totalAudits}`);
-lines.push(`Documentation Correct - ${docsCorrect}/${totalAudits}`);
+const passRate =
+  totalAudits > 0
+    ? Math.round((passAudits / totalAudits) * 100)
+    : 0;
+
+lines.push(`PASS - ${passAudits}/${totalAudits}`);
+lines.push(`FAIL - ${failAudits}/${totalAudits}`);
+lines.push(`Pass rate - ${passRate}%`);
 
 lines.push(`Totals: ${totalFindings} Defects Found • ${totalPositives} positives`);
 lines.push(`Severity: ID ${severityCounts.Critical} • AR ${severityCounts.Major} • NCS ${severityCounts.Minor} • Advisory ${severityCounts.Advisory}`);
@@ -3341,6 +4646,984 @@ const filename = `${clean(engineerName)} - ${clean(jobRef)} - ${datePretty}.pdf`
 }
 
 
+
+
+// ================= Defects & audit analytics =================
+function initAnalytics() {
+  if (!el("tabAnalytics")) return;
+
+  // One-time/backfill migration for audits saved before Analytics existed.
+  (state.db.inspections || []).forEach(archiveInspectionForAnalytics);
+
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth() - 11, 1);
+  el("analyticsFrom").value = start.toISOString().slice(0,10);
+  el("analyticsTo").value = today.toISOString().slice(0,10);
+
+  ["analyticsFrom","analyticsTo","analyticsEngineer","analyticsCategory","analyticsSeverity","analyticsSearch"]
+    .forEach(id => el(id)?.addEventListener(id === "analyticsSearch" ? "input" : "change", renderAnalytics));
+
+  el("analyticsThisMonthBtn")?.addEventListener("click", () => {
+    const d = new Date();
+    el("analyticsFrom").value = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0,10);
+    el("analyticsTo").value = d.toISOString().slice(0,10);
+    renderAnalytics();
+  });
+
+  el("analyticsThisQuarterBtn")?.addEventListener("click", () => {
+    const d = new Date();
+    const month = Math.floor(d.getMonth() / 3) * 3;
+    el("analyticsFrom").value = new Date(d.getFullYear(), month, 1).toISOString().slice(0,10);
+    el("analyticsTo").value = d.toISOString().slice(0,10);
+    renderAnalytics();
+  });
+
+  el("analyticsAllTimeBtn")?.addEventListener("click", () => {
+    el("analyticsFrom").value = "";
+    el("analyticsTo").value = "";
+    renderAnalytics();
+  });
+
+   el("engineerPresentationBtn")?.addEventListener(
+    "click",
+    toggleEngineerPresentationView
+  );
+
+  el("exportAnalyticsCsvBtn")?.addEventListener(
+    "click",
+    exportAnalyticsCsv
+  );
+  el("printAnalyticsBtn")?.addEventListener("click", () => {
+    document.body.classList.add("analytics-print");
+    window.print();
+    setTimeout(() => document.body.classList.remove("analytics-print"), 500);
+  });
+
+  refreshAnalyticsFilters();
+}
+
+function refreshAnalyticsFilters() {
+  const engineer = el("analyticsEngineer");
+  const category = el("analyticsCategory");
+  if (!engineer || !category) return;
+  const keepEngineer = engineer.value;
+  const keepCategory = category.value;
+  const engineers = [...new Set(analyticsState.defects.map(x => x.engineer).filter(Boolean))].sort();
+  const categories = [...new Set(analyticsState.defects.map(x => x.category || "Other"))].sort();
+  engineer.innerHTML = `<option value="">All engineers</option>` + engineers.map(x => `<option>${escapeHtml(x)}</option>`).join("");
+  category.innerHTML = `<option value="">All categories</option>` + categories.map(x => `<option>${escapeHtml(x)}</option>`).join("");
+  engineer.value = keepEngineer;
+  category.value = keepCategory;
+}
+
+function analyticsDateInRange(date, from, to) {
+  if (!date) return false;
+  if (from && date < from) return false;
+  if (to && date > to) return false;
+  return true;
+}
+
+function getAnalyticsSelection() {
+  const from = el("analyticsFrom")?.value || "";
+  const to = el("analyticsTo")?.value || "";
+  const engineer = el("analyticsEngineer")?.value || "";
+  const category = el("analyticsCategory")?.value || "";
+  const severity = el("analyticsSeverity")?.value || "";
+  const search = (el("analyticsSearch")?.value || "").trim().toLowerCase();
+
+  const defects = analyticsState.defects.filter(d => {
+    if (!analyticsDateInRange(d.date, from, to)) return false;
+    if (engineer && d.engineer !== engineer) return false;
+    if (category && (d.category || "Other") !== category) return false;
+    if (severity && d.severity !== severity) return false;
+    if (search) {
+      const haystack = `${d.title} ${d.tag} ${d.notes} ${d.why} ${d.action}`.toLowerCase();
+      if (!haystack.includes(search)) return false;
+    }
+    return true;
+  });
+
+  const audits = analyticsState.audits.filter(a => {
+    if (!analyticsDateInRange(a.date, from, to)) return false;
+    if (engineer && a.engineer !== engineer) return false;
+    return true;
+  });
+
+  return { defects, audits };
+}
+
+function isPassingOutcome(outcome) {
+  return String(outcome || "") === "Work & Documentation Correct";
+}
+
+function countBy(items, keyFn) {
+  const out = {};
+  items.forEach(item => {
+    const key = String(keyFn(item) || "Other").trim() || "Other";
+    out[key] = (out[key] || 0) + 1;
+  });
+  return out;
+}
+
+function sortedCounts(counts, limit = 10) {
+  return Object.entries(counts).sort((a,b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, limit);
+}
+function getEngineerPerformanceData(audits) {
+  const engineers = new Map();
+
+  (Array.isArray(audits) ? audits : []).forEach(audit => {
+    const rawName = String(audit.engineer || "").trim();
+    if (!rawName) return;
+
+    const key = normalizeEngineer(rawName);
+
+    if (!engineers.has(key)) {
+      engineers.set(key, {
+        engineer: rawName,
+        total: 0,
+        pass: 0,
+        fail: 0,
+        passRate: 0
+      });
+    }
+
+    const record = engineers.get(key);
+
+    record.total++;
+
+    if (isPassingOutcome(audit.outcome)) {
+      record.pass++;
+    } else {
+      record.fail++;
+    }
+  });
+
+  return Array.from(engineers.values())
+    .map(record => ({
+      ...record,
+      passRate: record.total
+        ? Math.round((record.pass / record.total) * 100)
+        : 0
+    }))
+    .sort((a, b) => {
+      if (b.total !== a.total) {
+        return b.total - a.total;
+      }
+
+      return a.engineer.localeCompare(b.engineer);
+    });
+}
+
+function getAnalyticsPeriodLabel() {
+  const from = el("analyticsFrom")?.value || "";
+  const to = el("analyticsTo")?.value || "";
+
+  if (!from && !to) {
+    return "All historical audits";
+  }
+
+  if (from && to) {
+    return `${formatDate(from)} to ${formatDate(to)}`;
+  }
+
+  if (from) {
+    return `From ${formatDate(from)}`;
+  }
+
+  return `Up to ${formatDate(to)}`;
+}
+
+function splitEngineerChartLabel(name) {
+  const words = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!words.length) {
+    return ["Unnamed"];
+  }
+
+  if (words.length === 1) {
+    return [words[0]];
+  }
+
+  if (words.length === 2) {
+    return words;
+  }
+
+  const midpoint = Math.ceil(words.length / 2);
+
+  return [
+    words.slice(0, midpoint).join(" "),
+    words.slice(midpoint).join(" ")
+  ];
+}
+
+function renderEngineerPerformanceChart(audits) {
+  const container = el("engineerPerformanceChart");
+  const period = el("engineerPerformancePeriod");
+  const summary = el("engineerPerformanceSummary");
+
+  if (!container) return;
+
+  const data = getEngineerPerformanceData(audits);
+
+  if (period) {
+    period.textContent = getAnalyticsPeriodLabel();
+  }
+
+  if (!data.length) {
+    container.innerHTML = `
+      <div class="analytics-empty">
+        No engineer audit data matches the selected period.
+      </div>
+    `;
+
+    if (summary) {
+      summary.innerHTML = "";
+    }
+
+    return;
+  }
+
+  const chartWidth = Math.max(
+    1120,
+    data.length * 122
+  );
+
+  const chartHeight = 520;
+  const margin = {
+    top: 42,
+    right: 30,
+    bottom: 118,
+    left: 58
+  };
+
+  const plotWidth =
+    chartWidth - margin.left - margin.right;
+
+  const plotHeight =
+    chartHeight - margin.top - margin.bottom;
+
+  const maximumValue = Math.max(
+    1,
+    ...data.map(item => item.total)
+  );
+
+  const tickStep =
+    maximumValue <= 10
+      ? 1
+      : maximumValue <= 25
+        ? 5
+        : maximumValue <= 50
+          ? 10
+          : Math.ceil(maximumValue / 5);
+
+  const axisMaximum =
+    Math.ceil(maximumValue / tickStep) * tickStep;
+
+  const tickValues = [];
+
+  for (
+    let value = 0;
+    value <= axisMaximum;
+    value += tickStep
+  ) {
+    tickValues.push(value);
+  }
+
+  const groupWidth = plotWidth / data.length;
+  const availableBarWidth = Math.min(
+    24,
+    Math.max(12, groupWidth * 0.2)
+  );
+
+  const barGap = Math.max(
+    4,
+    Math.min(9, groupWidth * 0.055)
+  );
+
+  const completeGroupWidth =
+    availableBarWidth * 3 + barGap * 2;
+
+  const scaleY = value =>
+    margin.top +
+    plotHeight -
+    (value / axisMaximum) * plotHeight;
+
+  const gridLines = tickValues
+    .map(value => {
+      const y = scaleY(value);
+
+      return `
+        <line
+          x1="${margin.left}"
+          y1="${y}"
+          x2="${chartWidth - margin.right}"
+          y2="${y}"
+          stroke="#d1d5db"
+stroke-width="1"
+class="engineer-chart-gridline"
+        ></line>
+
+        <text
+          x="${margin.left - 12}"
+          y="${y + 5}"
+          text-anchor="end"
+          fill="#4b5563"
+font-size="12"
+class="engineer-chart-axis-label"
+        >
+          ${value}
+        </text>
+      `;
+    })
+    .join("");
+
+  const groups = data
+    .map((item, index) => {
+      const centreX =
+        margin.left +
+        index * groupWidth +
+        groupWidth / 2;
+
+      const groupStart =
+        centreX - completeGroupWidth / 2;
+
+      const values = [
+  {
+    value: item.total,
+    className: "engineer-chart-total",
+    fill: "#2563eb",
+    label: "Total audits"
+  },
+  {
+    value: item.pass,
+    className: "engineer-chart-pass",
+    fill: "#16a34a",
+    label: "PASS"
+  },
+  {
+    value: item.fail,
+    className: "engineer-chart-fail",
+    fill: "#dc2626",
+    label: "FAIL"
+  }
+];
+
+      const bars = values
+        .map((bar, barIndex) => {
+          const x =
+            groupStart +
+            barIndex * (availableBarWidth + barGap);
+
+          const y = scaleY(bar.value);
+          const height =
+            margin.top + plotHeight - y;
+
+          const valueLabelY = Math.max(
+            margin.top + 14,
+            y - 8
+          );
+
+          return `
+            <g>
+              <title>
+                ${escapeHtml(item.engineer)} —
+                ${bar.label}: ${bar.value}
+              </title>
+
+              <rect
+  x="${x}"
+  y="${y}"
+  width="${availableBarWidth}"
+  height="${height}"
+  rx="3"
+  fill="${bar.fill}"
+  class="${bar.className}"
+></rect>
+
+              <text
+                x="${x + availableBarWidth / 2}"
+                y="${valueLabelY}"
+                text-anchor="middle"
+                fill="#111827"
+font-size="13"
+font-weight="800"
+class="engineer-chart-value-label"
+              >
+                ${bar.value}
+              </text>
+            </g>
+          `;
+        })
+        .join("");
+
+      const nameLines =
+        splitEngineerChartLabel(item.engineer);
+
+      const nameText = nameLines
+        .map((line, lineIndex) => `
+          <tspan
+            x="${centreX}"
+            dy="${lineIndex === 0 ? 0 : 16}"
+          >
+            ${escapeHtml(line)}
+          </tspan>
+        `)
+        .join("");
+
+      return `
+        ${bars}
+
+        <text
+          x="${centreX}"
+          y="${chartHeight - margin.bottom + 28}"
+          text-anchor="middle"
+          fill="#111827"
+font-size="12"
+font-weight="700"
+class="engineer-chart-engineer-label"
+        >
+          ${nameText}
+        </text>
+
+        <text
+          x="${centreX}"
+          y="${chartHeight - 28}"
+          text-anchor="middle"
+          fill="#4b5563"
+font-size="11"
+font-weight="700"
+class="engineer-chart-rate-label"
+        >
+          ${item.passRate}% PASS
+        </text>
+      `;
+    })
+    .join("");
+
+  container.innerHTML = `
+ <svg
+  class="engineer-performance-svg"
+  viewBox="0 0 ${chartWidth} ${chartHeight}"
+  width="${data.length <= 10 ? "100%" : chartWidth}"
+  height="${data.length <= 10 ? "auto" : chartHeight}"
+  role="img"
+  aria-label="Total audits, passes and failures by engineer"
+  preserveAspectRatio="xMidYMid meet"
+  data-engineer-count="${data.length}"
+  style="
+    display:block;
+    width:${data.length <= 10 ? "100%" : `${chartWidth}px`};
+    max-width:${data.length <= 10 ? "100%" : "none"};
+    height:auto;
+    background:#ffffff;
+  "
+>
+     <rect
+  x="0"
+  y="0"
+  width="${chartWidth}"
+  height="${chartHeight}"
+  fill="#ffffff"
+  class="engineer-chart-background"
+></rect>
+
+      ${gridLines}
+
+      <line
+        x1="${margin.left}"
+        y1="${margin.top + plotHeight}"
+        x2="${chartWidth - margin.right}"
+        y2="${margin.top + plotHeight}"
+        stroke="#6b7280"
+stroke-width="1.2"
+class="engineer-chart-axis"
+      ></line>
+
+      <line
+        x1="${margin.left}"
+        y1="${margin.top}"
+        x2="${margin.left}"
+        y2="${margin.top + plotHeight}"
+        stroke="#6b7280"
+stroke-width="1.2"
+class="engineer-chart-axis"
+      ></line>
+
+      ${groups}
+
+      <text
+        x="18"
+        y="${margin.top + plotHeight / 2}"
+        text-anchor="middle"
+        fill="#374151"
+font-size="13"
+font-weight="700"
+class="engineer-chart-y-title"
+        transform="rotate(-90 18 ${margin.top + plotHeight / 2})"
+      >
+        Number of audits
+      </text>
+    </svg>
+  `;
+
+  const totalAudits =
+    data.reduce((sum, item) => sum + item.total, 0);
+
+  const totalPasses =
+    data.reduce((sum, item) => sum + item.pass, 0);
+
+  const totalFailures =
+    data.reduce((sum, item) => sum + item.fail, 0);
+
+  const overallPassRate = totalAudits
+    ? Math.round((totalPasses / totalAudits) * 100)
+    : 0;
+
+  const busiestEngineer = data[0];
+
+  if (summary) {
+    summary.innerHTML = `
+      <div>
+        <strong>${data.length}</strong>
+        <span>Engineers</span>
+      </div>
+
+      <div>
+        <strong>${totalAudits}</strong>
+        <span>Total audits</span>
+      </div>
+
+      <div>
+        <strong>${overallPassRate}%</strong>
+        <span>Overall PASS rate</span>
+      </div>
+
+      <div>
+        <strong>${totalFailures}</strong>
+        <span>Total FAIL audits</span>
+      </div>
+
+      <div>
+        <strong>${escapeHtml(busiestEngineer.engineer)}</strong>
+        <span>Most audits: ${busiestEngineer.total}</span>
+      </div>
+    `;
+  }
+}
+
+function toggleEngineerPresentationView() {
+  const section = el("engineerPerformanceSection");
+  const chart = el("engineerPerformanceChart");
+  const period = el("engineerPerformancePeriod");
+  const summary = el("engineerPerformanceSummary");
+
+  if (!section || !chart) return;
+
+  const presentationWindow = window.open(
+    "",
+    "PPCEngineerPerformancePresentation",
+    "width=1600,height=950,resizable=yes,scrollbars=yes"
+  );
+
+  if (!presentationWindow) {
+    alert(
+      "The presentation page was blocked by the browser. Allow pop-ups for this app and press Presentation View again."
+    );
+    return;
+  }
+
+  const chartHtml = chart.innerHTML;
+  const periodText =
+    period?.textContent?.trim() || "Selected reporting period";
+  const summaryHtml = summary?.innerHTML || "";
+
+  presentationWindow.document.open();
+
+  presentationWindow.document.write(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  />
+
+  <title>Engineer Performance Overview</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: #ffffff;
+      color: #111827;
+      font-family:
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Roboto,
+        Arial,
+        sans-serif;
+    }
+
+    body {
+      padding: 24px;
+    }
+
+    .presentation-page {
+      width: 100%;
+      max-width: 1800px;
+      margin: 0 auto;
+    }
+
+    .presentation-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 20px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.2;
+    }
+
+    .period {
+      margin-top: 6px;
+      color: #4b5563;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .close-button {
+      flex: 0 0 auto;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      padding: 9px 13px;
+      background: #ffffff;
+      color: #111827;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 700;
+    }
+
+    .legend {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 28px;
+      margin: 16px 0;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .swatch {
+      width: 16px;
+      height: 16px;
+      border-radius: 3px;
+    }
+
+    .total {
+      background: #2563eb;
+    }
+
+    .pass {
+      background: #16a34a;
+    }
+
+    .fail {
+      background: #dc2626;
+    }
+
+    .chart-frame {
+      width: 100%;
+      padding: 10px;
+      overflow: hidden;
+      border: 1px solid #d1d5db;
+      border-radius: 14px;
+      background: #ffffff;
+    }
+
+    .chart-frame svg {
+      display: block !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      height: auto !important;
+      background: #ffffff !important;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .summary > div {
+      padding: 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      background: #f9fafb;
+      text-align: center;
+    }
+
+    .summary strong {
+      display: block;
+      color: #111827;
+      font-size: 20px;
+    }
+
+    .summary span {
+      display: block;
+      margin-top: 4px;
+      color: #4b5563;
+      font-size: 12px;
+    }
+
+    @media (max-width: 800px) {
+      body {
+        padding: 12px;
+      }
+
+      .presentation-header {
+        flex-direction: column;
+      }
+
+      .summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media print {
+      body {
+        padding: 0;
+      }
+
+      .close-button {
+        display: none;
+      }
+
+      .presentation-page {
+        max-width: none;
+      }
+
+      .chart-frame {
+        border: 0;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="presentation-page">
+    <header class="presentation-header">
+      <div>
+        <h1>Engineer Performance Overview</h1>
+        <div class="period">${escapeHtml(periodText)}</div>
+      </div>
+
+      <button
+        class="close-button"
+        type="button"
+        onclick="window.close()"
+      >
+        Close Presentation
+      </button>
+    </header>
+
+    <div class="legend">
+      <span>
+        <i class="swatch total"></i>
+        Total audits
+      </span>
+
+      <span>
+        <i class="swatch pass"></i>
+        PASS
+      </span>
+
+      <span>
+        <i class="swatch fail"></i>
+        FAIL
+      </span>
+    </div>
+
+    <section class="chart-frame">
+      ${chartHtml}
+    </section>
+
+    <section class="summary">
+      ${summaryHtml}
+    </section>
+  </main>
+</body>
+</html>`);
+
+  presentationWindow.document.close();
+  presentationWindow.focus();
+}
+function renderAnalytics() {
+  if (!el("tabAnalytics")) return;
+  refreshAnalyticsFilters();
+  const { defects, audits } = getAnalyticsSelection();
+  const pass = audits.filter(a => isPassingOutcome(a.outcome)).length;
+  const fail = audits.length - pass;
+  const passRate = audits.length ? Math.round(pass / audits.length * 100) : 0;
+  const avgDefects = audits.length ? (defects.length / audits.length).toFixed(1) : "0.0";
+
+  el("analyticsKpis").innerHTML = [
+    ["Audits", audits.length],
+    ["Defects", defects.length],
+    ["Pass rate", `${passRate}%`],
+    ["Defects / audit", avgDefects]
+  ].map(([label,value]) => `<div class="analytics-kpi"><div class="label">${label}</div><div class="value">${value}</div></div>`).join("");
+
+  const titleCounts = countBy(defects, d => d.title);
+  renderHorizontalBars(el("topDefectsChart"), sortedCounts(titleCounts, 10));
+  el("topDefectsCaption").textContent = defects.length ? `${Object.keys(titleCounts).length} unique defects` : "";
+
+  renderPassFailChart(pass, fail);
+  el("passFailCaption").textContent = audits.length ? `${pass}/${audits.length} passed` : "";
+
+   renderHorizontalBars(
+    el("categoryChart"),
+    sortedCounts(
+      countBy(
+        defects,
+        d => d.category || "Other"
+      ),
+      8
+    )
+  );
+
+  renderHorizontalBars(
+    el("severityChart"),
+    sortedCounts(
+      countBy(
+        defects,
+        d => d.severity || "Other"
+      ),
+      8
+    )
+  );
+
+  renderMonthlyAuditChart(audits);
+  renderEngineerPerformanceChart(audits);
+  renderAnalyticsTable(defects);
+}
+
+function renderHorizontalBars(container, entries) {
+  if (!container) return;
+  if (!entries.length) {
+    container.innerHTML = `<div class="analytics-empty">No data for these filters.</div>`;
+    return;
+  }
+  const max = Math.max(...entries.map(x => x[1]), 1);
+  container.innerHTML = `<div class="analytics-bars">` + entries.map(([label,value]) => `
+    <div class="analytics-bar-row" title="${escapeHtml(label)}: ${value}">
+      <div class="analytics-bar-label">${escapeHtml(label)}</div>
+      <div class="analytics-bar-track"><div class="analytics-bar-fill" style="width:${Math.max(2, value/max*100)}%"></div></div>
+      <strong>${value}</strong>
+    </div>`).join("") + `</div>`;
+}
+
+function renderPassFailChart(pass, fail) {
+  const container = el("passFailChart");
+  if (!container) return;
+  const total = pass + fail;
+  if (!total) {
+    container.innerHTML = `<div class="analytics-empty">No audits for these filters.</div>`;
+    return;
+  }
+  const passPct = pass / total * 100;
+  container.innerHTML = `
+    <div class="analytics-donut-wrap">
+      <div class="analytics-donut" style="background:conic-gradient(#22c55e 0 ${passPct}%, #ef4444 ${passPct}% 100%)"></div>
+      <div class="analytics-legend">
+        <div class="analytics-legend-row"><span class="analytics-swatch" style="background:#22c55e"></span>PASS <strong>${pass} (${Math.round(passPct)}%)</strong></div>
+        <div class="analytics-legend-row"><span class="analytics-swatch" style="background:#ef4444"></span>FAIL <strong>${fail} (${Math.round(100-passPct)}%)</strong></div>
+      </div>
+    </div>`;
+}
+
+function renderMonthlyAuditChart(audits) {
+  const container = el("monthlyAuditChart");
+  if (!container) return;
+  const months = {};
+  audits.forEach(a => {
+    const month = String(a.date || "").slice(0,7);
+    if (!month) return;
+    months[month] ||= { pass:0, fail:0 };
+    months[month][isPassingOutcome(a.outcome) ? "pass" : "fail"]++;
+  });
+  const entries = Object.entries(months).sort((a,b) => a[0].localeCompare(b[0])).slice(-12);
+  if (!entries.length) {
+    container.innerHTML = `<div class="analytics-empty">No audits for these filters.</div>`;
+    return;
+  }
+  const width = 760, height = 220, pad = 35;
+  const max = Math.max(1, ...entries.map(([,v]) => v.pass + v.fail));
+  const groupW = (width - pad*2) / entries.length;
+  const bars = entries.map(([month,v],i) => {
+    const x = pad + i*groupW + groupW*.18;
+    const barW = groupW*.64;
+    const passH = v.pass/max*(height-pad*2);
+    const failH = v.fail/max*(height-pad*2);
+    const base = height-pad;
+    return `<rect x="${x}" y="${base-passH}" width="${barW}" height="${passH}" rx="3" fill="#22c55e"/>
+      <rect x="${x}" y="${base-passH-failH}" width="${barW}" height="${failH}" rx="3" fill="#ef4444"/>
+      <text x="${x+barW/2}" y="${height-10}" text-anchor="middle" fill="currentColor" font-size="10">${month.slice(5)}/${month.slice(2,4)}</text>`;
+  }).join("");
+  container.innerHTML = `<svg class="analytics-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Monthly pass and fail audit totals">
+    <line x1="${pad}" y1="${height-pad}" x2="${width-pad}" y2="${height-pad}" stroke="currentColor" opacity=".25"/>
+    ${bars}
+  </svg>`;
+}
+
+function renderAnalyticsTable(defects) {
+  const tbody = el("analyticsTableBody");
+  if (!tbody) return;
+  const rows = defects.slice().sort((a,b) => String(b.date).localeCompare(String(a.date))).slice(0,250);
+  tbody.innerHTML = rows.length ? rows.map(d => `<tr>
+    <td>${escapeHtml(formatDate(d.date))}</td>
+    <td>${escapeHtml(d.engineer || "—")}</td>
+    <td>${escapeHtml(d.title || "—")}</td>
+    <td>${escapeHtml(d.category || "Other")}</td>
+    <td>${escapeHtml(d.severity || "—")}</td>
+    <td>${escapeHtml(d.tag || "—")}</td>
+  </tr>`).join("") : `<tr><td colspan="6" class="muted">No defects match these filters.</td></tr>`;
+}
+
+function exportAnalyticsCsv() {
+  const { defects } = getAnalyticsSelection();
+  const headers = ["Date","Engineer","Job reference","Outcome","Defect","Category","Severity","Tag","Why it matters","Action","Notes"];
+  const escCsv = value => `"${String(value ?? "").replace(/"/g,'""')}"`;
+  const rows = defects.map(d => [d.date,d.engineer,d.jobRef,d.outcome,d.title,d.category,d.severity,d.tag,d.why,d.action,d.notes].map(escCsv).join(","));
+  const blob = new Blob([[headers.map(escCsv).join(","), ...rows].join("\n")], { type:"text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `PPC-defects-analytics-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ---------- Helpers ----------
 function setTab(name) {
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === name));
@@ -3349,9 +5632,11 @@ function setTab(name) {
   el("tabReport").classList.toggle("active", name === "report");
   el("tabSaved").classList.toggle("active", name === "saved");
   if (el("tabEngineers")) el("tabEngineers").classList.toggle("active", name === "engineers");
+  if (el("tabAnalytics")) el("tabAnalytics").classList.toggle("active", name === "analytics");
 
   if (name === "report") renderReportPreview();
   if (name === "saved") renderSavedList();
+  if (name === "analytics") renderAnalytics();
   if (name === "engineers") {
   refreshEngineerDropdown(); 
   // ✅ Load saved draft for current engineer/range (do NOT overwrite by regenerating)
@@ -3465,21 +5750,368 @@ function exportAllJson() {
 // ======================= HTML EXPORT (single long sheet) =======================
 const EXPORT_CSS = `
   :root { color-scheme: light; }
-  body { margin:0; padding:24px; background:#fff; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#111; }
-  .print-content { max-width: 900px; margin: 0 auto; }
-  h1 { font-size: 22px; margin: 0 0 12px; }
-  h3 { margin: 0 0 8px; }
-  .muted { color:#444; font-size: 13px; line-height: 1.4; }
-  .box { border:1px solid #d7d7d7; border-radius: 14px; padding: 12px; margin: 12px 0; }
-  .rp-section-title { font-weight: 700; margin: 14px 0 6px; }
-  .rp-small { font-size: 13px; line-height: 1.4; color:#222; }
-  .rp-block { border:1px solid #d7d7d7; border-radius: 14px; padding: 12px; margin: 10px 0; }
-  ul { margin: 8px 0 0 18px; }
-  img { max-width: 100%; height: auto; }
 
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    padding: 24px;
+    background: #fff;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    color: #111;
+  }
+
+  .print-content {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-size: 22px;
+    margin: 0 0 12px;
+  }
+
+  h2 {
+    font-size: 19px;
+    margin: 20px 0 12px;
+  }
+
+  h3 {
+    margin: 0 0 8px;
+  }
+
+  .muted {
+    color: #444;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .box {
+    border: 1px solid #d7d7d7;
+    border-radius: 14px;
+    padding: 12px;
+    margin: 12px 0;
+  }
+
+  .rp-section-title {
+    font-weight: 700;
+    margin: 14px 0 6px;
+  }
+
+  .rp-small {
+    font-size: 13px;
+    line-height: 1.4;
+    color: #222;
+  }
+
+  .rp-block {
+    border: 1px solid #d7d7d7;
+    border-radius: 14px;
+    padding: 12px;
+    margin: 10px 0;
+  }
+
+  ul {
+    margin: 8px 0 0 18px;
+  }
+
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Engineer visual analytics */
+  .engineer-analytics-report {
+    margin: 20px 0;
+  }
+
+  .engineer-analytics-heading {
+    margin: 0 0 14px;
+    font-size: 22px;
+  }
+
+  .engineer-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .engineer-kpi-card {
+    border: 1px solid #d8d8d8;
+    border-radius: 14px;
+    padding: 14px 10px;
+    text-align: center;
+    background: #fafafa;
+  }
+
+  .engineer-kpi-value {
+    display: block;
+    font-size: 22px;
+    line-height: 1.1;
+    font-weight: 800;
+  }
+
+  .engineer-kpi-label {
+    display: block;
+    margin-top: 6px;
+    color: #555;
+    font-size: 11px;
+  }
+
+  .engineer-chart-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .engineer-chart-card {
+    border: 1px solid #d8d8d8;
+    border-radius: 14px;
+    padding: 14px;
+    background: #fff;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .engineer-chart-card h3 {
+    margin: 0 0 12px;
+    font-size: 15px;
+  }
+
+  .engineer-chart-row {
+    margin-bottom: 11px;
+  }
+
+  .engineer-chart-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .engineer-chart-label {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 5px;
+    font-size: 12px;
+  }
+
+  .engineer-chart-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .engineer-chart-value {
+    flex: 0 0 auto;
+    font-weight: 700;
+  }
+
+  .engineer-chart-track {
+    width: 100%;
+    height: 12px;
+    overflow: hidden;
+    border: 1px solid #d8d8d8;
+    border-radius: 999px;
+    background: #eee;
+  }
+
+  .engineer-chart-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(
+      90deg,
+      #a855f7,
+      #7c3aed
+    );
+  }
+
+  .engineer-pass-fail-bar {
+    display: flex;
+    width: 100%;
+    height: 28px;
+    overflow: hidden;
+    border: 1px solid #d8d8d8;
+    border-radius: 999px;
+    background: #eee;
+  }
+
+  .engineer-pass-section,
+  .engineer-fail-section {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    overflow: hidden;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .engineer-pass-section {
+    background: #15803d;
+  }
+
+  .engineer-fail-section {
+    background: #b91c1c;
+  }
+
+  .engineer-chart-legend {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 8px;
+    color: #555;
+    font-size: 11px;
+  }
+
+  @media (max-width: 700px) {
+    body {
+      padding: 14px;
+    }
+
+    .engineer-kpi-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .engineer-chart-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .engineer-chart-card[style*="grid-column"] {
+      grid-column: auto !important;
+    }
+  }
+  /* Repeat, monthly and comparison analytics */
+
+  .engineer-repeat-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .engineer-repeat-summary > div {
+    border: 1px solid #d8d8d8;
+    border-radius: 12px;
+    padding: 10px;
+    text-align: center;
+    background: #fafafa;
+  }
+
+  .engineer-repeat-summary strong {
+    display: block;
+    font-size: 18px;
+  }
+
+  .engineer-repeat-summary span {
+    display: block;
+    margin-top: 4px;
+    color: #555;
+    font-size: 11px;
+  }
+
+  .engineer-chart-note {
+    margin-bottom: 12px;
+  }
+
+  .engineer-month-row {
+    margin-bottom: 14px;
+  }
+
+  .engineer-month-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .engineer-month-heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+
+  .engineer-month-heading span {
+    color: #555;
+    text-align: right;
+  }
+
+  .engineer-comparison-heading,
+  .engineer-comparison-row {
+    display: grid;
+    grid-template-columns: 1fr 1.25fr 0.75fr;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .engineer-comparison-heading {
+    margin-top: 12px;
+    padding: 0 10px 7px;
+    border-bottom: 1px solid #d8d8d8;
+    color: #555;
+    font-size: 11px;
+  }
+
+  .engineer-comparison-row {
+    padding: 10px;
+    border-bottom: 1px solid #d8d8d8;
+    font-size: 12px;
+  }
+
+  .engineer-comparison-row:last-child {
+    border-bottom: 0;
+  }
+
+  .analytics-change-good {
+    color: #15803d;
+    font-weight: 750;
+  }
+
+  .analytics-change-bad {
+    color: #b91c1c;
+    font-weight: 750;
+  }
+
+  @media (max-width: 700px) {
+    .engineer-repeat-summary {
+      grid-template-columns: 1fr;
+    }
+
+    .engineer-month-heading {
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .engineer-month-heading span {
+      text-align: left;
+    }
+
+    .engineer-comparison-heading {
+      display: none;
+    }
+
+    .engineer-comparison-row {
+      grid-template-columns: 1fr;
+      gap: 4px;
+    }
+  }
   /* Watermark */
-  .print-watermark { position: fixed; top: 14px; right: 14px; opacity: 0.18; pointer-events: none; z-index: 10; }
-  .print-watermark img { max-width: 220px; height: auto; }
+  .print-watermark {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    opacity: 0.18;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .print-watermark img {
+    max-width: 220px;
+    height: auto;
+  }
 `;
 
 function wrapAsStandaloneHtml(innerHtml, title = "PPC Report") {
