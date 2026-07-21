@@ -151,6 +151,35 @@ const DEFECTS_CSV_URL = "https://lexington1988.github.io/feedbackapp/Defects.csv
 let defectsLibrary = [];
 
 // Load from localStorage first, then try to fetch from GitHub CSV
+function rebuildAnalyticsFromInspections(inspections) {
+  /*
+    Firebase inspections are the source of truth.
+
+    Reset both arrays first so audits deleted from Firebase
+    cannot remain in memory or localStorage.
+  */
+  analyticsState.audits = [];
+  analyticsState.defects = [];
+
+  (inspections || []).forEach(inspection => {
+    const {
+      auditRecord,
+      defectRecords
+    } = buildAnalyticsRecordsFromInspection(inspection);
+
+    if (!auditRecord) return;
+
+    analyticsState.audits.push(auditRecord);
+    analyticsState.defects.push(...defectRecords);
+  });
+
+  saveAnalyticsArchive();
+  refreshAnalyticsFilters();
+
+  if (el("tabAnalytics")) {
+    renderAnalytics();
+  }
+}
 async function initDefectsLibrary() {
   // 1) local cache
   try {
@@ -1054,56 +1083,70 @@ async function loadAnalyticsArchiveFromCloud() {
 async function initialiseCloudAnalyticsArchive() {
   const user = getUser();
 
-  /*
-    Include any full audits currently held in Firebase.
-
-    This provides a one-time migration for audits that existed
-    before the permanent cloud analytics archive was added.
-  */
   const liveAuditsSnapshot =
-    await inspectionsCol(user.uid).get();
+    await inspectionsCol(user.uid)
+      .orderBy("updatedAt", "desc")
+      .get();
 
-  liveAuditsSnapshot.docs.forEach(document => {
-    archiveInspectionForAnalytics({
-      id: document.id,
-      ...document.data()
-    });
-  });
+  const inspections = liveAuditsSnapshot.docs.map(document => ({
+    id: document.id,
+    ...document.data()
+  }));
 
-  /*
-    Upload historical analytics already held on this device,
-    then combine them with records saved by other devices.
-  */
-  await uploadLocalAnalyticsArchiveToCloud();
-  await loadAnalyticsArchiveFromCloud();
+  state.db.inspections = inspections;
+
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({ inspections })
+  );
+
+  rebuildAnalyticsFromInspections(inspections);
+
+  renderSavedList();
+  refreshEngineerDropdown();
+  refreshEngineerDatalist();
 }
 
 function startCloudSync() {
-  const u = getUser();
+  const user = getUser();
 
-  if (cloudUnsub) cloudUnsub();
+  if (cloudUnsub) {
+    cloudUnsub();
+  }
 
-  cloudUnsub = inspectionsCol(u.uid)
+  cloudUnsub = inspectionsCol(user.uid)
     .orderBy("updatedAt", "desc")
-    .onSnapshot((snap) => {
-      const inspections = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      state.db.inspections = inspections;
-      // Keep the independent analytics archive populated from cloud audits too.
-      inspections.forEach(archiveInspectionForAnalytics);
+    .onSnapshot(
+      snapshot => {
+        const inspections = snapshot.docs.map(document => ({
+          id: document.id,
+          ...document.data()
+        }));
 
-      // keep a local cache too
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ inspections }));
+        state.db.inspections = inspections;
 
-            renderSavedList();
-      refreshEngineerDropdown();
-      refreshEngineerDatalist();
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ inspections })
+        );
 
-      refreshAnalyticsFilters();
+        /*
+          Rebuild Analytics from the complete current Firebase
+          snapshot. Deleted inspections therefore disappear too.
+        */
+        rebuildAnalyticsFromInspections(inspections);
 
-      if (el("tabAnalytics")) {
-        renderAnalytics();
+        renderSavedList();
+        refreshEngineerDropdown();
+        refreshEngineerDatalist();
+      },
+      error => {
+        console.error(
+          "Firebase inspection sync failed:",
+          error
+        );
       }
-    });
+    );
 }
 
 function stopCloudSync() {
@@ -1221,7 +1264,7 @@ if (el("logoutBtn")) {
 // When auth state changes, start/stop sync and toggle buttons
 auth.onAuthStateChanged(async user => {
   if (user) {
-    startCloudSync();
+    
 
     if (el("loginBtn")) {
       el("loginBtn").classList.add(
@@ -1235,18 +1278,25 @@ auth.onAuthStateChanged(async user => {
       );
     }
 
-    try {
-      await initialiseCloudAnalyticsArchive();
-    } catch (err) {
-      console.error(
-        "Analytics cloud sync failed:",
-        err
-      );
+   try {
+  await initialiseCloudAnalyticsArchive();
+  startCloudSync();
+} catch (err) {
+  console.error(
+    "Analytics cloud sync failed:",
+    err
+  );
 
-      alert(
-        "Logged in, but the historical analytics archive could not be synchronised. Your full audits will still sync. Check Firebase permissions and the browser console."
-      );
-    }
+  /*
+    Start the live listener anyway, because a later Firebase
+    snapshot may still load successfully.
+  */
+  startCloudSync();
+
+  alert(
+    "Logged in, but the Firebase audit data could not be loaded. Check the browser console and Firebase permissions."
+  );
+}
   } else {
     stopCloudSync();
 
