@@ -1080,6 +1080,27 @@ body:not(.light) .suggestion-item { border-bottom-color: rgba(255,255,255,0.10);
 .analytics-kpi .label{font-size:12px;color:var(--muted)}
 .analytics-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .analytics-card{border:1px solid var(--border);border-radius:16px;padding:12px;min-width:0;background:rgba(255,255,255,.02)}
+
+/* Only the Most common defects card is clickable */
+.analytics-card.top-defects-clickable {
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.analytics-card.top-defects-clickable:hover {
+  transform: translateY(-1px);
+  border-color: rgba(168,85,247,.55);
+  box-shadow:
+    0 10px 24px rgba(0,0,0,.16);
+}
+
+.analytics-card.top-defects-clickable:focus-visible {
+  outline: 3px solid rgba(168,85,247,.35);
+  outline-offset: 3px;
+}
 .analytics-wide{grid-column:1/-1}
 .analytics-card-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px}
 .analytics-chart{min-height:210px;overflow-x:auto}
