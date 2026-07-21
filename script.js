@@ -4734,22 +4734,66 @@ function initAnalytics() {
     renderAnalytics();
   });
 
-   el("engineerPresentationBtn")?.addEventListener(
+   /* Open Engineer Performance Overview by clicking its card */
+const engineerPerformanceCard = el(
+  "engineerPerformanceSection"
+);
+
+if (engineerPerformanceCard) {
+  engineerPerformanceCard.classList.add(
+    "analytics-presentation-clickable"
+  );
+
+  engineerPerformanceCard.setAttribute(
+    "role",
+    "button"
+  );
+
+  engineerPerformanceCard.setAttribute(
+    "tabindex",
+    "0"
+  );
+
+  engineerPerformanceCard.setAttribute(
+    "aria-label",
+    "Open Engineer Performance Overview presentation view"
+  );
+
+  engineerPerformanceCard.addEventListener(
     "click",
     toggleEngineerPresentationView
   );
 
-  el("exportAnalyticsCsvBtn")?.addEventListener(
-    "click",
-    exportAnalyticsCsv
+  engineerPerformanceCard.addEventListener(
+    "keydown",
+    event => {
+      if (
+        event.key === "Enter" ||
+        event.key === " "
+      ) {
+        event.preventDefault();
+        toggleEngineerPresentationView();
+      }
+    }
   );
+}
+
+  el("managementReportBtn")?.addEventListener(
+  "click",
+  openManagementReport
+);
+
+el("exportAnalyticsCsvBtn")?.addEventListener(
+  "click",
+  exportAnalyticsCsv
+);
  el("printAnalyticsBtn")?.addEventListener("click", () => {
   document.body.classList.add("analytics-print");
   window.print();
   setTimeout(() => document.body.classList.remove("analytics-print"), 500);
 });
 
-/* Open only the Most common defects card in presentation view */
+/* Open only the Most common defects card in its custom presentation view */
 const topDefectsCard = el("topDefectsChart")?.closest(".analytics-card");
 
 if (topDefectsCard) {
@@ -4773,6 +4817,52 @@ if (topDefectsCard) {
     }
   });
 }
+
+/* Other analytics cards that open in presentation view */
+const analyticsPresentationCards = [
+  {
+    chartId: "passFailChart",
+    title: "Audit PASS / FAIL rate"
+  },
+  {
+    chartId: "categoryChart",
+    title: "Defects by category"
+  },
+  {
+    chartId: "severityChart",
+    title: "Defects by severity"
+  },
+  {
+    chartId: "monthlyAuditChart",
+    title: "Monthly audit trend"
+  }
+];
+
+analyticsPresentationCards.forEach(({ chartId, title }) => {
+  const chart = el(chartId);
+  const card = chart?.closest(".analytics-card");
+
+  if (!card) return;
+
+  card.classList.add("analytics-presentation-clickable");
+  card.setAttribute("role", "button");
+  card.setAttribute("tabindex", "0");
+  card.setAttribute(
+    "aria-label",
+    `Open ${title} presentation view`
+  );
+
+  card.addEventListener("click", () => {
+    openAnalyticsCardPresentation(chartId, title);
+  });
+
+  card.addEventListener("keydown", event => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openAnalyticsCardPresentation(chartId, title);
+    }
+  });
+});
 
 refreshAnalyticsFilters();
 
@@ -5557,6 +5647,366 @@ function toggleEngineerPresentationView() {
   presentationWindow.document.close();
   presentationWindow.focus();
 }
+function openAnalyticsCardPresentation(chartId, title) {
+  const chart = el(chartId);
+  const card = chart?.closest(".analytics-card");
+
+  if (!chart || !card) {
+    alert("This analytics chart could not be opened.");
+    return;
+  }
+
+  const clonedCard = card.cloneNode(true);
+
+  clonedCard.classList.remove(
+    "analytics-presentation-clickable",
+    "top-defects-clickable"
+  );
+
+  clonedCard.removeAttribute("role");
+  clonedCard.removeAttribute("tabindex");
+  clonedCard.removeAttribute("aria-label");
+
+  const engineer =
+    el("analyticsEngineer")?.value ||
+    "All engineers";
+
+  const category =
+    el("analyticsCategory")?.value ||
+    "All categories";
+
+  const severity =
+    el("analyticsSeverity")?.selectedOptions?.[0]?.textContent ||
+    "All severities";
+
+  const fromDate =
+    el("analyticsFrom")?.value ||
+    "All time";
+
+  const toDate =
+    el("analyticsTo")?.value ||
+    "Present";
+
+  const presentationWindow = window.open(
+    "",
+    `analyticsPresentation_${chartId}`,
+    "width=1200,height=850,resizable=yes,scrollbars=yes"
+  );
+
+  if (!presentationWindow) {
+    alert(
+      "The presentation window was blocked. Please allow pop-ups for this app and try again."
+    );
+    return;
+  }
+
+  presentationWindow.document.open();
+
+  presentationWindow.document.write(`
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8">
+
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1"
+        >
+
+        <title>${escapeHtml(title)}</title>
+
+        <style>
+          * {
+            box-sizing: border-box;
+          }
+
+          body {
+            margin: 0;
+            padding: 30px;
+            background: #f5f3f7;
+            color: #1b1028;
+            font-family:
+              Arial,
+              Helvetica,
+              sans-serif;
+          }
+
+          .presentation-toolbar {
+            width: min(1150px, 100%);
+            margin: 0 auto 14px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+          }
+
+          .presentation-toolbar button {
+            padding: 10px 16px;
+            border: 1px solid #d8d1df;
+            border-radius: 10px;
+            background: #ffffff;
+            color: #1b1028;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+          }
+
+          .presentation-page {
+            width: min(1150px, 100%);
+            margin: 0 auto;
+            padding: 34px;
+            border: 1px solid #ddd7e4;
+            border-radius: 22px;
+            background: #ffffff;
+            box-shadow:
+              0 18px 45px rgba(35, 20, 50, 0.12);
+          }
+
+          .presentation-heading {
+            margin-bottom: 26px;
+          }
+
+          .presentation-heading h1 {
+            margin: 0 0 10px;
+            font-size: 30px;
+            line-height: 1.2;
+          }
+
+          .presentation-filters {
+            color: #675d70;
+            font-size: 14px;
+            line-height: 1.6;
+          }
+
+          .analytics-card {
+            min-width: 0;
+            padding: 0;
+            border: 0;
+            background: transparent;
+          }
+
+          .analytics-card-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 16px;
+            margin-bottom: 22px;
+          }
+
+          .analytics-card-head h3 {
+            margin: 0;
+            font-size: 25px;
+          }
+
+          .analytics-card-head .muted {
+            color: #675d70;
+            font-size: 15px;
+          }
+
+          .analytics-chart {
+            min-height: 420px;
+            overflow: visible;
+          }
+
+          .analytics-bars {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+          }
+
+          .analytics-bar-row {
+            display: grid;
+            grid-template-columns:
+              minmax(260px, 1.4fr)
+              minmax(300px, 3fr)
+              70px;
+            gap: 18px;
+            align-items: center;
+            font-size: 18px;
+          }
+
+          .analytics-bar-label {
+            overflow: visible;
+            text-overflow: clip;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            line-height: 1.35;
+          }
+
+          .analytics-bar-track {
+            height: 25px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: #e9e6ec;
+          }
+
+          .analytics-bar-fill {
+            height: 100%;
+            min-width: 3px;
+            border-radius: 999px;
+            background:
+              linear-gradient(
+                90deg,
+                #7c3aed,
+                #a855f7
+              );
+          }
+
+          .analytics-bar-row strong {
+            font-size: 20px;
+          }
+
+          .analytics-donut-wrap {
+            min-height: 420px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 55px;
+            flex-wrap: wrap;
+          }
+
+          .analytics-donut {
+            width: 260px;
+            height: 260px;
+            border-radius: 50%;
+            position: relative;
+          }
+
+          .analytics-donut::after {
+            content: "";
+            position: absolute;
+            inset: 45px;
+            border-radius: 50%;
+            background: #ffffff;
+          }
+
+          .analytics-legend {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            font-size: 20px;
+          }
+
+          .analytics-legend-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+          }
+
+          .analytics-swatch {
+            width: 18px;
+            height: 18px;
+            border-radius: 4px;
+          }
+
+          .analytics-svg {
+            display: block;
+            width: 100%;
+            height: auto;
+            min-height: 420px;
+          }
+
+          .analytics-empty {
+            min-height: 350px;
+            display: grid;
+            place-items: center;
+            color: #675d70;
+            font-size: 18px;
+          }
+
+          @media (max-width: 750px) {
+            body {
+              padding: 14px;
+            }
+
+            .presentation-page {
+              padding: 22px;
+            }
+
+            .analytics-bar-row {
+              grid-template-columns:
+                minmax(140px, 1.4fr)
+                minmax(150px, 2fr)
+                45px;
+              gap: 10px;
+              font-size: 14px;
+            }
+
+            .analytics-card-head {
+              align-items: flex-start;
+              flex-direction: column;
+            }
+          }
+
+          @media print {
+            body {
+              padding: 0;
+              background: #ffffff;
+            }
+
+            .presentation-toolbar {
+              display: none;
+            }
+
+            .presentation-page {
+              width: 100%;
+              max-width: none;
+              padding: 18px;
+              border: 0;
+              border-radius: 0;
+              box-shadow: none;
+            }
+
+            .analytics-card {
+              break-inside: avoid;
+            }
+          }
+        </style>
+      </head>
+
+      <body>
+        <div class="presentation-toolbar">
+          <button
+            type="button"
+            onclick="window.print()"
+          >
+            Print / Save PDF
+          </button>
+
+          <button
+            type="button"
+            onclick="window.close()"
+          >
+            Close
+          </button>
+        </div>
+
+        <main class="presentation-page">
+          <header class="presentation-heading">
+            <h1>${escapeHtml(title)}</h1>
+
+            <div class="presentation-filters">
+              Engineer: ${escapeHtml(engineer)}
+              &nbsp;•&nbsp;
+              Category: ${escapeHtml(category)}
+              &nbsp;•&nbsp;
+              Severity: ${escapeHtml(severity)}
+              <br>
+              Period: ${escapeHtml(fromDate)}
+              to
+              ${escapeHtml(toDate)}
+            </div>
+          </header>
+
+          ${clonedCard.outerHTML}
+        </main>
+      </body>
+    </html>
+  `);
+
+  presentationWindow.document.close();
+  presentationWindow.focus();
+}
+
 function openTopDefectsPresentation() {
   const { defects } = getAnalyticsSelection();
 
@@ -5894,64 +6344,38 @@ function renderAnalytics() {
   ].map(([label,value]) => `<div class="analytics-kpi"><div class="label">${label}</div><div class="value">${value}</div></div>`).join("");
 
   const titleCounts = countBy(defects, d => d.title);
-  renderHorizontalBars(el("topDefectsChart"), sortedCounts(titleCounts, 10));
+  renderHorizontalBars(
+  el("topDefectsChart"),
+  sortedCounts(titleCounts, 10),
+  "title"
+);
   el("topDefectsCaption").textContent = defects.length ? `${Object.keys(titleCounts).length} unique defects` : "";
 
   renderPassFailChart(pass, fail);
   el("passFailCaption").textContent = audits.length ? `${pass}/${audits.length} passed` : "";
 
    renderHorizontalBars(
-    el("categoryChart"),
-    sortedCounts(
-      countBy(
-        defects,
-        d => d.category || "Other"
-      ),
-      8
-    )
-  );
+  el("categoryChart"),
+  sortedCounts(
+    countBy(
+      defects,
+      d => d.category || "Other"
+    ),
+    8
+  ),
+  "category"
+);
 
-  renderHorizontalBars(
+renderHorizontalBars(
   el("severityChart"),
   sortedCounts(
     countBy(
       defects,
-      d => {
-        const severity = String(
-          d.severity || "Other"
-        ).trim();
-
-        if (
-          severity === "Critical" ||
-          severity === "Immediate" ||
-          severity === "ID"
-        ) {
-          return "ID";
-        }
-
-        if (
-          severity === "Major" ||
-          severity === "AR"
-        ) {
-          return "AR";
-        }
-
-        if (
-          severity === "Minor" ||
-          severity === "NCS"
-        ) {
-          return "NCS";
-        }
-
-        if (severity === "Advisory") {
-          return "Advisory";
-        }
-
-        return severity;
-      }
+      d => getAnalyticsSeverityLabel(d.severity)
     ),
     8
-  )
+  ),
+  "severity"
 );
 
   renderMonthlyAuditChart(audits);
@@ -5959,38 +6383,1358 @@ function renderAnalytics() {
   renderAnalyticsTable(defects);
 }
 
-function renderHorizontalBars(container, entries) {
+function getAnalyticsSeverityLabel(value) {
+  const severity = String(value || "Other").trim();
+
+  if (
+    severity === "Critical" ||
+    severity === "Immediate" ||
+    severity === "ID"
+  ) {
+    return "ID";
+  }
+
+  if (
+    severity === "Major" ||
+    severity === "AR"
+  ) {
+    return "AR";
+  }
+
+  if (
+    severity === "Minor" ||
+    severity === "NCS"
+  ) {
+    return "NCS";
+  }
+
+  if (severity === "Advisory") {
+    return "Advisory";
+  }
+
+  return severity;
+}
+
+function renderHorizontalBars(
+  container,
+  entries,
+  drilldownType = ""
+) {
   if (!container) return;
+
   if (!entries.length) {
-    container.innerHTML = `<div class="analytics-empty">No data for these filters.</div>`;
+    container.innerHTML = `
+      <div class="analytics-empty">
+        No data for these filters.
+      </div>
+    `;
     return;
   }
-  const max = Math.max(...entries.map(x => x[1]), 1);
-  container.innerHTML = `<div class="analytics-bars">` + entries.map(([label,value]) => `
-    <div class="analytics-bar-row" title="${escapeHtml(label)}: ${value}">
-      <div class="analytics-bar-label">${escapeHtml(label)}</div>
-      <div class="analytics-bar-track"><div class="analytics-bar-fill" style="width:${Math.max(2, value/max*100)}%"></div></div>
-      <strong>${value}</strong>
-    </div>`).join("") + `</div>`;
+
+  const maximum = Math.max(
+    ...entries.map(item => item[1]),
+    1
+  );
+
+  container.innerHTML = `
+    <div class="analytics-bars">
+      ${entries
+        .map(([label, value]) => {
+          const clickableClass = drilldownType
+            ? " analytics-drilldown-row"
+            : "";
+
+          const accessibility = drilldownType
+            ? `
+                role="button"
+                tabindex="0"
+                aria-label="View ${escapeHtml(label)} defect details"
+              `
+            : "";
+
+          return `
+            <div
+              class="analytics-bar-row${clickableClass}"
+              title="${escapeHtml(label)}: ${value}"
+              data-drilldown-label="${escapeHtml(label)}"
+              ${accessibility}
+            >
+              <div class="analytics-bar-label">
+                ${escapeHtml(label)}
+              </div>
+
+              <div class="analytics-bar-track">
+                <div
+                  class="analytics-bar-fill"
+                  style="width:${
+                    Math.max(
+                      2,
+                      (value / maximum) * 100
+                    )
+                  }%"
+                ></div>
+              </div>
+
+              <strong>${value}</strong>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+
+  if (!drilldownType) return;
+
+  container
+    .querySelectorAll(".analytics-drilldown-row")
+    .forEach(row => {
+      const openRow = event => {
+        /*
+          Prevent the click from reaching the analytics card.
+
+          Without this, clicking a bar would also open the card's
+          presentation view.
+        */
+        event.stopPropagation();
+
+        const label =
+          row.dataset.drilldownLabel || "";
+
+        openDefectDrilldown(
+          drilldownType,
+          label
+        );
+      };
+
+      row.addEventListener("click", openRow);
+
+      row.addEventListener("keydown", event => {
+        if (
+          event.key === "Enter" ||
+          event.key === " "
+        ) {
+          event.preventDefault();
+          openRow(event);
+        }
+      });
+    });
+}
+
+function openDefectDrilldown(type, selectedLabel) {
+  const { defects } = getAnalyticsSelection();
+
+  const normalizedSelectedLabel =
+    String(selectedLabel || "")
+      .trim()
+      .toLowerCase();
+
+  const matchingDefects = defects
+    .filter(defect => {
+      if (type === "title") {
+        return String(
+          defect.title || "Untitled defect"
+        )
+          .trim()
+          .toLowerCase() === normalizedSelectedLabel;
+      }
+
+      if (type === "category") {
+        return String(
+          defect.category || "Other"
+        )
+          .trim()
+          .toLowerCase() === normalizedSelectedLabel;
+      }
+
+      if (type === "severity") {
+        return getAnalyticsSeverityLabel(
+          defect.severity
+        )
+          .trim()
+          .toLowerCase() === normalizedSelectedLabel;
+      }
+
+      return false;
+    })
+    .sort((a, b) =>
+      String(b.date || "").localeCompare(
+        String(a.date || "")
+      )
+    );
+
+  const drilldownTitles = {
+    title: "Defect details",
+    category: "Defects by category",
+    severity: "Defects by severity"
+  };
+
+  const pageTitle =
+    drilldownTitles[type] ||
+    "Defect details";
+
+  const engineer =
+    el("analyticsEngineer")?.value ||
+    "All engineers";
+
+  const fromDate =
+    el("analyticsFrom")?.value ||
+    "All time";
+
+  const toDate =
+    el("analyticsTo")?.value ||
+    "Present";
+
+  const resultWord =
+    matchingDefects.length === 1
+      ? "record"
+      : "records";
+
+  const recordsHtml = matchingDefects.length
+    ? matchingDefects
+        .map((defect, index) => {
+          const severity =
+            getAnalyticsSeverityLabel(
+              defect.severity
+            );
+
+          return `
+            <article class="defect-record">
+              <header class="defect-record-header">
+                <div>
+                  <div class="record-number">
+                    Record ${index + 1}
+                  </div>
+
+                  <h2>
+                    ${escapeHtml(
+                      defect.title ||
+                      "Untitled defect"
+                    )}
+                  </h2>
+                </div>
+
+                <span class="severity-badge">
+                  ${escapeHtml(severity)}
+                </span>
+              </header>
+
+              <div class="record-grid">
+                <div>
+                  <span>Date</span>
+                  <strong>
+                    ${escapeHtml(
+                      formatDate(defect.date)
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Engineer</span>
+                  <strong>
+                    ${escapeHtml(
+                      defect.engineer || "—"
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Job reference</span>
+                  <strong>
+                    ${escapeHtml(
+                      defect.jobRef || "—"
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Outcome</span>
+                  <strong>
+                    ${escapeHtml(
+                      defect.outcome || "—"
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Category</span>
+                  <strong>
+                    ${escapeHtml(
+                      defect.category || "Other"
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Issue tag</span>
+                  <strong>
+                    ${escapeHtml(
+                      defect.tag || "—"
+                    )}
+                  </strong>
+                </div>
+              </div>
+
+              ${
+                defect.why
+                  ? `
+                      <section class="record-section">
+                        <h3>Why it matters</h3>
+                        <p>
+                          ${escapeHtml(defect.why)}
+                        </p>
+                      </section>
+                    `
+                  : ""
+              }
+
+              ${
+                defect.action
+                  ? `
+                      <section class="record-section">
+                        <h3>Required action</h3>
+                        <p>
+                          ${escapeHtml(defect.action)}
+                        </p>
+                      </section>
+                    `
+                  : ""
+              }
+
+              ${
+                defect.notes
+                  ? `
+                      <section class="record-section">
+                        <h3>Notes</h3>
+                        <p>
+                          ${escapeHtml(defect.notes)}
+                        </p>
+                      </section>
+                    `
+                  : ""
+              }
+            </article>
+          `;
+        })
+        .join("")
+    : `
+        <div class="empty-results">
+          No matching defects were found.
+        </div>
+      `;
+
+  const drilldownWindow = window.open(
+    "",
+    "PPCDefectDrilldown",
+    "width=1200,height=900,resizable=yes,scrollbars=yes"
+  );
+
+  if (!drilldownWindow) {
+    alert(
+      "The defect details window was blocked. Please allow pop-ups for this app and try again."
+    );
+    return;
+  }
+
+  drilldownWindow.document.open();
+
+  drilldownWindow.document.write(`
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8">
+
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1"
+        >
+
+        <title>
+          ${escapeHtml(pageTitle)}:
+          ${escapeHtml(selectedLabel)}
+        </title>
+
+        <style>
+          * {
+            box-sizing: border-box;
+          }
+
+          body {
+            margin: 0;
+            padding: 30px;
+            background: #f5f3f7;
+            color: #1b1028;
+            font-family:
+              Arial,
+              Helvetica,
+              sans-serif;
+          }
+
+          .toolbar {
+            width: min(1150px, 100%);
+            margin: 0 auto 14px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+          }
+
+          .toolbar button {
+            padding: 10px 16px;
+            border: 1px solid #d8d1df;
+            border-radius: 10px;
+            background: #ffffff;
+            color: #1b1028;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+          }
+
+          .page {
+            width: min(1150px, 100%);
+            margin: 0 auto;
+          }
+
+          .page-heading {
+            margin-bottom: 18px;
+            padding: 28px;
+            border: 1px solid #ddd7e4;
+            border-radius: 20px;
+            background: #ffffff;
+          }
+
+          .page-heading h1 {
+            margin: 0 0 8px;
+            font-size: 30px;
+            line-height: 1.25;
+          }
+
+          .selected-value {
+            color: #7c3aed;
+          }
+
+          .page-summary {
+            color: #675d70;
+            font-size: 15px;
+            line-height: 1.6;
+          }
+
+          .records {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+          }
+
+          .defect-record {
+            padding: 24px;
+            border: 1px solid #ddd7e4;
+            border-radius: 18px;
+            background: #ffffff;
+            break-inside: avoid;
+          }
+
+          .defect-record-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 20px;
+            margin-bottom: 20px;
+          }
+
+          .record-number {
+            margin-bottom: 5px;
+            color: #675d70;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+          }
+
+          .defect-record h2 {
+            margin: 0;
+            font-size: 21px;
+            line-height: 1.35;
+          }
+
+          .severity-badge {
+            flex: 0 0 auto;
+            padding: 7px 12px;
+            border: 1px solid #c9b4f4;
+            border-radius: 999px;
+            background: #f3edff;
+            color: #5b21b6;
+            font-size: 13px;
+            font-weight: 800;
+          }
+
+          .record-grid {
+            display: grid;
+            grid-template-columns:
+              repeat(3, minmax(0, 1fr));
+            gap: 12px;
+          }
+
+          .record-grid > div {
+            min-width: 0;
+            padding: 12px;
+            border-radius: 12px;
+            background: #f7f5f9;
+          }
+
+          .record-grid span {
+            display: block;
+            margin-bottom: 5px;
+            color: #675d70;
+            font-size: 12px;
+          }
+
+          .record-grid strong {
+            display: block;
+            overflow-wrap: anywhere;
+            font-size: 14px;
+            line-height: 1.4;
+          }
+
+          .record-section {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #ebe6ef;
+          }
+
+          .record-section h3 {
+            margin: 0 0 6px;
+            font-size: 14px;
+          }
+
+          .record-section p {
+            margin: 0;
+            font-size: 14px;
+            line-height: 1.55;
+            white-space: pre-wrap;
+          }
+
+          .empty-results {
+            padding: 50px 20px;
+            border: 1px solid #ddd7e4;
+            border-radius: 18px;
+            background: #ffffff;
+            color: #675d70;
+            text-align: center;
+            font-size: 17px;
+          }
+
+          @media (max-width: 750px) {
+            body {
+              padding: 14px;
+            }
+
+            .page-heading,
+            .defect-record {
+              padding: 19px;
+            }
+
+            .record-grid {
+              grid-template-columns: 1fr;
+            }
+
+            .defect-record-header {
+              flex-direction: column;
+            }
+          }
+
+          @media print {
+            body {
+              padding: 0;
+              background: #ffffff;
+            }
+
+            .toolbar {
+              display: none;
+            }
+
+            .page {
+              width: 100%;
+              max-width: none;
+            }
+
+            .page-heading {
+              border: 0;
+              padding: 0 0 18px;
+            }
+
+            .defect-record {
+              box-shadow: none;
+            }
+          }
+        </style>
+      </head>
+
+      <body>
+        <div class="toolbar">
+          <button
+            type="button"
+            onclick="window.print()"
+          >
+            Print / Save PDF
+          </button>
+
+          <button
+            type="button"
+            onclick="window.close()"
+          >
+            Close
+          </button>
+        </div>
+
+        <main class="page">
+          <header class="page-heading">
+            <h1>
+              ${escapeHtml(pageTitle)}:
+              <span class="selected-value">
+                ${escapeHtml(selectedLabel)}
+              </span>
+            </h1>
+
+            <div class="page-summary">
+              ${matchingDefects.length}
+              ${resultWord}
+              &nbsp;•&nbsp;
+              ${escapeHtml(engineer)}
+              &nbsp;•&nbsp;
+              ${escapeHtml(fromDate)}
+              to
+              ${escapeHtml(toDate)}
+            </div>
+          </header>
+
+          <section class="records">
+            ${recordsHtml}
+          </section>
+        </main>
+      </body>
+    </html>
+  `);
+
+  drilldownWindow.document.close();
+  drilldownWindow.focus();
 }
 
 function renderPassFailChart(pass, fail) {
   const container = el("passFailChart");
+
   if (!container) return;
+
   const total = pass + fail;
+
   if (!total) {
-    container.innerHTML = `<div class="analytics-empty">No audits for these filters.</div>`;
+    container.innerHTML = `
+      <div class="analytics-empty">
+        No audits for these filters.
+      </div>
+    `;
+
     return;
   }
-  const passPct = pass / total * 100;
+
+  const passPct = (pass / total) * 100;
+
   container.innerHTML = `
     <div class="analytics-donut-wrap">
-      <div class="analytics-donut" style="background:conic-gradient(#22c55e 0 ${passPct}%, #ef4444 ${passPct}% 100%)"></div>
+      <div
+        class="analytics-donut"
+        style="
+          background:
+            conic-gradient(
+              #22c55e 0 ${passPct}%,
+              #ef4444 ${passPct}% 100%
+            );
+        "
+      ></div>
+
       <div class="analytics-legend">
-        <div class="analytics-legend-row"><span class="analytics-swatch" style="background:#22c55e"></span>PASS <strong>${pass} (${Math.round(passPct)}%)</strong></div>
-        <div class="analytics-legend-row"><span class="analytics-swatch" style="background:#ef4444"></span>FAIL <strong>${fail} (${Math.round(100-passPct)}%)</strong></div>
+        <div
+          class="analytics-legend-row analytics-pass-fail-drilldown"
+          data-audit-result="pass"
+          role="button"
+          tabindex="0"
+          aria-label="View passing audits"
+        >
+          <span
+            class="analytics-swatch"
+            style="background:#22c55e"
+          ></span>
+
+          PASS
+
+          <strong>
+            ${pass}
+            (${Math.round(passPct)}%)
+          </strong>
+        </div>
+
+        <div
+          class="analytics-legend-row analytics-pass-fail-drilldown"
+          data-audit-result="fail"
+          role="button"
+          tabindex="0"
+          aria-label="View failed audits"
+        >
+          <span
+            class="analytics-swatch"
+            style="background:#ef4444"
+          ></span>
+
+          FAIL
+
+          <strong>
+            ${fail}
+            (${Math.round(100 - passPct)}%)
+          </strong>
+        </div>
       </div>
-    </div>`;
+    </div>
+  `;
+
+  container
+    .querySelectorAll(
+      ".analytics-pass-fail-drilldown"
+    )
+    .forEach(row => {
+      const openResult = event => {
+        /*
+          Stop the click reaching the full analytics card.
+
+          This ensures the audit drill-down opens instead of the
+          general PASS / FAIL presentation view.
+        */
+        event.stopPropagation();
+
+        openPassFailDrilldown(
+          row.dataset.auditResult
+        );
+      };
+
+      row.addEventListener(
+        "click",
+        openResult
+      );
+
+      row.addEventListener(
+        "keydown",
+        event => {
+          if (
+            event.key === "Enter" ||
+            event.key === " "
+          ) {
+            event.preventDefault();
+            openResult(event);
+          }
+        }
+      );
+    });
+}
+
+function openPassFailDrilldown(result) {
+  const { audits } = getAnalyticsSelection();
+
+  const showPass = result === "pass";
+
+  const matchingAudits = audits
+    .filter(audit => {
+      const passed =
+        isPassingOutcome(audit.outcome);
+
+      return showPass
+        ? passed
+        : !passed;
+    })
+    .sort((a, b) =>
+      String(b.date || "").localeCompare(
+        String(a.date || "")
+      )
+    );
+
+  const resultLabel = showPass
+    ? "PASS"
+    : "FAIL";
+
+  const engineer =
+    el("analyticsEngineer")?.value ||
+    "All engineers";
+
+  const fromDate =
+    el("analyticsFrom")?.value ||
+    "All time";
+
+  const toDate =
+    el("analyticsTo")?.value ||
+    "Present";
+
+  const getFullInspection = audit => {
+    return (
+      state.db.inspections || []
+    ).find(inspection =>
+      String(inspection.id || "") ===
+      String(audit.id || "")
+    );
+  };
+
+  const auditsHtml = matchingAudits.length
+    ? matchingAudits
+        .map((audit, index) => {
+          const fullInspection =
+            getFullInspection(audit);
+
+          const findings =
+            fullInspection?.findings || [];
+
+          const positives =
+            fullInspection?.positives || [];
+
+          const site =
+            fullInspection?.address || "—";
+
+          const appliance =
+            fullInspection?.appliance || "—";
+
+          const severityCounts = {
+            ID: 0,
+            AR: 0,
+            NCS: 0,
+            Advisory: 0
+          };
+
+          findings.forEach(finding => {
+            const label =
+              getAnalyticsSeverityLabel(
+                finding.severity
+              );
+
+            if (
+              Object.prototype.hasOwnProperty.call(
+                severityCounts,
+                label
+              )
+            ) {
+              severityCounts[label]++;
+            }
+          });
+
+          const findingsHtml = findings.length
+            ? findings
+                .map(finding => `
+                  <div class="finding-row">
+                    <div class="finding-heading">
+                      <strong>
+                        ${escapeHtml(
+                          finding.title ||
+                          "Untitled defect"
+                        )}
+                      </strong>
+
+                      <span>
+                        ${escapeHtml(
+                          getAnalyticsSeverityLabel(
+                            finding.severity
+                          )
+                        )}
+                      </span>
+                    </div>
+
+                    ${
+                      finding.action
+                        ? `
+                            <p>
+                              <b>Action:</b>
+                              ${escapeHtml(
+                                finding.action
+                              )}
+                            </p>
+                          `
+                        : ""
+                    }
+                  </div>
+                `)
+                .join("")
+            : `
+                <div class="no-findings">
+                  No defects were recorded.
+                </div>
+              `;
+
+          return `
+            <article class="audit-record">
+              <header class="audit-header">
+                <div>
+                  <div class="audit-number">
+                    Audit ${index + 1}
+                  </div>
+
+                  <h2>
+                    ${escapeHtml(
+                      audit.jobRef ||
+                      "No job reference"
+                    )}
+                  </h2>
+                </div>
+
+                <span
+                  class="
+                    result-badge
+                    ${showPass
+                      ? "result-pass"
+                      : "result-fail"}
+                  "
+                >
+                  ${resultLabel}
+                </span>
+              </header>
+
+              <div class="audit-grid">
+                <div>
+                  <span>Date</span>
+
+                  <strong>
+                    ${escapeHtml(
+                      formatDate(audit.date)
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Engineer</span>
+
+                  <strong>
+                    ${escapeHtml(
+                      audit.engineer || "—"
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Job reference</span>
+
+                  <strong>
+                    ${escapeHtml(
+                      audit.jobRef || "—"
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Outcome</span>
+
+                  <strong>
+                    ${escapeHtml(
+                      audit.outcome || "—"
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Site</span>
+
+                  <strong>
+                    ${escapeHtml(site)}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Appliance</span>
+
+                  <strong>
+                    ${escapeHtml(appliance)}
+                  </strong>
+                </div>
+              </div>
+
+              <div class="audit-totals">
+                <span>
+                  <strong>${findings.length}</strong>
+                  defects
+                </span>
+
+                <span>
+                  <strong>${positives.length}</strong>
+                  positives
+                </span>
+
+                <span>
+                  ID:
+                  <strong>
+                    ${severityCounts.ID}
+                  </strong>
+                </span>
+
+                <span>
+                  AR:
+                  <strong>
+                    ${severityCounts.AR}
+                  </strong>
+                </span>
+
+                <span>
+                  NCS:
+                  <strong>
+                    ${severityCounts.NCS}
+                  </strong>
+                </span>
+
+                <span>
+                  Advisory:
+                  <strong>
+                    ${severityCounts.Advisory}
+                  </strong>
+                </span>
+              </div>
+
+              ${
+                findings.length
+                  ? `
+                      <section class="findings-section">
+                        <h3>Defects recorded</h3>
+                        ${findingsHtml}
+                      </section>
+                    `
+                  : ""
+              }
+            </article>
+          `;
+        })
+        .join("")
+    : `
+        <div class="empty-results">
+          No ${resultLabel} audits match the current filters.
+        </div>
+      `;
+
+  const resultWord =
+    matchingAudits.length === 1
+      ? "audit"
+      : "audits";
+
+  const drilldownWindow = window.open(
+    "",
+    `PPCAuditDrilldown_${resultLabel}`,
+    "width=1200,height=900,resizable=yes,scrollbars=yes"
+  );
+
+  if (!drilldownWindow) {
+    alert(
+      "The audit details window was blocked. Please allow pop-ups for this app and try again."
+    );
+
+    return;
+  }
+
+  drilldownWindow.document.open();
+
+  drilldownWindow.document.write(`
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8">
+
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1"
+        >
+
+        <title>${resultLabel} audits</title>
+
+        <style>
+          * {
+            box-sizing: border-box;
+          }
+
+          body {
+            margin: 0;
+            padding: 30px;
+            background: #f5f3f7;
+            color: #1b1028;
+            font-family:
+              Arial,
+              Helvetica,
+              sans-serif;
+          }
+
+          .toolbar {
+            width: min(1150px, 100%);
+            margin: 0 auto 14px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+          }
+
+          .toolbar button {
+            padding: 10px 16px;
+            border: 1px solid #d8d1df;
+            border-radius: 10px;
+            background: #ffffff;
+            color: #1b1028;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+          }
+
+          .page {
+            width: min(1150px, 100%);
+            margin: 0 auto;
+          }
+
+          .page-heading {
+            margin-bottom: 18px;
+            padding: 28px;
+            border: 1px solid #ddd7e4;
+            border-radius: 20px;
+            background: #ffffff;
+          }
+
+          .page-heading h1 {
+            margin: 0 0 8px;
+            font-size: 30px;
+          }
+
+          .page-summary {
+            color: #675d70;
+            font-size: 15px;
+            line-height: 1.6;
+          }
+
+          .audits {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+          }
+
+          .audit-record {
+            padding: 24px;
+            border: 1px solid #ddd7e4;
+            border-radius: 18px;
+            background: #ffffff;
+            break-inside: avoid;
+          }
+
+          .audit-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 20px;
+            margin-bottom: 18px;
+          }
+
+          .audit-number {
+            margin-bottom: 5px;
+            color: #675d70;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+          }
+
+          .audit-header h2 {
+            margin: 0;
+            font-size: 21px;
+            line-height: 1.35;
+          }
+
+          .result-badge {
+            flex: 0 0 auto;
+            padding: 7px 13px;
+            border-radius: 999px;
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 800;
+          }
+
+          .result-pass {
+            background: #16a34a;
+          }
+
+          .result-fail {
+            background: #dc2626;
+          }
+
+          .audit-grid {
+            display: grid;
+            grid-template-columns:
+              repeat(3, minmax(0, 1fr));
+            gap: 12px;
+          }
+
+          .audit-grid > div {
+            min-width: 0;
+            padding: 12px;
+            border-radius: 12px;
+            background: #f7f5f9;
+          }
+
+          .audit-grid span {
+            display: block;
+            margin-bottom: 5px;
+            color: #675d70;
+            font-size: 12px;
+          }
+
+          .audit-grid strong {
+            display: block;
+            overflow-wrap: anywhere;
+            font-size: 14px;
+            line-height: 1.4;
+          }
+
+          .audit-totals {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 9px;
+            margin-top: 16px;
+          }
+
+          .audit-totals span {
+            padding: 7px 10px;
+            border: 1px solid #ddd7e4;
+            border-radius: 999px;
+            background: #faf8fc;
+            font-size: 12px;
+          }
+
+          .findings-section {
+            margin-top: 18px;
+            padding-top: 16px;
+            border-top: 1px solid #ebe6ef;
+          }
+
+          .findings-section h3 {
+            margin: 0 0 12px;
+            font-size: 15px;
+          }
+
+          .finding-row {
+            padding: 11px 0;
+            border-bottom: 1px solid #eeeaf1;
+          }
+
+          .finding-row:last-child {
+            border-bottom: 0;
+          }
+
+          .finding-heading {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+          }
+
+          .finding-heading strong {
+            line-height: 1.4;
+          }
+
+          .finding-heading span {
+            flex: 0 0 auto;
+            color: #7c3aed;
+            font-size: 12px;
+            font-weight: 800;
+          }
+
+          .finding-row p {
+            margin: 6px 0 0;
+            color: #4e4655;
+            font-size: 13px;
+            line-height: 1.5;
+          }
+
+          .empty-results,
+          .no-findings {
+            color: #675d70;
+          }
+
+          .empty-results {
+            padding: 50px 20px;
+            border: 1px solid #ddd7e4;
+            border-radius: 18px;
+            background: #ffffff;
+            text-align: center;
+            font-size: 17px;
+          }
+
+          @media (max-width: 750px) {
+            body {
+              padding: 14px;
+            }
+
+            .audit-grid {
+              grid-template-columns: 1fr;
+            }
+
+            .audit-header,
+            .finding-heading {
+              flex-direction: column;
+            }
+          }
+
+          @media print {
+            body {
+              padding: 0;
+              background: #ffffff;
+            }
+
+            .toolbar {
+              display: none;
+            }
+
+            .page {
+              width: 100%;
+              max-width: none;
+            }
+
+            .page-heading {
+              padding: 0 0 18px;
+              border: 0;
+            }
+          }
+        </style>
+      </head>
+
+      <body>
+        <div class="toolbar">
+          <button
+            type="button"
+            onclick="window.print()"
+          >
+            Print / Save PDF
+          </button>
+
+          <button
+            type="button"
+            onclick="window.close()"
+          >
+            Close
+          </button>
+        </div>
+
+        <main class="page">
+          <header class="page-heading">
+            <h1>${resultLabel} audits</h1>
+
+            <div class="page-summary">
+              ${matchingAudits.length}
+              ${resultWord}
+              &nbsp;•&nbsp;
+              ${escapeHtml(engineer)}
+              &nbsp;•&nbsp;
+              ${escapeHtml(fromDate)}
+              to
+              ${escapeHtml(toDate)}
+            </div>
+          </header>
+
+          <section class="audits">
+            ${auditsHtml}
+          </section>
+        </main>
+      </body>
+    </html>
+  `);
+
+  drilldownWindow.document.close();
+  drilldownWindow.focus();
 }
 
 function renderMonthlyAuditChart(audits) {
@@ -6039,6 +7783,1091 @@ function renderAnalyticsTable(defects) {
     <td>${escapeHtml(d.severity || "—")}</td>
     <td>${escapeHtml(d.tag || "—")}</td>
   </tr>`).join("") : `<tr><td colspan="6" class="muted">No defects match these filters.</td></tr>`;
+}
+
+function openManagementReport() {
+  const { defects, audits } =
+    getAnalyticsSelection();
+
+  if (!audits.length && !defects.length) {
+    alert(
+      "There is no analytics data for the selected filters."
+    );
+
+    return;
+  }
+
+  const passingAudits = audits.filter(
+    audit => isPassingOutcome(audit.outcome)
+  );
+
+  const failingAudits = audits.filter(
+    audit => !isPassingOutcome(audit.outcome)
+  );
+
+  const passCount = passingAudits.length;
+  const failCount = failingAudits.length;
+
+  const passRate = audits.length
+    ? Math.round(
+        (passCount / audits.length) * 100
+      )
+    : 0;
+
+  const defectsPerAudit = audits.length
+    ? defects.length / audits.length
+    : 0;
+
+  const severityCounts = {
+    ID: 0,
+    AR: 0,
+    NCS: 0,
+    Advisory: 0
+  };
+
+  defects.forEach(defect => {
+    const severity =
+      getAnalyticsSeverityLabel(
+        defect.severity
+      );
+
+    if (
+      Object.prototype.hasOwnProperty.call(
+        severityCounts,
+        severity
+      )
+    ) {
+      severityCounts[severity]++;
+    }
+  });
+
+  const titleCounts = countBy(
+    defects,
+    defect =>
+      defect.title || "Untitled defect"
+  );
+
+  const topDefects = sortedCounts(
+    titleCounts,
+    10
+  );
+
+  const categoryCounts = sortedCounts(
+    countBy(
+      defects,
+      defect => defect.category || "Other"
+    ),
+    10
+  );
+
+  const engineerData =
+    getEngineerPerformanceData(audits);
+
+  const fromDate =
+    el("analyticsFrom")?.value || "";
+
+  const toDate =
+    el("analyticsTo")?.value || "";
+
+  const selectedEngineer =
+    el("analyticsEngineer")?.value ||
+    "All engineers";
+
+  const selectedCategory =
+    el("analyticsCategory")?.value ||
+    "All categories";
+
+  const selectedSeverity =
+    el("analyticsSeverity")
+      ?.selectedOptions?.[0]
+      ?.textContent ||
+    "All severities";
+
+  const periodLabel =
+    getAnalyticsPeriodLabel();
+
+  const generatedDate = new Date()
+    .toLocaleDateString(
+      "en-GB",
+      {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric"
+      }
+    );
+
+  const maximumDefectCount = Math.max(
+    1,
+    ...topDefects.map(
+      ([, count]) => count
+    )
+  );
+
+  const maximumCategoryCount = Math.max(
+    1,
+    ...categoryCounts.map(
+      ([, count]) => count
+    )
+  );
+
+  const topDefectsHtml = topDefects.length
+    ? topDefects
+        .map(([title, count], index) => {
+          const width = Math.max(
+            3,
+            (count / maximumDefectCount) * 100
+          );
+
+          return `
+            <div class="report-bar-row">
+              <div class="report-bar-heading">
+                <span class="report-position">
+                  ${index + 1}
+                </span>
+
+                <span class="report-bar-label">
+                  ${escapeHtml(title)}
+                </span>
+
+                <strong>${count}</strong>
+              </div>
+
+              <div class="report-bar-track">
+                <div
+                  class="report-bar-fill"
+                  style="width:${width}%"
+                ></div>
+              </div>
+            </div>
+          `;
+        })
+        .join("")
+    : `
+        <div class="report-empty">
+          No defects were recorded.
+        </div>
+      `;
+
+  const categoriesHtml =
+    categoryCounts.length
+      ? categoryCounts
+          .map(([category, count]) => {
+            const width = Math.max(
+              3,
+              (
+                count /
+                maximumCategoryCount
+              ) * 100
+            );
+
+            return `
+              <div class="report-bar-row">
+                <div class="report-bar-heading">
+                  <span class="report-bar-label">
+                    ${escapeHtml(category)}
+                  </span>
+
+                  <strong>${count}</strong>
+                </div>
+
+                <div class="report-bar-track">
+                  <div
+                    class="report-bar-fill"
+                    style="width:${width}%"
+                  ></div>
+                </div>
+              </div>
+            `;
+          })
+          .join("")
+      : `
+          <div class="report-empty">
+            No category data is available.
+          </div>
+        `;
+
+  const engineerRowsHtml =
+    engineerData.length
+      ? engineerData
+          .map(engineer => {
+            const engineerDefects =
+              defects.filter(defect =>
+                normalizeEngineer(
+                  defect.engineer
+                ) ===
+                normalizeEngineer(
+                  engineer.engineer
+                )
+              );
+
+            const engineerDefectsPerAudit =
+              engineer.total
+                ? (
+                    engineerDefects.length /
+                    engineer.total
+                  ).toFixed(2)
+                : "0.00";
+
+            return `
+              <tr>
+                <td>
+                  ${escapeHtml(
+                    engineer.engineer
+                  )}
+                </td>
+
+                <td>${engineer.total}</td>
+
+                <td>${engineer.pass}</td>
+
+                <td>${engineer.fail}</td>
+
+                <td>${engineer.passRate}%</td>
+
+                <td>
+                  ${engineerDefects.length}
+                </td>
+
+                <td>
+                  ${engineerDefectsPerAudit}
+                </td>
+              </tr>
+            `;
+          })
+          .join("")
+      : `
+          <tr>
+            <td colspan="7">
+              No engineer performance data is available.
+            </td>
+          </tr>
+        `;
+
+  const repeatedDefects =
+    Object.entries(titleCounts)
+      .filter(([, count]) => count > 1)
+      .sort((a, b) =>
+        b[1] - a[1] ||
+        a[0].localeCompare(b[0])
+      );
+
+  const repeatOccurrences =
+    repeatedDefects.reduce(
+      (total, [, count]) =>
+        total + (count - 1),
+      0
+    );
+
+  const highestDefect =
+    topDefects[0] || null;
+
+  const highestCategory =
+    categoryCounts[0] || null;
+
+const strongestEngineer =
+  engineerData.length
+    ? engineerData
+        .map(engineer => {
+          const engineerDefectCount =
+            defects.filter(defect =>
+              normalizeEngineer(
+                defect.engineer
+              ) ===
+              normalizeEngineer(
+                engineer.engineer
+              )
+            ).length;
+
+          const defectsPerAudit =
+            engineer.total
+              ? (
+                  engineerDefectCount /
+                  engineer.total
+                )
+              : 0;
+
+          return {
+            ...engineer,
+            engineerDefectCount,
+            defectsPerAudit
+          };
+        })
+        .sort((a, b) => {
+          /*
+            1. Highest PASS rate
+          */
+          if (
+            b.passRate !== a.passRate
+          ) {
+            return (
+              b.passRate -
+              a.passRate
+            );
+          }
+
+          /*
+            2. Highest number of audits
+          */
+          if (b.total !== a.total) {
+            return b.total - a.total;
+          }
+
+          /*
+            3. Lowest defects per audit
+          */
+          if (
+            a.defectsPerAudit !==
+            b.defectsPerAudit
+          ) {
+            return (
+              a.defectsPerAudit -
+              b.defectsPerAudit
+            );
+          }
+
+          /*
+            4. Lowest total defects
+          */
+          if (
+            a.engineerDefectCount !==
+            b.engineerDefectCount
+          ) {
+            return (
+              a.engineerDefectCount -
+              b.engineerDefectCount
+            );
+          }
+
+          /*
+            Final technical tie-break only
+          */
+          return a.engineer.localeCompare(
+            b.engineer
+          );
+        })[0]
+    : null;
+
+  const managementPoints = [];
+
+  managementPoints.push(
+    `${audits.length} audit${
+      audits.length === 1 ? "" : "s"
+    } were included, with a PASS rate of ${passRate}%.`
+  );
+
+  managementPoints.push(
+    `${defects.length} defect${
+      defects.length === 1 ? "" : "s"
+    } were recorded, averaging ${defectsPerAudit.toFixed(
+      2
+    )} defects per audit.`
+  );
+
+  if (highestDefect) {
+    managementPoints.push(
+      `The most common defect was "${highestDefect[0]}", recorded ${highestDefect[1]} time${
+        highestDefect[1] === 1 ? "" : "s"
+      }.`
+    );
+  }
+
+  if (highestCategory) {
+    managementPoints.push(
+      `The category with the highest number of defects was "${highestCategory[0]}" with ${highestCategory[1]} record${
+        highestCategory[1] === 1 ? "" : "s"
+      }.`
+    );
+  }
+
+  if (repeatOccurrences > 0) {
+    managementPoints.push(
+      `${repeatedDefects.length} defect type${
+        repeatedDefects.length === 1
+          ? ""
+          : "s"
+      } occurred more than once, creating ${repeatOccurrences} repeat occurrence${
+        repeatOccurrences === 1
+          ? ""
+          : "s"
+      }.`
+    );
+  } else {
+    managementPoints.push(
+      "No repeated defect titles were identified in the selected period."
+    );
+  }
+
+ if (strongestEngineer) {
+  managementPoints.push(
+    `${strongestEngineer.engineer} was the strongest-performing engineer, recording a ${strongestEngineer.passRate}% PASS rate across ${strongestEngineer.total} audit${
+      strongestEngineer.total === 1
+        ? ""
+        : "s"
+    }, with ${strongestEngineer.defectsPerAudit.toFixed(
+      2
+    )} defects per audit.`
+  );
+}
+
+  const managementSummaryHtml =
+    managementPoints
+      .map(point => `
+        <li>${escapeHtml(point)}</li>
+      `)
+      .join("");
+
+  const reportWindow = window.open(
+    "",
+    "PPCManagementReport",
+    "width=1400,height=950,resizable=yes,scrollbars=yes"
+  );
+
+  if (!reportWindow) {
+    alert(
+      "The management report window was blocked. Please allow pop-ups for this app and try again."
+    );
+
+    return;
+  }
+
+  reportWindow.document.open();
+
+  reportWindow.document.write(`
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8">
+
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1"
+        >
+
+        <title>
+          PPC Management Report
+        </title>
+
+        <style>
+          * {
+            box-sizing: border-box;
+          }
+
+          body {
+            margin: 0;
+            padding: 30px;
+            background: #f4f1f7;
+            color: #1b1028;
+            font-family:
+              Arial,
+              Helvetica,
+              sans-serif;
+          }
+
+          .toolbar {
+            width: min(1250px, 100%);
+            margin: 0 auto 14px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+          }
+
+          .toolbar button {
+            padding: 10px 16px;
+            border: 1px solid #d8d1df;
+            border-radius: 10px;
+            background: #ffffff;
+            color: #1b1028;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+          }
+
+          .report-page {
+            width: min(1250px, 100%);
+            margin: 0 auto;
+            padding: 34px;
+            border: 1px solid #ddd7e4;
+            border-radius: 22px;
+            background: #ffffff;
+            box-shadow:
+              0 18px 45px
+              rgba(35, 20, 50, 0.12);
+          }
+
+          .report-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 24px;
+            margin-bottom: 25px;
+          }
+
+          .report-header h1 {
+            margin: 0 0 8px;
+            font-size: 32px;
+          }
+
+          .report-period {
+            color: #675d70;
+            font-size: 15px;
+            line-height: 1.6;
+          }
+
+          .report-generated {
+            color: #675d70;
+            font-size: 13px;
+            white-space: nowrap;
+          }
+
+          .report-section {
+            margin-top: 24px;
+            break-inside: avoid;
+          }
+
+          .report-section h2 {
+            margin: 0 0 14px;
+            font-size: 21px;
+          }
+
+          .report-section-note {
+            margin: -7px 0 14px;
+            color: #675d70;
+            font-size: 13px;
+          }
+
+          .kpi-grid {
+            display: grid;
+            grid-template-columns:
+              repeat(4, minmax(0, 1fr));
+            gap: 12px;
+          }
+
+          .kpi-card {
+            padding: 17px 12px;
+            border: 1px solid #ddd7e4;
+            border-radius: 15px;
+            background: #faf8fc;
+            text-align: center;
+          }
+
+          .kpi-value {
+            display: block;
+            font-size: 27px;
+            font-weight: 800;
+          }
+
+          .kpi-label {
+            display: block;
+            margin-top: 5px;
+            color: #675d70;
+            font-size: 12px;
+          }
+
+          .pass-fail-grid {
+            display: grid;
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+          }
+
+          .pass-card,
+          .fail-card {
+            padding: 18px;
+            border-radius: 15px;
+            color: #ffffff;
+          }
+
+          .pass-card {
+            background: #15803d;
+          }
+
+          .fail-card {
+            background: #b91c1c;
+          }
+
+          .pass-card strong,
+          .fail-card strong {
+            display: block;
+            font-size: 26px;
+          }
+
+          .pass-card span,
+          .fail-card span {
+            display: block;
+            margin-top: 4px;
+            font-size: 13px;
+          }
+
+          .severity-grid {
+            display: grid;
+            grid-template-columns:
+              repeat(4, minmax(0, 1fr));
+            gap: 12px;
+          }
+
+          .severity-card {
+            padding: 17px;
+            border: 1px solid #d8c9f5;
+            border-radius: 15px;
+            background: #f7f2ff;
+            text-align: center;
+          }
+
+          .severity-card strong {
+            display: block;
+            color: #5b21b6;
+            font-size: 25px;
+          }
+
+          .severity-card span {
+            display: block;
+            margin-top: 5px;
+            color: #675d70;
+            font-size: 12px;
+          }
+
+          .two-column-grid {
+            display: grid;
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
+            gap: 18px;
+          }
+
+          .report-panel {
+            min-width: 0;
+            padding: 18px;
+            border: 1px solid #ddd7e4;
+            border-radius: 16px;
+          }
+
+          .report-panel h2 {
+            margin: 0 0 15px;
+            font-size: 19px;
+          }
+
+          .report-bars {
+            display: flex;
+            flex-direction: column;
+            gap: 13px;
+          }
+
+          .report-bar-row {
+            break-inside: avoid;
+          }
+
+          .report-bar-heading {
+            display: grid;
+            grid-template-columns:
+              minmax(0, 1fr)
+              45px;
+            gap: 10px;
+            align-items: end;
+            margin-bottom: 6px;
+          }
+
+          .report-bar-heading:has(
+            .report-position
+          ) {
+            grid-template-columns:
+              24px
+              minmax(0, 1fr)
+              45px;
+          }
+
+          .report-position {
+            color: #7c3aed;
+            font-size: 12px;
+            font-weight: 800;
+          }
+
+          .report-bar-label {
+            overflow-wrap: anywhere;
+            font-size: 13px;
+            line-height: 1.35;
+          }
+
+          .report-bar-heading strong {
+            text-align: right;
+          }
+
+          .report-bar-track {
+            width: 100%;
+            height: 14px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: #ebe7ee;
+          }
+
+          .report-bar-fill {
+            height: 100%;
+            min-width: 3px;
+            border-radius: 999px;
+            background:
+              linear-gradient(
+                90deg,
+                #7c3aed,
+                #a855f7
+              );
+          }
+
+          .report-table-wrap {
+            overflow-x: auto;
+            border: 1px solid #ddd7e4;
+            border-radius: 15px;
+          }
+
+          .report-table {
+            width: 100%;
+            min-width: 760px;
+            border-collapse: collapse;
+            font-size: 13px;
+          }
+
+          .report-table th,
+          .report-table td {
+            padding: 11px 12px;
+            border-bottom:
+              1px solid #ebe6ef;
+            text-align: left;
+          }
+
+          .report-table th {
+            background: #f0e9ff;
+            font-weight: 800;
+          }
+
+          .report-table tr:last-child td {
+            border-bottom: 0;
+          }
+
+          .management-summary {
+            padding: 20px;
+            border: 1px solid #d8c9f5;
+            border-radius: 16px;
+            background: #f8f4ff;
+          }
+
+          .management-summary h2 {
+            margin: 0 0 12px;
+          }
+
+          .management-summary ul {
+            margin: 0;
+            padding-left: 21px;
+          }
+
+          .management-summary li {
+            margin-bottom: 9px;
+            line-height: 1.55;
+          }
+
+          .management-summary li:last-child {
+            margin-bottom: 0;
+          }
+
+          .report-empty {
+            padding: 30px 15px;
+            color: #675d70;
+            text-align: center;
+          }
+
+          @media (max-width: 800px) {
+            body {
+              padding: 14px;
+            }
+
+            .report-page {
+              padding: 20px;
+            }
+
+            .report-header {
+              flex-direction: column;
+            }
+
+            .kpi-grid,
+            .severity-grid {
+              grid-template-columns:
+                repeat(2, minmax(0, 1fr));
+            }
+
+            .two-column-grid {
+              grid-template-columns: 1fr;
+            }
+          }
+
+          @media print {
+            @page {
+              size: A4;
+              margin: 10mm;
+            }
+
+            body {
+              padding: 0;
+              background: #ffffff;
+            }
+
+            .toolbar {
+              display: none;
+            }
+
+            .report-page {
+              width: 100%;
+              max-width: none;
+              padding: 0;
+              border: 0;
+              border-radius: 0;
+              box-shadow: none;
+            }
+
+            .report-section,
+            .report-panel,
+            .kpi-card,
+            .severity-card,
+            .management-summary {
+              break-inside: avoid;
+            }
+
+            .report-table-wrap {
+              overflow: visible;
+            }
+
+            .report-table {
+              min-width: 0;
+              font-size: 10px;
+            }
+
+            .report-table th,
+            .report-table td {
+              padding: 7px;
+            }
+          }
+        </style>
+      </head>
+
+      <body>
+        <div class="toolbar">
+          <button
+            type="button"
+            onclick="window.print()"
+          >
+            Print / Save PDF
+          </button>
+
+          <button
+            type="button"
+            onclick="window.close()"
+          >
+            Close
+          </button>
+        </div>
+
+        <main class="report-page">
+          <header class="report-header">
+            <div>
+              <h1>
+                PPC Management Report
+              </h1>
+
+              <div class="report-period">
+                Period:
+                ${escapeHtml(periodLabel)}
+                <br>
+
+                Engineer:
+                ${escapeHtml(
+                  selectedEngineer
+                )}
+
+                &nbsp;•&nbsp;
+
+                Category:
+                ${escapeHtml(
+                  selectedCategory
+                )}
+
+                &nbsp;•&nbsp;
+
+                Severity:
+                ${escapeHtml(
+                  selectedSeverity
+                )}
+              </div>
+            </div>
+
+            <div class="report-generated">
+              Generated:
+              ${escapeHtml(generatedDate)}
+            </div>
+          </header>
+
+          <section class="report-section">
+            <h2>Performance overview</h2>
+
+            <div class="kpi-grid">
+              <div class="kpi-card">
+                <span class="kpi-value">
+                  ${audits.length}
+                </span>
+
+                <span class="kpi-label">
+                  Audits
+                </span>
+              </div>
+
+              <div class="kpi-card">
+                <span class="kpi-value">
+                  ${defects.length}
+                </span>
+
+                <span class="kpi-label">
+                  Defects
+                </span>
+              </div>
+
+              <div class="kpi-card">
+                <span class="kpi-value">
+                  ${passRate}%
+                </span>
+
+                <span class="kpi-label">
+                  PASS rate
+                </span>
+              </div>
+
+              <div class="kpi-card">
+                <span class="kpi-value">
+                  ${defectsPerAudit.toFixed(2)}
+                </span>
+
+                <span class="kpi-label">
+                  Defects per audit
+                </span>
+              </div>
+            </div>
+
+            <div class="pass-fail-grid">
+              <div class="pass-card">
+                <strong>${passCount}</strong>
+
+                <span>
+                  PASS audits
+                </span>
+              </div>
+
+              <div class="fail-card">
+                <strong>${failCount}</strong>
+
+                <span>
+                  FAIL audits
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <section class="report-section">
+            <h2>Defects by severity</h2>
+
+            <div class="severity-grid">
+              <div class="severity-card">
+                <strong>
+                  ${severityCounts.ID}
+                </strong>
+
+                <span>ID</span>
+              </div>
+
+              <div class="severity-card">
+                <strong>
+                  ${severityCounts.AR}
+                </strong>
+
+                <span>AR</span>
+              </div>
+
+              <div class="severity-card">
+                <strong>
+                  ${severityCounts.NCS}
+                </strong>
+
+                <span>NCS</span>
+              </div>
+
+              <div class="severity-card">
+                <strong>
+                  ${severityCounts.Advisory}
+                </strong>
+
+                <span>Advisory</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="report-section">
+            <div class="two-column-grid">
+              <div class="report-panel">
+                <h2>Most common defects</h2>
+
+                <div class="report-bars">
+                  ${topDefectsHtml}
+                </div>
+              </div>
+
+              <div class="report-panel">
+                <h2>Defects by category</h2>
+
+                <div class="report-bars">
+                  ${categoriesHtml}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="report-section">
+            <h2>Engineer performance</h2>
+
+            <div class="report-section-note">
+              Engineer totals use the selected
+              analytics date range.
+            </div>
+
+            <div class="report-table-wrap">
+              <table class="report-table">
+                <thead>
+                  <tr>
+                    <th>Engineer</th>
+                    <th>Audits</th>
+                    <th>PASS</th>
+                    <th>FAIL</th>
+                    <th>PASS rate</th>
+                    <th>Defects</th>
+                    <th>Defects / audit</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  ${engineerRowsHtml}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="report-section">
+            <div class="management-summary">
+              <h2>Management summary</h2>
+
+              <ul>
+                ${managementSummaryHtml}
+              </ul>
+            </div>
+          </section>
+        </main>
+      </body>
+    </html>
+  `);
+
+  reportWindow.document.close();
+  reportWindow.focus();
 }
 
 function exportAnalyticsCsv() {
