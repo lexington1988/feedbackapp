@@ -5103,24 +5103,26 @@ class="engineer-chart-rate-label"
     })
     .join("");
 
-  container.innerHTML = `
- <svg
-  class="engineer-performance-svg"
-  viewBox="0 0 ${chartWidth} ${chartHeight}"
-  width="${data.length <= 10 ? "100%" : chartWidth}"
-  height="${data.length <= 10 ? "auto" : chartHeight}"
-  role="img"
-  aria-label="Total audits, passes and failures by engineer"
-  preserveAspectRatio="xMidYMid meet"
-  data-engineer-count="${data.length}"
-  style="
-    display:block;
-    width:${data.length <= 10 ? "100%" : `${chartWidth}px`};
-    max-width:${data.length <= 10 ? "100%" : "none"};
-    height:auto;
-    background:#ffffff;
-  "
->
+ container.innerHTML = `
+  <svg
+    class="engineer-performance-svg"
+    viewBox="0 0 ${chartWidth} ${chartHeight}"
+    width="100%"
+    height="auto"
+    role="img"
+    aria-label="Total audits, passes and failures by engineer"
+    preserveAspectRatio="xMidYMid meet"
+    data-engineer-count="${data.length}"
+    style="
+      display:block;
+      width:100%;
+      max-width:100%;
+      min-width:0;
+      height:auto;
+      margin:0;
+      background:#ffffff;
+    "
+  >
      <rect
   x="0"
   y="0"
