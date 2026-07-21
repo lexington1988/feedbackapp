@@ -1796,3 +1796,118 @@ body.engineer-presentation-mode
   height: auto;
   background: #ffffff;
 }
+  /* =========================================================
+   ANALYTICS — MOBILE/TABLET RESPONSIVE FIX
+   Keeps the Performance Overview chart inside its card
+   and removes the horizontal scrollbar.
+   ========================================================= */
+
+#tabAnalytics,
+#tabAnalytics .analytics-grid,
+#tabAnalytics .analytics-card,
+#engineerPerformanceSection,
+#engineerPerformanceSection .engineer-performance-scroll,
+#engineerPerformanceSection .engineer-performance-chart {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#tabAnalytics {
+  overflow-x: hidden;
+}
+
+#tabAnalytics .analytics-grid {
+  overflow: hidden;
+}
+
+#tabAnalytics .analytics-card {
+  overflow: hidden;
+}
+
+#engineerPerformanceSection {
+  overflow: hidden;
+}
+
+#engineerPerformanceSection .engineer-performance-scroll {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  overflow-x: hidden;
+  overflow-y: hidden;
+
+  padding-bottom: 0;
+  scrollbar-gutter: auto;
+  -webkit-overflow-scrolling: auto;
+}
+
+#engineerPerformanceSection .engineer-performance-chart {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+#engineerPerformanceSection .engineer-performance-svg,
+#engineerPerformanceSection .engineer-performance-svg[data-engineer-count] {
+  display: block;
+
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+
+  height: auto !important;
+
+  margin: 0;
+  background: #ffffff;
+}
+
+/* Prevent controls and cards forcing the page wider */
+#tabAnalytics .analytics-toolbar,
+#tabAnalytics .analytics-actions,
+#engineerPerformanceSection .engineer-performance-header,
+#engineerPerformanceSection .engineer-performance-legend,
+#engineerPerformanceSection .engineer-performance-summary {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+@media (max-width: 900px) {
+  #tabAnalytics .analytics-toolbar,
+  #tabAnalytics .analytics-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  #tabAnalytics .analytics-toolbar .field,
+  #tabAnalytics .analytics-actions .field {
+    min-width: 0;
+  }
+
+  #engineerPerformanceSection .engineer-performance-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  #engineerPerformanceSection .engineer-performance-legend {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 560px) {
+  #engineerPerformanceSection .engineer-performance-header h3 {
+    font-size: 18px;
+  }
+
+  #engineerPerformanceSection .engineer-performance-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #engineerPerformanceSection .engineer-performance-summary > div {
+    min-width: 0;
+  }
+}
