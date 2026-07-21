@@ -4743,11 +4743,38 @@ function initAnalytics() {
     "click",
     exportAnalyticsCsv
   );
-  el("printAnalyticsBtn")?.addEventListener("click", () => {
-    document.body.classList.add("analytics-print");
-    window.print();
-    setTimeout(() => document.body.classList.remove("analytics-print"), 500);
+ el("printAnalyticsBtn")?.addEventListener("click", () => {
+  document.body.classList.add("analytics-print");
+  window.print();
+  setTimeout(() => document.body.classList.remove("analytics-print"), 500);
+});
+
+/* Open only the Most common defects card in presentation view */
+const topDefectsCard = el("topDefectsChart")?.closest(".analytics-card");
+
+if (topDefectsCard) {
+  topDefectsCard.classList.add("top-defects-clickable");
+  topDefectsCard.setAttribute("role", "button");
+  topDefectsCard.setAttribute("tabindex", "0");
+  topDefectsCard.setAttribute(
+    "aria-label",
+    "Open Most common defects presentation view"
+  );
+
+  topDefectsCard.addEventListener(
+    "click",
+    openTopDefectsPresentation
+  );
+
+  topDefectsCard.addEventListener("keydown", event => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openTopDefectsPresentation();
+    }
   });
+}
+
+refreshAnalyticsFilters();
 
   refreshAnalyticsFilters();
 }
@@ -5530,6 +5557,326 @@ function toggleEngineerPresentationView() {
   presentationWindow.document.close();
   presentationWindow.focus();
 }
+function openTopDefectsPresentation() {
+  const { defects } = getAnalyticsSelection();
+
+  const titleCounts = countBy(
+    defects,
+    defect => defect.title || "Untitled defect"
+  );
+
+  const entries = sortedCounts(titleCounts, 10);
+
+  const uniqueDefectCount =
+    Object.keys(titleCounts).length;
+
+  const maximumCount = Math.max(
+    1,
+    ...entries.map(([, count]) => count)
+  );
+
+  const engineer =
+    el("analyticsEngineer")?.value ||
+    "All engineers";
+
+  const fromDate =
+    el("analyticsFrom")?.value ||
+    "All time";
+
+  const toDate =
+    el("analyticsTo")?.value ||
+    "Present";
+
+  const rowsHtml = entries.length
+    ? entries
+        .map(([label, count]) => {
+          const width = Math.max(
+            3,
+            (count / maximumCount) * 100
+          );
+
+          return `
+            <div class="defect-row">
+              <div class="defect-heading">
+                <div class="defect-name">
+                  ${escapeHtml(label)}
+                </div>
+
+                <div class="defect-count">
+                  ${count}
+                </div>
+              </div>
+
+              <div class="defect-track">
+                <div
+                  class="defect-fill"
+                  style="width:${width}%"
+                ></div>
+              </div>
+            </div>
+          `;
+        })
+        .join("")
+    : `
+        <div class="empty-message">
+          No defects match the current analytics filters.
+        </div>
+      `;
+
+  const presentationWindow = window.open(
+    "",
+    "topDefectsPresentation",
+    "width=1100,height=800,resizable=yes,scrollbars=yes"
+  );
+
+  if (!presentationWindow) {
+    alert(
+      "The presentation window was blocked. Please allow pop-ups for this app and try again."
+    );
+    return;
+  }
+
+  presentationWindow.document.open();
+
+  presentationWindow.document.write(`
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8">
+
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1"
+        >
+
+        <title>Most common defects</title>
+
+        <style>
+          * {
+            box-sizing: border-box;
+          }
+
+          body {
+            margin: 0;
+            padding: 30px;
+            background: #f5f3f7;
+            color: #1b1028;
+            font-family:
+              Arial,
+              Helvetica,
+              sans-serif;
+          }
+
+          .toolbar {
+            width: min(1100px, 100%);
+            margin: 0 auto 14px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+          }
+
+          .toolbar button {
+            padding: 10px 16px;
+            border: 1px solid #d8d1df;
+            border-radius: 10px;
+            background: #ffffff;
+            color: #1b1028;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+          }
+
+          .presentation-card {
+            width: min(1100px, 100%);
+            margin: 0 auto;
+            padding: 32px;
+            border: 1px solid #ddd7e4;
+            border-radius: 22px;
+            background: #ffffff;
+            box-shadow:
+              0 18px 45px rgba(35, 20, 50, 0.12);
+          }
+
+          .presentation-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 24px;
+            margin-bottom: 30px;
+          }
+
+          h1 {
+            margin: 0 0 8px;
+            font-size: 30px;
+            line-height: 1.2;
+          }
+
+          .filters {
+            color: #675d70;
+            font-size: 15px;
+            line-height: 1.5;
+          }
+
+          .unique-count {
+            color: #675d70;
+            font-size: 16px;
+            white-space: nowrap;
+          }
+
+          .defects-list {
+            display: flex;
+            flex-direction: column;
+            gap: 22px;
+          }
+
+          .defect-row {
+            break-inside: avoid;
+          }
+
+          .defect-heading {
+            display: grid;
+            grid-template-columns:
+              minmax(0, 1fr)
+              55px;
+            align-items: end;
+            gap: 20px;
+            margin-bottom: 8px;
+          }
+
+          .defect-name {
+            font-size: 18px;
+            font-weight: 600;
+            line-height: 1.4;
+            white-space: normal;
+            overflow-wrap: anywhere;
+          }
+
+          .defect-count {
+            text-align: right;
+            font-size: 20px;
+            font-weight: 800;
+          }
+
+          .defect-track {
+            width: 100%;
+            height: 24px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: #e9e6ec;
+          }
+
+          .defect-fill {
+            height: 100%;
+            min-width: 3px;
+            border-radius: 999px;
+            background:
+              linear-gradient(
+                90deg,
+                #7c3aed,
+                #a855f7
+              );
+          }
+
+          .empty-message {
+            padding: 50px 20px;
+            color: #675d70;
+            text-align: center;
+            font-size: 18px;
+          }
+
+          @media (max-width: 650px) {
+            body {
+              padding: 14px;
+            }
+
+            .presentation-card {
+              padding: 22px;
+            }
+
+            .presentation-header {
+              flex-direction: column;
+              gap: 6px;
+            }
+
+            .unique-count {
+              white-space: normal;
+            }
+
+            .defect-name {
+              font-size: 16px;
+            }
+          }
+
+          @media print {
+            body {
+              padding: 0;
+              background: #ffffff;
+            }
+
+            .toolbar {
+              display: none;
+            }
+
+            .presentation-card {
+              width: 100%;
+              max-width: none;
+              padding: 20px;
+              border: 0;
+              border-radius: 0;
+              box-shadow: none;
+            }
+          }
+        </style>
+      </head>
+
+      <body>
+        <div class="toolbar">
+          <button
+            type="button"
+            onclick="window.print()"
+          >
+            Print / Save PDF
+          </button>
+
+          <button
+            type="button"
+            onclick="window.close()"
+          >
+            Close
+          </button>
+        </div>
+
+        <main class="presentation-card">
+          <header class="presentation-header">
+            <div>
+              <h1>Most common defects</h1>
+
+              <div class="filters">
+                ${escapeHtml(engineer)}
+                &nbsp;•&nbsp;
+                ${escapeHtml(fromDate)}
+                to
+                ${escapeHtml(toDate)}
+              </div>
+            </div>
+
+            <div class="unique-count">
+              ${uniqueDefectCount} unique defects
+            </div>
+          </header>
+
+          <section class="defects-list">
+            ${rowsHtml}
+          </section>
+        </main>
+      </body>
+    </html>
+  `);
+
+  presentationWindow.document.close();
+  presentationWindow.focus();
+}
+
 function renderAnalytics() {
   if (!el("tabAnalytics")) return;
   refreshAnalyticsFilters();
@@ -5565,15 +5912,47 @@ function renderAnalytics() {
   );
 
   renderHorizontalBars(
-    el("severityChart"),
-    sortedCounts(
-      countBy(
-        defects,
-        d => d.severity || "Other"
-      ),
-      8
-    )
-  );
+  el("severityChart"),
+  sortedCounts(
+    countBy(
+      defects,
+      d => {
+        const severity = String(
+          d.severity || "Other"
+        ).trim();
+
+        if (
+          severity === "Critical" ||
+          severity === "Immediate" ||
+          severity === "ID"
+        ) {
+          return "ID";
+        }
+
+        if (
+          severity === "Major" ||
+          severity === "AR"
+        ) {
+          return "AR";
+        }
+
+        if (
+          severity === "Minor" ||
+          severity === "NCS"
+        ) {
+          return "NCS";
+        }
+
+        if (severity === "Advisory") {
+          return "Advisory";
+        }
+
+        return severity;
+      }
+    ),
+    8
+  )
+);
 
   renderMonthlyAuditChart(audits);
   renderEngineerPerformanceChart(audits);
