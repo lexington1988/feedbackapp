@@ -1101,12 +1101,54 @@ body:not(.light) .suggestion-item { border-bottom-color: rgba(255,255,255,0.10);
   outline: 3px solid rgba(168,85,247,.35);
   outline-offset: 3px;
 }
+
+/* Other analytics cards with presentation views */
+.analytics-card.analytics-presentation-clickable {
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.analytics-card.analytics-presentation-clickable:hover {
+  transform: translateY(-1px);
+  border-color: rgba(168,85,247,.55);
+  box-shadow:
+    0 10px 24px rgba(0,0,0,.16);
+}
+
+.analytics-card.analytics-presentation-clickable:focus-visible {
+  outline: 3px solid rgba(168,85,247,.35);
+  outline-offset: 3px;
+}
 .analytics-wide{grid-column:1/-1}
 .analytics-card-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px}
 .analytics-chart{min-height:210px;overflow-x:auto}
 .analytics-empty{min-height:180px;display:grid;place-items:center;color:var(--muted);font-size:13px}
 .analytics-bars{display:flex;flex-direction:column;gap:10px}
 .analytics-bar-row{display:grid;grid-template-columns:minmax(110px,1.2fr) minmax(120px,3fr) 42px;gap:9px;align-items:center;font-size:12px}
+
+/* Clickable analytics bars for defect drill-down */
+.analytics-bar-row.analytics-drilldown-row {
+  cursor: pointer;
+  padding: 5px;
+  margin: -5px;
+  border-radius: 10px;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.analytics-bar-row.analytics-drilldown-row:hover {
+  background: rgba(168,85,247,.10);
+  transform: translateX(2px);
+}
+
+.analytics-bar-row.analytics-drilldown-row:focus-visible {
+  outline: 3px solid rgba(168,85,247,.30);
+  outline-offset: 2px;
+}
 .analytics-bar-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .analytics-bar-track{height:16px;border-radius:999px;background:rgba(255,255,255,.07);overflow:hidden}
 body.light .analytics-bar-track{background:rgba(0,0,0,.07)}
@@ -1116,6 +1158,27 @@ body.light .analytics-bar-track{background:rgba(0,0,0,.07)}
 .analytics-donut::after{content:"";position:absolute;inset:25px;border-radius:50%;background:var(--panel)}
 .analytics-legend{display:flex;flex-direction:column;gap:9px;font-size:13px}
 .analytics-legend-row{display:flex;align-items:center;gap:8px}
+
+/* Clickable PASS and FAIL legend rows */
+.analytics-legend-row.analytics-pass-fail-drilldown {
+  cursor: pointer;
+  padding: 7px 9px;
+  margin: -7px -9px;
+  border-radius: 10px;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.analytics-legend-row.analytics-pass-fail-drilldown:hover {
+  background: rgba(168,85,247,.10);
+  transform: translateX(2px);
+}
+
+.analytics-legend-row.analytics-pass-fail-drilldown:focus-visible {
+  outline: 3px solid rgba(168,85,247,.30);
+  outline-offset: 2px;
+}
 .analytics-swatch{width:12px;height:12px;border-radius:3px}
 .analytics-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0}
 .analytics-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:16px;max-height:420px}
