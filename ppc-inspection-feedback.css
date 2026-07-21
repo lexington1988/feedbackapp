@@ -1911,3 +1911,198 @@ body.engineer-presentation-mode
     min-width: 0;
   }
 }
+  /* =========================================================
+   ANALYTICS PAGE — TABLET AND MOBILE WIDTH FIX
+   Makes Analytics use the same available width as other tabs.
+   ========================================================= */
+
+/* Allow every analytics element to shrink inside the main card */
+#tabAnalytics,
+#tabAnalytics *,
+#tabAnalytics *::before,
+#tabAnalytics *::after {
+  box-sizing: border-box;
+}
+
+#tabAnalytics {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+/* Do not let the toolbar or charts set a wider minimum width */
+#tabAnalytics .analytics-toolbar,
+#tabAnalytics .analytics-kpis,
+#tabAnalytics .analytics-grid,
+#tabAnalytics .analytics-card,
+#tabAnalytics .analytics-chart,
+#tabAnalytics .analytics-actions,
+#tabAnalytics .analytics-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* All form controls must be allowed to shrink */
+#tabAnalytics input,
+#tabAnalytics select,
+#tabAnalytics button,
+#tabAnalytics .field,
+#tabAnalytics .field.inline,
+#tabAnalytics .analytics-search {
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* Remove the old fixed minimum width from the monthly chart */
+#tabAnalytics .analytics-svg {
+  display: block;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  height: auto;
+}
+
+/* Keep horizontal bar charts contained */
+#tabAnalytics .analytics-bars,
+#tabAnalytics .analytics-bar-row,
+#tabAnalytics .analytics-bar-label,
+#tabAnalytics .analytics-bar-track {
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* Prevent long captions or headings widening their cards */
+#tabAnalytics .analytics-card-head {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+#tabAnalytics .analytics-card-head h3,
+#tabAnalytics .analytics-card-head span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* =========================================================
+   TABLET
+   Change Analytics to one chart per row earlier.
+   ========================================================= */
+
+@media (max-width: 1000px) {
+  #tabAnalytics .analytics-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #tabAnalytics .analytics-wide {
+    grid-column: auto;
+  }
+
+  #tabAnalytics .analytics-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #tabAnalytics .analytics-toolbar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: end;
+  }
+
+  #tabAnalytics .analytics-toolbar .field.inline,
+  #tabAnalytics .analytics-toolbar .analytics-search {
+    width: 100%;
+    min-width: 0;
+  }
+
+  #tabAnalytics .analytics-toolbar input,
+  #tabAnalytics .analytics-toolbar select {
+    width: 100%;
+  }
+
+  /*
+   Allow preset buttons such as This month, This quarter
+   and All time to sit naturally without widening the page.
+  */
+  #tabAnalytics .analytics-toolbar button {
+    width: auto;
+    justify-self: start;
+  }
+}
+
+/* =========================================================
+   MOBILE
+   One full-width control/card per row.
+   ========================================================= */
+
+@media (max-width: 600px) {
+  #tabAnalytics .analytics-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #tabAnalytics .analytics-toolbar .field,
+  #tabAnalytics .analytics-toolbar .field.inline,
+  #tabAnalytics .analytics-toolbar .analytics-search {
+    width: 100%;
+  }
+
+  #tabAnalytics .analytics-toolbar input,
+  #tabAnalytics .analytics-toolbar select {
+    width: 100%;
+  }
+
+  #tabAnalytics .analytics-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  #tabAnalytics .analytics-kpi {
+    min-width: 0;
+    padding: 10px;
+  }
+
+  #tabAnalytics .analytics-kpi .value {
+    font-size: 20px;
+  }
+
+  #tabAnalytics .analytics-card {
+    padding: 10px;
+  }
+
+  #tabAnalytics .analytics-bar-row {
+    grid-template-columns:
+      minmax(75px, 1fr)
+      minmax(70px, 1.8fr)
+      28px;
+
+    gap: 6px;
+  }
+
+  #tabAnalytics .analytics-donut {
+    width: 125px;
+    height: 125px;
+  }
+
+  #tabAnalytics .analytics-donut::after {
+    inset: 22px;
+  }
+
+  #tabAnalytics .analytics-actions {
+    align-items: stretch;
+  }
+
+  #tabAnalytics .analytics-actions .btn {
+    width: 100%;
+  }
+
+  #engineerPerformanceSection .engineer-performance-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Very narrow phones */
+@media (max-width: 380px) {
+  #tabAnalytics .analytics-kpis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
