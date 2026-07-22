@@ -1196,6 +1196,7 @@ initBoilersLibrary().then(() => {
   });
   initDefectsImportButton();
   initAnalytics();
+initExecutiveDashboard();
 if (el("rangeSelect")) el("rangeSelect").value = "qCurrent";
   
   const today = new Date();
@@ -11681,52 +11682,241 @@ const strongestEngineer =
             }
           }
 
-          @media print {
-            @page {
-              size: A4;
-              margin: 10mm;
-            }
+   @media print {
+  @page {
+    size: A4 portrait;
+    margin: 5mm;
+  }
 
-            body {
-              padding: 0;
-              background: #ffffff;
-            }
+  html,
+  body {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+  }
 
-            .toolbar {
-              display: none;
-            }
+  /*
+    A lighter scale reduction keeps the report
+    close to the popup appearance while still
+    fitting comfortably on one A4 page.
+  */
+  body {
+    zoom: 0.72;
+  }
 
-            .report-page {
-              width: 100%;
-              max-width: none;
-              padding: 0;
-              border: 0;
-              border-radius: 0;
-              box-shadow: none;
-            }
+  .toolbar {
+    display: none !important;
+  }
 
-            .report-section,
-            .report-panel,
-            .kpi-card,
-            .severity-card,
-            .management-summary {
-              break-inside: avoid;
-            }
+  .report-page {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 20px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
 
-            .report-table-wrap {
-              overflow: visible;
-            }
+  /*
+    Preserve the desktop report structure.
+    Chrome's print viewport can otherwise
+    activate the narrow-screen layout.
+  */
+  .report-header {
+    flex-direction: row;
+    align-items: flex-start;
+    margin-bottom: 19px;
+  }
 
-            .report-table {
-              min-width: 0;
-              font-size: 10px;
-            }
+  .report-header h1 {
+    margin: 0 0 6px;
+    font-size: 28px;
+  }
 
-            .report-table th,
-            .report-table td {
-              padding: 7px;
-            }
-          }
+  .report-period {
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .report-generated {
+    font-size: 11px;
+  }
+
+  .report-section {
+    margin-top: 17px;
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .report-section h2 {
+    margin: 0 0 10px;
+    font-size: 18px;
+  }
+
+  .report-section-note {
+    margin: -5px 0 10px;
+    font-size: 11px;
+  }
+
+  .kpi-grid {
+    grid-template-columns:
+      repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .kpi-card {
+    padding: 13px 10px;
+    border-radius: 13px;
+    break-inside: avoid;
+  }
+
+  .kpi-value {
+    font-size: 23px;
+  }
+
+  .kpi-label {
+    margin-top: 4px;
+    font-size: 10px;
+  }
+
+  .pass-fail-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .pass-card,
+  .fail-card {
+    padding: 14px;
+    border-radius: 13px;
+  }
+
+  .pass-card strong,
+  .fail-card strong {
+    font-size: 23px;
+  }
+
+  .pass-card span,
+  .fail-card span {
+    margin-top: 3px;
+    font-size: 10px;
+  }
+
+  .severity-grid {
+    grid-template-columns:
+      repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .severity-card {
+    padding: 13px;
+    border-radius: 13px;
+    break-inside: avoid;
+  }
+
+  .severity-card strong {
+    font-size: 21px;
+  }
+
+  .severity-card span {
+    margin-top: 4px;
+    font-size: 10px;
+  }
+
+  .two-column-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .report-panel {
+    padding: 14px;
+    border-radius: 14px;
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .report-panel h2 {
+    margin: 0 0 11px;
+    font-size: 16px;
+  }
+
+  .report-bars {
+    gap: 9px;
+  }
+
+  .report-bar-heading {
+    margin-bottom: 4px;
+    font-size: 10px;
+  }
+
+  .report-bar-heading:has(
+    .report-position
+  ) {
+    grid-template-columns:
+      21px
+      minmax(0, 1fr)
+      34px;
+  }
+
+  .report-position {
+    font-size: 10px;
+  }
+
+  .report-bar-label {
+    font-size: 10px;
+    line-height: 1.3;
+  }
+
+  .report-bar-track {
+    height: 10px;
+  }
+
+  .report-table-wrap {
+    overflow: visible;
+    border-radius: 12px;
+  }
+
+  .report-table {
+    width: 100%;
+    min-width: 0;
+    font-size: 9px;
+  }
+
+  .report-table th,
+  .report-table td {
+    padding: 5px 7px;
+    line-height: 1.25;
+  }
+
+  .management-summary {
+    padding: 14px 16px;
+    border-radius: 14px;
+    break-inside: avoid;
+  }
+
+  .management-summary h2 {
+    margin-bottom: 8px;
+    font-size: 16px;
+  }
+
+  .management-summary ul {
+    padding-left: 19px;
+  }
+
+  .management-summary li {
+    margin-bottom: 5px;
+    font-size: 9.5px;
+    line-height: 1.4;
+  }
+
+  .management-summary li:last-child {
+    margin-bottom: 0;
+  }
+}
         </style>
       </head>
 
@@ -11970,18 +12160,987 @@ function exportAnalyticsCsv() {
 }
 
 // ---------- Helpers ----------
+function initExecutiveDashboard() {
+  document
+    .querySelectorAll(
+      "[data-dashboard-period]"
+    )
+    .forEach(button => {
+      button.addEventListener(
+        "click",
+        () => {
+          applyExecutiveDashboardPeriod(
+            button.dataset
+              .dashboardPeriod
+          );
+        }
+      );
+    });
+
+  el("dashboardManagementReportBtn")
+    ?.addEventListener(
+      "click",
+      openManagementReport
+    );
+
+  el("dashboardOpenAnalyticsBtn")
+    ?.addEventListener(
+      "click",
+      () => setTab("analytics")
+    );
+
+  el("dashboardViewAllAlertsBtn")
+    ?.addEventListener(
+      "click",
+      () => {
+        setTab("analytics");
+
+        setTimeout(() => {
+          el("analyticsAlertsCard")
+            ?.scrollIntoView({
+              behavior: "smooth",
+              block: "start"
+            });
+        }, 50);
+      }
+    );
+}
+
+function applyExecutiveDashboardPeriod(
+  period
+) {
+  const dates =
+    getManagementReportPresetDates(
+      period
+    );
+
+  if (!dates) return;
+
+  const fromInput =
+    el("analyticsFrom");
+
+  const toInput =
+    el("analyticsTo");
+
+  if (!fromInput || !toInput) {
+    return;
+  }
+
+  fromInput.value =
+    formatAnalyticsInputDate(
+      dates.from
+    );
+
+  toInput.value =
+    formatAnalyticsInputDate(
+      dates.to
+    );
+
+  document
+    .querySelectorAll(
+      "[data-dashboard-period]"
+    )
+    .forEach(button => {
+      button.classList.toggle(
+        "dashboard-period-active",
+        button.dataset
+          .dashboardPeriod === period
+      );
+    });
+
+  renderExecutiveDashboard();
+}
+
+function getExecutiveDashboardMetrics(
+  selection
+) {
+  const audits =
+    selection.audits || [];
+
+  const defects =
+    selection.defects || [];
+
+  const passes =
+    audits.filter(audit =>
+      isPassingOutcome(
+        audit.outcome
+      )
+    ).length;
+
+  const passRate =
+    audits.length
+      ? Math.round(
+          passes /
+          audits.length *
+          100
+        )
+      : 0;
+
+  const defectsPerAudit =
+    audits.length
+      ? defects.length /
+        audits.length
+      : 0;
+
+  const severityCounts = {
+    ID: 0,
+    AR: 0,
+    NCS: 0,
+    Advisory: 0
+  };
+
+  defects.forEach(defect => {
+    const severity =
+      getAnalyticsSeverityLabel(
+        defect.severity
+      );
+
+    if (
+      Object.prototype.hasOwnProperty.call(
+        severityCounts,
+        severity
+      )
+    ) {
+      severityCounts[severity]++;
+    }
+  });
+
+  const titleCounts = countBy(
+    defects,
+    defect =>
+      defect.title ||
+      "Untitled defect"
+  );
+
+  const repeatOccurrences =
+    Object.values(titleCounts)
+      .reduce(
+        (total, count) =>
+          total +
+          Math.max(0, count - 1),
+        0
+      );
+
+  return {
+    audits,
+    defects,
+    passes,
+    failures:
+      audits.length - passes,
+    passRate,
+    defectsPerAudit,
+    severityCounts,
+    titleCounts,
+    repeatOccurrences
+  };
+}
+
+function getDashboardChange(
+  currentValue,
+  previousValue,
+  options = {}
+) {
+  const {
+    suffix = "",
+    decimals = 0,
+    lowerIsBetter = false,
+    percentagePoints = false
+  } = options;
+
+  const current =
+    Number(currentValue) || 0;
+
+  const previous =
+    Number(previousValue) || 0;
+
+  const difference =
+    current - previous;
+
+  if (
+    Math.abs(difference) <
+    Math.pow(10, -decimals) / 2
+  ) {
+    return {
+      className:
+        "dashboard-change-neutral",
+      text: "No change"
+    };
+  }
+
+  const improved =
+    lowerIsBetter
+      ? difference < 0
+      : difference > 0;
+
+  const formattedDifference =
+    Math.abs(difference).toFixed(
+      decimals
+    );
+
+  return {
+    className: improved
+      ? "dashboard-change-good"
+      : "dashboard-change-bad",
+
+    text:
+      `${difference > 0 ? "↑" : "↓"} ` +
+      `${formattedDifference}` +
+      `${percentagePoints
+        ? " points"
+        : suffix}`
+  };
+}
+
+function getDashboardEngineerRankings(
+  audits,
+  defects
+) {
+  const engineerData =
+    getEngineerPerformanceData(
+      audits
+    );
+
+  const enriched =
+    engineerData.map(engineer => {
+      const engineerDefects =
+        defects.filter(defect =>
+          normalizeEngineer(
+            defect.engineer
+          ) ===
+          normalizeEngineer(
+            engineer.engineer
+          )
+        );
+
+      return {
+        ...engineer,
+
+        totalDefects:
+          engineerDefects.length,
+
+        defectsPerAudit:
+          engineer.total
+            ? engineerDefects.length /
+              engineer.total
+            : 0
+      };
+    });
+
+  const strongest =
+    enriched
+      .slice()
+      .sort((a, b) => {
+        if (
+          b.passRate !==
+          a.passRate
+        ) {
+          return (
+            b.passRate -
+            a.passRate
+          );
+        }
+
+        if (b.total !== a.total) {
+          return b.total - a.total;
+        }
+
+        if (
+          a.defectsPerAudit !==
+          b.defectsPerAudit
+        ) {
+          return (
+            a.defectsPerAudit -
+            b.defectsPerAudit
+          );
+        }
+
+        return a.engineer.localeCompare(
+          b.engineer
+        );
+      })[0] || null;
+
+  /*
+    Review ranking prioritises the lowest
+    PASS rate, then the highest defects per
+    audit and then the largest audit sample.
+  */
+  const review =
+    enriched
+      .filter(engineer =>
+        !strongest ||
+        normalizeEngineer(
+          engineer.engineer
+        ) !==
+        normalizeEngineer(
+          strongest.engineer
+        )
+      )
+      .sort((a, b) => {
+        if (
+          a.passRate !==
+          b.passRate
+        ) {
+          return (
+            a.passRate -
+            b.passRate
+          );
+        }
+
+        if (
+          b.defectsPerAudit !==
+          a.defectsPerAudit
+        ) {
+          return (
+            b.defectsPerAudit -
+            a.defectsPerAudit
+          );
+        }
+
+        return b.total - a.total;
+      })[0] || null;
+
+  return {
+    strongest,
+    review
+  };
+}
+
+function renderExecutiveDashboard() {
+  const dashboard =
+    el("tabDashboard");
+
+  if (!dashboard) return;
+
+  const periods =
+    getAnalyticsComparisonPeriods();
+
+  const periodLabel =
+    el("dashboardPeriodLabel");
+
+  if (!periods) {
+    if (periodLabel) {
+      periodLabel.textContent =
+        "Select a From and To date in Analytics.";
+    }
+
+    [
+      "dashboardKpis",
+      "dashboardRiskKpis",
+      "dashboardTopIssues",
+      "dashboardAlerts",
+      "dashboardEngineerSnapshot",
+      "dashboardMonthlyTrend"
+    ].forEach(id => {
+      const container = el(id);
+
+      if (container) {
+        container.innerHTML = `
+          <div class="dashboard-empty">
+            A valid analytics date range is required.
+          </div>
+        `;
+      }
+    });
+
+    return;
+  }
+
+  const currentSelection =
+    getAnalyticsSelectionForRange(
+      periods.currentFrom,
+      periods.currentTo
+    );
+
+  const previousSelection =
+    getAnalyticsSelectionForRange(
+      periods.previousFrom,
+      periods.previousTo
+    );
+
+  const current =
+    getExecutiveDashboardMetrics(
+      currentSelection
+    );
+
+  const previous =
+    getExecutiveDashboardMetrics(
+      previousSelection
+    );
+
+  if (periodLabel) {
+    periodLabel.textContent =
+      `${formatDate(
+        periods.currentFrom
+      )}–${formatDate(
+        periods.currentTo
+      )} compared with ${formatDate(
+        periods.previousFrom
+      )}–${formatDate(
+        periods.previousTo
+      )}`;
+  }
+
+  const auditChange =
+    getDashboardChange(
+      current.audits.length,
+      previous.audits.length
+    );
+
+  const passRateChange =
+    getDashboardChange(
+      current.passRate,
+      previous.passRate,
+      {
+        percentagePoints: true
+      }
+    );
+
+  const defectChange =
+    getDashboardChange(
+      current.defects.length,
+      previous.defects.length,
+      {
+        lowerIsBetter: true
+      }
+    );
+
+  const averageChange =
+    getDashboardChange(
+      current.defectsPerAudit,
+      previous.defectsPerAudit,
+      {
+        decimals: 2,
+        lowerIsBetter: true
+      }
+    );
+
+  const kpis = [
+    {
+      label: "Audits",
+      value: current.audits.length,
+      change: auditChange
+    },
+    {
+      label: "PASS rate",
+      value: `${current.passRate}%`,
+      change: passRateChange
+    },
+    {
+      label: "Defects",
+      value: current.defects.length,
+      change: defectChange
+    },
+    {
+      label: "Defects / audit",
+      value:
+        current.defectsPerAudit
+          .toFixed(2),
+      change: averageChange
+    }
+  ];
+
+  el("dashboardKpis").innerHTML =
+    kpis
+      .map(item => `
+        <div class="dashboard-kpi-card">
+          <span class="dashboard-kpi-label">
+            ${escapeHtml(item.label)}
+          </span>
+
+          <strong>
+            ${escapeHtml(item.value)}
+          </strong>
+
+          <span
+            class="
+              dashboard-kpi-change
+              ${item.change.className}
+            "
+          >
+            ${escapeHtml(
+              item.change.text
+            )}
+            <small>
+              vs previous period
+            </small>
+          </span>
+        </div>
+      `)
+      .join("");
+
+  const riskItems = [
+    {
+      label: "ID findings",
+      value:
+        current.severityCounts.ID,
+      tone:
+        current.severityCounts.ID
+          ? "danger"
+          : "good"
+    },
+    {
+      label: "AR findings",
+      value:
+        current.severityCounts.AR,
+      tone:
+        current.severityCounts.AR
+          ? "warning"
+          : "good"
+    },
+    {
+      label: "Repeat occurrences",
+      value:
+        current.repeatOccurrences,
+      tone:
+        current.repeatOccurrences
+          ? "warning"
+          : "good"
+    },
+    {
+      label: "FAIL audits",
+      value: current.failures,
+      tone:
+        current.failures
+          ? "danger"
+          : "good"
+    }
+  ];
+
+  el("dashboardRiskKpis").innerHTML =
+    riskItems
+      .map(item => `
+        <div
+          class="
+            dashboard-risk-card
+            dashboard-risk-${item.tone}
+          "
+        >
+          <strong>${item.value}</strong>
+          <span>${escapeHtml(item.label)}</span>
+        </div>
+      `)
+      .join("");
+
+  const topIssues = sortedCounts(
+    current.titleCounts,
+    3
+  );
+
+  const topIssuesContainer =
+    el("dashboardTopIssues");
+
+  if (topIssues.length) {
+    topIssuesContainer.innerHTML =
+      topIssues
+        .map(
+          ([title, count], index) => `
+            <button
+              type="button"
+              class="dashboard-issue-row"
+              data-dashboard-issue="${escapeHtml(
+                title
+              )}"
+            >
+              <span class="dashboard-rank">
+                ${index + 1}
+              </span>
+
+              <span class="dashboard-issue-name">
+                ${escapeHtml(title)}
+              </span>
+
+              <strong>${count}</strong>
+
+              <span class="dashboard-row-arrow">
+                →
+              </span>
+            </button>
+          `
+        )
+        .join("");
+
+    topIssuesContainer
+      .querySelectorAll(
+        "[data-dashboard-issue]"
+      )
+      .forEach(button => {
+        button.addEventListener(
+          "click",
+          () => {
+            openDefectDrilldown(
+              "title",
+              button.dataset
+                .dashboardIssue
+            );
+          }
+        );
+      });
+  } else {
+    topIssuesContainer.innerHTML = `
+      <div class="dashboard-empty">
+        No defects were recorded in this period.
+      </div>
+    `;
+  }
+
+  const alerts =
+    buildAnalyticsTrendAlerts(
+      getAnalyticsTrendMetrics(
+        currentSelection
+      ),
+      getAnalyticsTrendMetrics(
+        previousSelection
+      )
+    ).slice(0, 3);
+
+  const alertsContainer =
+    el("dashboardAlerts");
+
+  if (alerts.length) {
+    alertsContainer.innerHTML =
+      alerts
+        .map(
+          (alert, index) => `
+            <button
+              type="button"
+              class="
+                dashboard-alert-row
+                dashboard-alert-${alert.tone}
+              "
+              data-dashboard-alert="${index}"
+            >
+              <span class="dashboard-alert-dot"></span>
+
+              <span>
+                <strong>
+                  ${escapeHtml(
+                    alert.title
+                  )}
+                </strong>
+
+                <small>
+                  ${escapeHtml(
+                    alert.message
+                  )}
+                </small>
+              </span>
+
+              <span class="dashboard-row-arrow">
+                →
+              </span>
+            </button>
+          `
+        )
+        .join("");
+
+    alertsContainer
+      .querySelectorAll(
+        "[data-dashboard-alert]"
+      )
+      .forEach(button => {
+        button.addEventListener(
+          "click",
+          () => {
+            const alert =
+              alerts[
+                Number(
+                  button.dataset
+                    .dashboardAlert
+                )
+              ];
+
+            if (!alert) return;
+
+            openAnalyticsTrendAlertDrilldown(
+              alert,
+              currentSelection,
+              periods
+            );
+          }
+        );
+      });
+  } else {
+    alertsContainer.innerHTML = `
+      <div class="dashboard-good-message">
+        <strong>
+          No significant changes identified
+        </strong>
+
+        <span>
+          No alert thresholds were reached.
+        </span>
+      </div>
+    `;
+  }
+
+  const rankings =
+    getDashboardEngineerRankings(
+      current.audits,
+      current.defects
+    );
+
+  const buildEngineerCard = (
+    engineer,
+    type
+  ) => {
+    if (!engineer) {
+      return `
+        <div class="dashboard-engineer-card">
+          <span class="dashboard-engineer-type">
+            ${type}
+          </span>
+
+          <strong>
+            Not enough data
+          </strong>
+        </div>
+      `;
+    }
+
+    return `
+      <button
+        type="button"
+        class="dashboard-engineer-card"
+        data-dashboard-engineer="${escapeHtml(
+          engineer.engineer
+        )}"
+      >
+        <span class="dashboard-engineer-type">
+          ${type}
+        </span>
+
+        <strong>
+          ${escapeHtml(
+            engineer.engineer
+          )}
+        </strong>
+
+        <span>
+          ${engineer.passRate}% PASS
+          &nbsp;•&nbsp;
+          ${engineer.total} audit${
+            engineer.total === 1
+              ? ""
+              : "s"
+          }
+          &nbsp;•&nbsp;
+          ${engineer.defectsPerAudit
+            .toFixed(2)}
+          defects / audit
+        </span>
+      </button>
+    `;
+  };
+
+  el(
+    "dashboardEngineerSnapshot"
+  ).innerHTML =
+    buildEngineerCard(
+      rankings.strongest,
+      "Strongest performance"
+    ) +
+    buildEngineerCard(
+      rankings.review,
+      "Results to review"
+    );
+
+  el("dashboardEngineerSnapshot")
+    .querySelectorAll(
+      "[data-dashboard-engineer]"
+    )
+    .forEach(button => {
+      button.addEventListener(
+        "click",
+        () => {
+          openEngineerAuditDrilldown(
+            button.dataset
+              .dashboardEngineer,
+            "all"
+          );
+        }
+      );
+    });
+
+  renderExecutiveDashboardMonthlyTrend(
+    current.audits
+  );
+}
+
+function renderExecutiveDashboardMonthlyTrend(
+  selectedAudits
+) {
+  const container =
+    el("dashboardMonthlyTrend");
+
+  if (!container) return;
+
+  const toValue =
+    el("analyticsTo")?.value || "";
+
+  const toDate =
+    parseAnalyticsDate(toValue) ||
+    new Date();
+
+  const months = [];
+
+  for (let offset = 5; offset >= 0; offset--) {
+    const date = new Date(
+      toDate.getFullYear(),
+      toDate.getMonth() - offset,
+      1
+    );
+
+    const key =
+      `${date.getFullYear()}-` +
+      `${String(
+        date.getMonth() + 1
+      ).padStart(2, "0")}`;
+
+    months.push({
+      key,
+      label:
+        date.toLocaleDateString(
+          "en-GB",
+          {
+            month: "short",
+            year: "2-digit"
+          }
+        ),
+      total: 0,
+      pass: 0
+    });
+  }
+
+  const monthMap = new Map(
+    months.map(month => [
+      month.key,
+      month
+    ])
+  );
+
+  selectedAudits.forEach(audit => {
+    const month =
+      monthMap.get(
+        String(
+          audit.date || ""
+        ).slice(0, 7)
+      );
+
+    if (!month) return;
+
+    month.total++;
+
+    if (
+      isPassingOutcome(
+        audit.outcome
+      )
+    ) {
+      month.pass++;
+    }
+  });
+
+  const maximumAudits =
+    Math.max(
+      1,
+      ...months.map(
+        month => month.total
+      )
+    );
+
+  container.innerHTML = `
+    <div class="dashboard-month-list">
+      ${months
+        .map(month => {
+          const passRate =
+            month.total
+              ? Math.round(
+                  month.pass /
+                  month.total *
+                  100
+                )
+              : 0;
+
+          const width =
+            month.total /
+            maximumAudits *
+            100;
+
+          return `
+            <div class="dashboard-month-row">
+              <span>
+                ${escapeHtml(
+                  month.label
+                )}
+              </span>
+
+              <div class="dashboard-month-track">
+                <div
+                  class="dashboard-month-fill"
+                  style="width:${width}%"
+                ></div>
+              </div>
+
+              <strong>
+                ${month.total}
+              </strong>
+
+              <small>
+                ${passRate}% PASS
+              </small>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
 function setTab(name) {
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === name));
 
   el("tabVerbal").classList.toggle("active", name === "verbal");
   el("tabReport").classList.toggle("active", name === "report");
-  el("tabSaved").classList.toggle("active", name === "saved");
-  if (el("tabEngineers")) el("tabEngineers").classList.toggle("active", name === "engineers");
-  if (el("tabAnalytics")) el("tabAnalytics").classList.toggle("active", name === "analytics");
+  el("tabSaved").classList.toggle(
+  "active",
+  name === "saved"
+);
 
-  if (name === "report") renderReportPreview();
-  if (name === "saved") renderSavedList();
-  if (name === "analytics") renderAnalytics();
+if (el("tabEngineers")) {
+  el("tabEngineers").classList.toggle(
+    "active",
+    name === "engineers"
+  );
+}
+
+if (el("tabDashboard")) {
+  el("tabDashboard").classList.toggle(
+    "active",
+    name === "dashboard"
+  );
+}
+
+if (el("tabAnalytics")) {
+  el("tabAnalytics").classList.toggle(
+    "active",
+    name === "analytics"
+  );
+}
+
+if (name === "report") {
+  renderReportPreview();
+}
+
+if (name === "saved") {
+  renderSavedList();
+}
+
+if (name === "dashboard") {
+  renderExecutiveDashboard();
+}
+
+if (name === "analytics") {
+  renderAnalytics();
+}
   if (name === "engineers") {
   refreshEngineerDropdown(); 
   // ✅ Load saved draft for current engineer/range (do NOT overwrite by regenerating)
