@@ -1413,7 +1413,10 @@ body.light .analytics-bar-track{background:rgba(0,0,0,.07)}
     background: #b91c1c !important;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
-  }
+ }
+
+/* Close @media print */
+}
 /* =========================================================
    ENGINEER REPEAT, MONTHLY AND COMPARISON ANALYTICS
    ========================================================= */
@@ -1554,6 +1557,9 @@ body.light .analytics-bar-track{background:rgba(0,0,0,.07)}
   .analytics-change-bad {
     color: #b91c1c !important;
   }
+
+/* Close @media print */
+}
 /* =========================================================
    PRESENTATION-READY ENGINEER PERFORMANCE CHART
    ========================================================= */
@@ -1813,8 +1819,11 @@ body.engineer-presentation-mode
   }
 
   #engineerPresentationBtn {
-    display: none !important;
-  }
+  display: none !important;
+}
+
+/* Close Engineer Performance print styles */
+}
   .engineer-performance-section {
   width: 100%;
   max-width: 100%;
@@ -2188,5 +2197,371 @@ body.engineer-presentation-mode
 @media (max-width: 380px) {
   #tabAnalytics .analytics-kpis {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+  /* =========================================================
+   ENGINEER PERFORMANCE — CLICKABLE DRILL-DOWN
+   ========================================================= */
+
+.engineer-chart-drilldown,
+.engineer-chart-name-drilldown {
+  cursor: pointer;
+}
+
+.engineer-chart-drilldown rect {
+  transition:
+    opacity 0.15s ease,
+    filter 0.15s ease;
+}
+
+.engineer-chart-drilldown:hover rect,
+.engineer-chart-drilldown:focus rect {
+  opacity: 0.82;
+  filter:
+    drop-shadow(
+      0 3px 3px rgba(0,0,0,.28)
+    );
+}
+
+.engineer-chart-drilldown:focus,
+.engineer-chart-name-drilldown:focus {
+  outline: none;
+}
+
+.engineer-chart-drilldown:focus rect {
+  stroke: #111827;
+  stroke-width: 2;
+}
+
+.engineer-chart-name-drilldown {
+  text-decoration: underline;
+  text-decoration-color:
+    rgba(124,58,237,.35);
+  text-underline-offset: 3px;
+}
+
+.engineer-chart-name-drilldown:hover,
+.engineer-chart-name-drilldown:focus {
+  fill: #7c3aed;
+  text-decoration-color: #7c3aed;
+}
+  /* =========================================================
+   MANAGEMENT REPORT SPLIT BUTTON AND PERIOD MENU
+   ========================================================= */
+
+.management-report-launcher {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+}
+
+.management-report-main-btn {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.management-report-menu-btn {
+  min-width: 42px;
+  padding-left: 11px;
+  padding-right: 11px;
+  border-left:
+    1px solid rgba(255,255,255,.24);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.management-report-menu-btn[aria-expanded="true"] {
+  filter: brightness(.92);
+}
+
+.management-report-menu {
+  position: absolute;
+  z-index: 1000;
+  top: calc(100% + 7px);
+  left: 0;
+  width: max-content;
+  min-width: 215px;
+  overflow: hidden;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow:
+    0 16px 38px rgba(0,0,0,.22);
+}
+
+.management-report-menu.hidden {
+  display: none;
+}
+
+.management-report-menu button {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.management-report-menu button:hover,
+.management-report-menu button:focus-visible {
+  outline: none;
+  background:
+    rgba(168,85,247,.13);
+}
+
+@media (max-width: 560px) {
+  .management-report-launcher {
+    max-width: 100%;
+  }
+
+  .management-report-main-btn {
+    min-width: 0;
+  }
+
+  .management-report-menu {
+    right: 0;
+    left: auto;
+    min-width: 220px;
+    max-width:
+      calc(100vw - 32px);
+  }
+}
+ /* =========================================================
+   ANALYTICS PERFORMANCE ALERTS
+   ========================================================= */
+
+.analytics-alerts-card {
+  margin: 12px 0;
+  padding: 14px;
+}
+
+.analytics-alerts-card .analytics-card-head {
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.analytics-alerts-card h3 {
+  margin: 0 0 4px;
+}
+
+.analytics-alert-count {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border: 1px solid rgba(124,58,237,.20);
+  border-radius: 999px;
+  background: rgba(124,58,237,.10);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.analytics-alerts-message {
+  padding: 22px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 13px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 13px;
+}
+
+.analytics-alert-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.analytics-alert-row {
+  display: grid;
+  grid-template-columns:
+    12px
+    minmax(0,1fr)
+    auto;
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255,255,255,.03);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 1px 0 rgba(255,255,255,.02) inset;
+  transition:
+    transform .15s ease,
+    border-color .15s ease,
+    box-shadow .15s ease,
+    background .15s ease;
+}
+
+.analytics-alert-row:hover {
+  transform: translateY(-1px);
+  border-color: rgba(168,85,247,.35);
+  background: rgba(168,85,247,.06);
+  box-shadow: 0 10px 22px rgba(0,0,0,.10);
+}
+
+.analytics-alert-row:focus-visible {
+  outline: 3px solid rgba(168,85,247,.28);
+  outline-offset: 2px;
+}
+
+.analytics-alert-status {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  align-self: flex-start;
+  margin-top: 6px;
+}
+
+.analytics-alert-copy {
+  display: block;
+  min-width: 0;
+}
+
+.analytics-alert-topline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.analytics-alert-topline strong {
+  display: inline;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.analytics-alert-message {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.analytics-alert-tone-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+
+.analytics-alert-tone-pill-danger {
+  background: rgba(220,38,38,.12);
+  color: #dc2626;
+}
+
+.analytics-alert-tone-pill-warning {
+  background: rgba(217,119,6,.14);
+  color: #d97706;
+}
+
+.analytics-alert-tone-pill-success {
+  background: rgba(22,163,74,.14);
+  color: #16a34a;
+}
+
+.analytics-alert-tone-pill-info {
+  background: rgba(37,99,235,.12);
+  color: #2563eb;
+}
+
+.analytics-alert-open {
+  align-self: center;
+  color: #7c3aed;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.analytics-alert-danger {
+  border-left: 4px solid #dc2626;
+}
+
+.analytics-alert-danger .analytics-alert-status {
+  background: #dc2626;
+}
+
+.analytics-alert-warning {
+  border-left: 4px solid #d97706;
+}
+
+.analytics-alert-warning .analytics-alert-status {
+  background: #d97706;
+}
+
+.analytics-alert-success {
+  border-left: 4px solid #16a34a;
+}
+
+.analytics-alert-success .analytics-alert-status {
+  background: #16a34a;
+}
+
+.analytics-alert-info {
+  border-left: 4px solid #2563eb;
+}
+
+.analytics-alert-info .analytics-alert-status {
+  background: #2563eb;
+}
+
+.analytics-alerts-clear {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px;
+  border: 1px solid rgba(34,197,94,.30);
+  border-radius: 13px;
+  background: rgba(34,197,94,.09);
+}
+
+.analytics-alert-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(34,197,94,.18);
+  color: #16a34a;
+  font-weight: 900;
+}
+
+.analytics-alerts-clear strong {
+  display: block;
+  font-size: 13px;
+}
+
+.analytics-alerts-clear p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 650px) {
+  .analytics-alert-row {
+    grid-template-columns:
+      12px
+      minmax(0,1fr);
+  }
+
+  .analytics-alert-open {
+    display: none;
   }
 }
