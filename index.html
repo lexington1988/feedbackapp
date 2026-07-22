@@ -131,8 +131,9 @@
   <button class="tab active" data-tab="verbal" type="button">Verbal</button>
   <button class="tab" data-tab="report" type="button">Report</button>
   <button class="tab" data-tab="saved" type="button">Saved</button>
-  <button class="tab" data-tab="engineers" type="button">Engineers</button>
-  <button class="tab" data-tab="analytics" type="button">Analytics</button>
+<button class="tab" data-tab="engineers" type="button">Engineers</button>
+<button class="tab" data-tab="dashboard" type="button">Dashboard</button>
+<button class="tab" data-tab="analytics" type="button">Analytics</button>
 </div>
 
 
@@ -271,6 +272,159 @@
 </div>
 
 
+
+<!-- EXECUTIVE DASHBOARD -->
+<div id="tabDashboard" class="tab-panel">
+  <section class="executive-dashboard">
+    <div class="executive-dashboard-header">
+      <div>
+        <h2>Executive Dashboard</h2>
+
+        <p
+          id="dashboardPeriodLabel"
+          class="muted"
+        >
+          Current analytics period
+        </p>
+      </div>
+
+      <div class="dashboard-header-actions">
+        <button
+          id="dashboardManagementReportBtn"
+          class="btn"
+          type="button"
+        >
+          Management Report
+        </button>
+
+        <button
+          id="dashboardOpenAnalyticsBtn"
+          class="btn ghost"
+          type="button"
+        >
+          Full Analytics
+        </button>
+      </div>
+    </div>
+
+    <div class="dashboard-period-controls">
+      <button
+        class="btn ghost small dashboard-period-btn"
+        data-dashboard-period="current-month"
+        type="button"
+      >
+        Current month
+      </button>
+
+      <button
+        class="btn ghost small dashboard-period-btn"
+        data-dashboard-period="previous-month"
+        type="button"
+      >
+        Previous month
+      </button>
+
+      <button
+        class="btn ghost small dashboard-period-btn"
+        data-dashboard-period="current-quarter"
+        type="button"
+      >
+        Current quarter
+      </button>
+
+      <button
+        class="btn ghost small dashboard-period-btn"
+        data-dashboard-period="previous-quarter"
+        type="button"
+      >
+        Previous quarter
+      </button>
+
+      <button
+        class="btn ghost small dashboard-period-btn"
+        data-dashboard-period="last-12-months"
+        type="button"
+      >
+        Last 12 months
+      </button>
+    </div>
+
+    <div
+      id="dashboardKpis"
+      class="dashboard-kpi-grid"
+    ></div>
+
+    <div
+      id="dashboardRiskKpis"
+      class="dashboard-risk-grid"
+    ></div>
+
+    <div class="dashboard-content-grid">
+      <section class="dashboard-panel">
+        <div class="dashboard-panel-head">
+          <div>
+            <h3>Top issues</h3>
+            <span class="muted">
+              Click an issue to view its records
+            </span>
+          </div>
+        </div>
+
+        <div id="dashboardTopIssues"></div>
+      </section>
+
+      <section class="dashboard-panel">
+        <div class="dashboard-panel-head">
+          <div>
+            <h3>Performance alerts</h3>
+            <span class="muted">
+              Highest-priority changes
+            </span>
+          </div>
+
+          <button
+            id="dashboardViewAllAlertsBtn"
+            class="dashboard-text-button"
+            type="button"
+          >
+            View all
+          </button>
+        </div>
+
+        <div id="dashboardAlerts"></div>
+      </section>
+
+      <section class="dashboard-panel">
+        <div class="dashboard-panel-head">
+          <div>
+            <h3>Engineer snapshot</h3>
+            <span class="muted">
+              Based on PASS rate, audit volume and defects per audit
+            </span>
+          </div>
+        </div>
+
+        <div
+          id="dashboardEngineerSnapshot"
+          class="dashboard-engineer-snapshot"
+        ></div>
+      </section>
+
+      <section class="dashboard-panel">
+        <div class="dashboard-panel-head">
+          <div>
+            <h3>Six-month trend</h3>
+            <span class="muted">
+              Audit volume and PASS rate
+            </span>
+          </div>
+        </div>
+
+        <div id="dashboardMonthlyTrend"></div>
+      </section>
+    </div>
+  </section>
+</div>
 
 <!-- ANALYTICS -->
 <div id="tabAnalytics" class="tab-panel">
