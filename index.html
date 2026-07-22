@@ -312,7 +312,34 @@
 
   <div id="analyticsKpis" class="analytics-kpis"></div>
 
-  <div class="analytics-grid">
+<section
+  id="analyticsAlertsCard"
+  class="analytics-card analytics-alerts-card"
+>
+  <div class="analytics-card-head">
+    <div>
+      <h3>Performance Alerts</h3>
+
+      <span
+        id="analyticsAlertsPeriod"
+        class="muted"
+      ></span>
+    </div>
+
+    <span
+      id="analyticsAlertsCount"
+      class="analytics-alert-count hidden"
+    ></span>
+  </div>
+
+  <div id="analyticsAlerts">
+    <div class="analytics-empty">
+      Select a date range to compare performance.
+    </div>
+  </div>
+</section>
+
+<div class="analytics-grid">
     <section class="analytics-card">
       <div class="analytics-card-head"><h3>Most common defects</h3><span id="topDefectsCaption" class="muted"></span></div>
       <div id="topDefectsChart" class="analytics-chart"></div>
@@ -381,13 +408,91 @@
   </div>
 
   <div class="analytics-actions">
+  <div
+  id="managementReportLauncher"
+  class="management-report-launcher"
+>
   <button
     id="managementReportBtn"
-    class="btn"
+    class="btn management-report-main-btn"
     type="button"
   >
     Management Report
   </button>
+
+  <button
+    id="managementReportMenuBtn"
+    class="btn management-report-menu-btn"
+    type="button"
+    aria-label="Choose management report period"
+    aria-haspopup="true"
+    aria-expanded="false"
+  >
+    ▼
+  </button>
+
+  <div
+    id="managementReportMenu"
+    class="management-report-menu hidden"
+    role="menu"
+  >
+    <button
+      type="button"
+      role="menuitem"
+      data-report-period="current-selection"
+    >
+      Current selection
+    </button>
+
+    <button
+      type="button"
+      role="menuitem"
+      data-report-period="previous-month"
+    >
+      Previous month
+    </button>
+
+    <button
+      type="button"
+      role="menuitem"
+      data-report-period="current-month"
+    >
+      Current month
+    </button>
+
+    <button
+      type="button"
+      role="menuitem"
+      data-report-period="previous-quarter"
+    >
+      Previous quarter
+    </button>
+
+    <button
+      type="button"
+      role="menuitem"
+      data-report-period="current-quarter"
+    >
+      Current quarter
+    </button>
+
+    <button
+      type="button"
+      role="menuitem"
+      data-report-period="last-30-days"
+    >
+      Last 30 days
+    </button>
+
+    <button
+      type="button"
+      role="menuitem"
+      data-report-period="last-12-months"
+    >
+      Last 12 months
+    </button>
+  </div>
+</div>
 
   <button
     id="exportAnalyticsCsvBtn"
