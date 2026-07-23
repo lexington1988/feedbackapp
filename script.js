@@ -10901,10 +10901,198 @@ function openManagementReport() {
     : 0;
 
   const defectsPerAudit = audits.length
-    ? defects.length / audits.length
-    : 0;
+  ? defects.length / audits.length
+  : 0;
 
-  const severityCounts = {
+/*
+  Calculate the immediately preceding
+  equivalent reporting period.
+*/
+const comparisonPeriods =
+  getAnalyticsComparisonPeriods();
+
+let previousAudits = [];
+let previousDefects = [];
+
+if (comparisonPeriods) {
+  const previousSelection =
+    getAnalyticsSelectionForRange(
+      comparisonPeriods.previousFrom,
+      comparisonPeriods.previousTo
+    );
+
+  previousAudits =
+    previousSelection.audits;
+
+  previousDefects =
+    previousSelection.defects;
+}
+
+const previousPassCount =
+  previousAudits.filter(audit =>
+    isPassingOutcome(
+      audit.outcome
+    )
+  ).length;
+
+const previousPassRate =
+  previousAudits.length
+    ? Math.round(
+        (
+          previousPassCount /
+          previousAudits.length
+        ) * 100
+      )
+    : null;
+
+const previousDefectsPerAudit =
+  previousAudits.length
+    ? (
+        previousDefects.length /
+        previousAudits.length
+      )
+    : null;
+
+function buildManagementKpiComparison(
+  currentValue,
+  previousValue,
+  options = {}
+) {
+  const {
+    decimals = 0,
+    suffix = "",
+    percentagePoints = false,
+    lowerIsBetter = false,
+    neutralChange = false
+  } = options;
+
+  if (
+    previousValue === null ||
+    previousValue === undefined
+  ) {
+    return `
+      <span class="kpi-previous">
+        Previous: No audit data
+      </span>
+
+      <span class="kpi-change kpi-change-neutral">
+        No comparison available
+      </span>
+    `;
+  }
+
+  const current =
+    Number(currentValue) || 0;
+
+  const previous =
+    Number(previousValue) || 0;
+
+  const difference =
+    current - previous;
+
+  const previousText =
+    `${previous.toFixed(decimals)}${suffix}`;
+
+  if (
+    Math.abs(difference) <
+    Math.pow(10, -decimals) / 2
+  ) {
+    return `
+      <span class="kpi-previous">
+        Previous: ${escapeHtml(
+          previousText
+        )}
+      </span>
+
+      <span class="kpi-change kpi-change-neutral">
+        No change
+      </span>
+    `;
+  }
+
+  let toneClass =
+    "kpi-change-info";
+
+  if (!neutralChange) {
+    const improved =
+      lowerIsBetter
+        ? difference < 0
+        : difference > 0;
+
+    toneClass = improved
+      ? "kpi-change-good"
+      : "kpi-change-bad";
+  }
+
+  const differenceText =
+    `${Math.abs(difference).toFixed(
+      decimals
+    )}${
+      percentagePoints
+        ? " points"
+        : suffix
+    }`;
+
+  return `
+    <span class="kpi-previous">
+      Previous: ${escapeHtml(
+        previousText
+      )}
+    </span>
+
+    <span
+      class="
+        kpi-change
+        ${toneClass}
+      "
+    >
+      ${difference > 0 ? "↑" : "↓"}
+      ${escapeHtml(
+        differenceText
+      )}
+    </span>
+  `;
+}
+
+const auditComparisonHtml =
+  buildManagementKpiComparison(
+    audits.length,
+    previousAudits.length,
+    {
+      neutralChange: true
+    }
+  );
+
+const defectComparisonHtml =
+  buildManagementKpiComparison(
+    defects.length,
+    previousDefects.length,
+    {
+      lowerIsBetter: true
+    }
+  );
+
+const passRateComparisonHtml =
+  buildManagementKpiComparison(
+    passRate,
+    previousPassRate,
+    {
+      suffix: "%",
+      percentagePoints: true
+    }
+  );
+
+const defectsPerAuditComparisonHtml =
+  buildManagementKpiComparison(
+    defectsPerAudit,
+    previousDefectsPerAudit,
+    {
+      decimals: 2,
+      lowerIsBetter: true
+    }
+  );
+
+const severityCounts = {
     ID: 0,
     AR: 0,
     NCS: 0,
@@ -11443,11 +11631,47 @@ const strongestEngineer =
           }
 
           .kpi-label {
-            display: block;
-            margin-top: 5px;
-            color: #675d70;
-            font-size: 12px;
-          }
+  display: block;
+  margin-bottom: 5px;
+  color: #675d70;
+  font-size: 12px;
+}
+
+.kpi-comparison {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 7px;
+}
+
+.kpi-previous {
+  display: block;
+  color: #675d70;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.kpi-change {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.kpi-change-good {
+  color: #15803d;
+}
+
+.kpi-change-bad {
+  color: #b91c1c;
+}
+
+.kpi-change-info {
+  color: #6d28d9;
+}
+
+.kpi-change-neutral {
+  color: #675d70;
+}
 
           .pass-fail-grid {
             display: grid;
@@ -11685,7 +11909,7 @@ const strongestEngineer =
    @media print {
   @page {
     size: A4 portrait;
-    margin: 5mm;
+    margin: 3mm;
   }
 
   html,
@@ -11702,7 +11926,7 @@ const strongestEngineer =
     fitting comfortably on one A4 page.
   */
   body {
-    zoom: 0.72;
+    zoom: 0.84;
   }
 
   .toolbar {
@@ -11713,7 +11937,7 @@ const strongestEngineer =
     width: 100%;
     max-width: none;
     margin: 0;
-    padding: 20px;
+    padding: 12px;
     border: 0;
     border-radius: 0;
     box-shadow: none;
@@ -11727,7 +11951,7 @@ const strongestEngineer =
   .report-header {
     flex-direction: row;
     align-items: flex-start;
-    margin-bottom: 19px;
+    margin-bottom: 10px;
   }
 
   .report-header h1 {
@@ -11745,7 +11969,7 @@ const strongestEngineer =
   }
 
   .report-section {
-    margin-top: 17px;
+    margin-top: 11px;
     break-inside: auto;
     page-break-inside: auto;
   }
@@ -11767,7 +11991,7 @@ const strongestEngineer =
   }
 
   .kpi-card {
-    padding: 13px 10px;
+    padding: 9px 10px;
     border-radius: 13px;
     break-inside: avoid;
   }
@@ -11789,10 +12013,10 @@ const strongestEngineer =
   }
 
   .pass-card,
-  .fail-card {
-    padding: 14px;
-    border-radius: 13px;
-  }
+.fail-card {
+  padding: 9px 12px;
+  border-radius: 13px;
+}
 
   .pass-card strong,
   .fail-card strong {
@@ -11812,7 +12036,7 @@ const strongestEngineer =
   }
 
   .severity-card {
-    padding: 13px;
+    padding: 9px;
     border-radius: 13px;
     break-inside: avoid;
   }
@@ -11833,7 +12057,7 @@ const strongestEngineer =
   }
 
   .report-panel {
-    padding: 14px;
+    padding: 10px;
     border-radius: 14px;
     break-inside: auto;
     page-break-inside: auto;
@@ -11845,7 +12069,7 @@ const strongestEngineer =
   }
 
   .report-bars {
-    gap: 9px;
+    gap: 5px;
   }
 
   .report-bar-heading {
@@ -11872,7 +12096,7 @@ const strongestEngineer =
   }
 
   .report-bar-track {
-    height: 10px;
+    height: 7px;
   }
 
   .report-table-wrap {
@@ -11887,16 +12111,16 @@ const strongestEngineer =
   }
 
   .report-table th,
-  .report-table td {
-    padding: 5px 7px;
-    line-height: 1.25;
-  }
+.report-table td {
+  padding: 3px 6px;
+  line-height: 1.15;
+}
 
   .management-summary {
-    padding: 14px 16px;
-    border-radius: 14px;
-    break-inside: avoid;
-  }
+  padding: 9px 12px;
+  border-radius: 14px;
+  break-inside: avoid;
+}
 
   .management-summary h2 {
     margin-bottom: 8px;
@@ -11908,10 +12132,10 @@ const strongestEngineer =
   }
 
   .management-summary li {
-    margin-bottom: 5px;
-    font-size: 9.5px;
-    line-height: 1.4;
-  }
+  margin-bottom: 2px;
+  font-size: 9.5px;
+  line-height: 1.25;
+}
 
   .management-summary li:last-child {
     margin-bottom: 0;
@@ -11922,20 +12146,27 @@ const strongestEngineer =
 
       <body>
         <div class="toolbar">
-          <button
-            type="button"
-            onclick="window.print()"
-          >
-            Print / Save PDF
-          </button>
+  <button
+    type="button"
+    onclick="window.print()"
+  >
+    Print / Save PDF
+  </button>
 
-          <button
-            type="button"
-            onclick="window.close()"
-          >
-            Close
-          </button>
-        </div>
+  <button
+    type="button"
+    onclick="saveManagementReportHtml()"
+  >
+    Save / Share HTML
+  </button>
+
+  <button
+    type="button"
+    onclick="window.close()"
+  >
+    Close
+  </button>
+</div>
 
         <main class="report-page">
           <header class="report-header">
@@ -11980,46 +12211,62 @@ const strongestEngineer =
             <h2>Performance overview</h2>
 
             <div class="kpi-grid">
-              <div class="kpi-card">
-                <span class="kpi-value">
-                  ${audits.length}
-                </span>
+  <div class="kpi-card">
+    <span class="kpi-label">
+      Audits
+    </span>
 
-                <span class="kpi-label">
-                  Audits
-                </span>
-              </div>
+    <span class="kpi-value">
+      ${audits.length}
+    </span>
 
-              <div class="kpi-card">
-                <span class="kpi-value">
-                  ${defects.length}
-                </span>
+    <div class="kpi-comparison">
+      ${auditComparisonHtml}
+    </div>
+  </div>
 
-                <span class="kpi-label">
-                  Defects
-                </span>
-              </div>
+  <div class="kpi-card">
+    <span class="kpi-label">
+      Defects
+    </span>
 
-              <div class="kpi-card">
-                <span class="kpi-value">
-                  ${passRate}%
-                </span>
+    <span class="kpi-value">
+      ${defects.length}
+    </span>
 
-                <span class="kpi-label">
-                  PASS rate
-                </span>
-              </div>
+    <div class="kpi-comparison">
+      ${defectComparisonHtml}
+    </div>
+  </div>
 
-              <div class="kpi-card">
-                <span class="kpi-value">
-                  ${defectsPerAudit.toFixed(2)}
-                </span>
+  <div class="kpi-card">
+    <span class="kpi-label">
+      PASS rate
+    </span>
 
-                <span class="kpi-label">
-                  Defects per audit
-                </span>
-              </div>
-            </div>
+    <span class="kpi-value">
+      ${passRate}%
+    </span>
+
+    <div class="kpi-comparison">
+      ${passRateComparisonHtml}
+    </div>
+  </div>
+
+  <div class="kpi-card">
+    <span class="kpi-label">
+      Defects per audit
+    </span>
+
+    <span class="kpi-value">
+      ${defectsPerAudit.toFixed(2)}
+    </span>
+
+    <div class="kpi-comparison">
+      ${defectsPerAuditComparisonHtml}
+    </div>
+  </div>
+</div>
 
             <div class="pass-fail-grid">
               <div class="pass-card">
@@ -12136,7 +12383,132 @@ const strongestEngineer =
               </ul>
             </div>
           </section>
-        </main>
+                </main>
+
+        <script>
+          async function saveManagementReportHtml() {
+            try {
+              const documentClone =
+                document.documentElement
+                  .cloneNode(true);
+
+              /*
+                Remove the popup toolbar so the
+                saved report contains only the
+                finished management report.
+              */
+              documentClone
+                .querySelector(".toolbar")
+                ?.remove();
+
+              /*
+                Remove this export script from
+                the standalone saved document.
+              */
+              documentClone
+                .querySelectorAll("script")
+                .forEach(script =>
+                  script.remove()
+                );
+
+              const fullHtml =
+                "<!doctype html>\\n" +
+                documentClone.outerHTML;
+
+              const safeFromDate =
+                "${escapeHtml(
+                  fromDate || "start"
+                )}";
+
+              const safeToDate =
+                "${escapeHtml(
+                  toDate || "end"
+                )}";
+
+              const filename =
+                "PPC-Management-Report-" +
+                safeFromDate +
+                "-to-" +
+                safeToDate +
+                ".html";
+
+              const blob = new Blob(
+                [fullHtml],
+                {
+                  type:
+                    "text/html;charset=utf-8"
+                }
+              );
+
+              const file = new File(
+                [blob],
+                filename,
+                {
+                  type: "text/html"
+                }
+              );
+
+              /*
+                On supported phones and tablets,
+                open the normal sharing menu.
+              */
+              if (
+                navigator.share &&
+                navigator.canShare &&
+                navigator.canShare({
+                  files: [file]
+                })
+              ) {
+                await navigator.share({
+                  title:
+                    "PPC Management Report",
+
+                  text:
+                    "PPC Management Report attached.",
+
+                  files: [file]
+                });
+
+                return;
+              }
+
+              /*
+                Desktop and unsupported-browser
+                fallback: download the HTML file.
+              */
+              const url =
+                URL.createObjectURL(blob);
+
+              const link =
+                document.createElement("a");
+
+              link.href = url;
+              link.download = filename;
+
+              document.body.appendChild(
+                link
+              );
+
+              link.click();
+              link.remove();
+
+              setTimeout(
+                () => {
+                  URL.revokeObjectURL(
+                    url
+                  );
+                },
+                1000
+              );
+            } catch (error) {
+              console.error(error);
+
+              alert(
+                "The HTML report could not be saved or shared."
+              );
+            }
+          }
+        <\/script>
       </body>
     </html>
   `);
