@@ -2593,6 +2593,15 @@ body.engineer-presentation-mode
   gap: 8px;
 }
 
+.quarterly-ppt-btn {
+  white-space: nowrap;
+}
+
+.quarterly-ppt-btn[disabled] {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .dashboard-period-controls {
   margin-bottom: 14px;
   padding-bottom: 13px;
@@ -2977,6 +2986,205 @@ body.light .dashboard-month-track {
   color: var(--muted);
   text-align: center;
   font-size: 12px;
+}
+
+/* =========================================================
+   EXTERNAL PERFORMANCE METRICS
+   ========================================================= */
+
+.dashboard-external-section {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.dashboard-external-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.dashboard-external-heading h3 {
+  margin: 0 0 3px;
+  font-size: 16px;
+}
+
+.dashboard-import-status {
+  max-width: 48%;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.dashboard-external-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 12px;
+}
+
+.dashboard-external-panel {
+  min-height: 285px;
+}
+
+.dashboard-external-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 8px;
+}
+
+.dashboard-external-metrics-five {
+  grid-template-columns: repeat(5, minmax(0,1fr));
+}
+
+.dashboard-external-metric {
+  min-width: 0;
+  padding: 11px 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255,255,255,.025);
+  text-align: center;
+}
+
+.dashboard-external-metric span {
+  display: block;
+  min-height: 26px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.dashboard-external-metric strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 20px;
+}
+
+.dashboard-external-metric small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.35;
+}
+
+.dashboard-mini-chart {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  align-items: end;
+  gap: 18px;
+  min-height: 125px;
+  margin-top: 14px;
+  padding: 12px 18px 0;
+  border-top: 1px solid var(--border);
+}
+
+.dashboard-mini-column {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  height: 110px;
+}
+
+.dashboard-mini-column strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 14px;
+}
+
+.dashboard-mini-bar-wrap {
+  display: flex;
+  align-items: flex-end;
+  width: 72%;
+  height: 72px;
+}
+
+.dashboard-mini-bar {
+  width: 100%;
+  min-height: 3px;
+  border-radius: 7px 7px 2px 2px;
+  background: linear-gradient(
+    180deg,
+    var(--brand),
+    var(--brand2)
+  );
+}
+
+.dashboard-mini-column span {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 9px;
+  text-align: center;
+}
+
+.dashboard-morgan-comparison {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.dashboard-morgan-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 8px;
+}
+
+.dashboard-morgan-period {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255,255,255,.025);
+}
+
+.dashboard-morgan-period strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 11px;
+}
+
+.dashboard-morgan-period span {
+  display: block;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.dashboard-import-error {
+  color: #dc2626;
+}
+
+@media (max-width: 1000px) {
+  .dashboard-external-metrics-five {
+    grid-template-columns:
+      repeat(3, minmax(0,1fr));
+  }
+}
+
+@media (max-width: 850px) {
+  .dashboard-external-grid {
+    grid-template-columns: minmax(0,1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .dashboard-external-heading {
+    flex-direction: column;
+  }
+
+  .dashboard-import-status {
+    max-width: none;
+    text-align: left;
+  }
+
+  .dashboard-external-metrics,
+  .dashboard-external-metrics-five {
+    grid-template-columns:
+      repeat(2, minmax(0,1fr));
+  }
 }
 
 @media (max-width: 850px) {
