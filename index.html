@@ -289,21 +289,45 @@
       </div>
 
       <div class="dashboard-header-actions">
-        <button
-          id="dashboardManagementReportBtn"
-          class="btn"
-          type="button"
-        >
-          Management Report
-        </button>
+       <button
+  id="dashboardManagementReportBtn"
+  class="btn"
+  type="button"
+>
+  Management Report
+</button>
 
-        <button
-          id="dashboardOpenAnalyticsBtn"
-          class="btn ghost"
-          type="button"
-        >
-          Full Analytics
-        </button>
+<input
+  id="performanceWorkbookInput"
+  class="hidden"
+  type="file"
+  accept=".xlsx,.xlsm,.xlsb,.xls"
+  multiple
+/>
+
+<button
+  id="importPerformanceWorkbookBtn"
+  class="btn ghost"
+  type="button"
+>
+  Import Performance Workbook
+</button>
+
+<button
+  id="generateQuarterlyPptBtn"
+  class="btn ghost quarterly-ppt-btn"
+  type="button"
+>
+  Generate Quarterly PowerPoint
+</button>
+
+<button
+  id="dashboardOpenAnalyticsBtn"
+  class="btn ghost"
+  type="button"
+>
+  Full Analytics
+</button>
       </div>
     </div>
 
@@ -420,9 +444,71 @@
           </div>
         </div>
 
-        <div id="dashboardMonthlyTrend"></div>
+                <div id="dashboardMonthlyTrend"></div>
       </section>
     </div>
+
+    <section class="dashboard-external-section">
+      <div class="dashboard-external-heading">
+        <div>
+          <h3>External Performance Metrics</h3>
+          <span class="muted">
+            Imported from the performance workbook
+          </span>
+        </div>
+
+        <span
+          id="performanceWorkbookStatus"
+          class="dashboard-import-status"
+        >
+          No workbook imported
+        </span>
+      </div>
+
+      <div class="dashboard-external-grid">
+        <section class="dashboard-panel dashboard-external-panel">
+          <div class="dashboard-panel-head">
+            <div>
+              <h3>TCW Errors</h3>
+              <span class="muted">
+                Current period vs comparison period
+              </span>
+            </div>
+          </div>
+
+          <div
+            id="dashboardTcwMetrics"
+            class="dashboard-external-metrics"
+          ></div>
+
+          <div
+            id="dashboardTcwChart"
+            class="dashboard-mini-chart"
+          ></div>
+        </section>
+
+        <section class="dashboard-panel dashboard-external-panel">
+          <div class="dashboard-panel-head">
+            <div>
+              <h3>Morgan &amp; Lambert</h3>
+              <span class="muted">
+                Current-period audit performance
+              </span>
+            </div>
+          </div>
+
+          <div
+            id="dashboardMorganMetrics"
+            class="dashboard-external-metrics dashboard-external-metrics-five"
+          ></div>
+
+          <div
+            id="dashboardMorganComparison"
+            class="dashboard-morgan-comparison"
+          ></div>
+        </section>
+      </div>
+    </section>
   </section>
 </div>
 
@@ -433,12 +519,47 @@
       <span>From</span>
       <input id="analyticsFrom" type="date" />
     </label>
-    <label class="field inline">
-      <span>To</span>
-      <input id="analyticsTo" type="date" />
-    </label>
-    <label class="field inline">
-      <span>Engineer</span>
+   <label class="field inline">
+  <span>To</span>
+  <input id="analyticsTo" type="date" />
+</label>
+
+<label class="field inline">
+  <span>Compare with</span>
+  <select id="analyticsCompareMode">
+    <option value="previous-equivalent" selected>
+      Previous equivalent period
+    </option>
+    <option value="previous-quarter">
+      Previous quarter
+    </option>
+    <option value="previous-year">
+      Same period last year
+    </option>
+    <option value="custom">
+      Custom period
+    </option>
+  </select>
+</label>
+
+<label
+  id="analyticsCompareFromWrap"
+  class="field inline hidden"
+>
+  <span>Comparison from</span>
+  <input id="analyticsCompareFrom" type="date" />
+</label>
+
+<label
+  id="analyticsCompareToWrap"
+  class="field inline hidden"
+>
+  <span>Comparison to</span>
+  <input id="analyticsCompareTo" type="date" />
+</label>
+
+<label class="field inline">
+  <span>Engineer</span>
       <select id="analyticsEngineer"><option value="">All engineers</option></select>
     </label>
     <label class="field inline">
@@ -829,6 +950,12 @@
 <!-- PDF export (used by Email button to share a PDF) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<!-- Excel workbook import -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<!-- PowerPoint export -->
+<script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs/dist/pptxgen.bundle.js"></script>
 
 <!-- Your app script -->
 <script src="./script.js"></script>
