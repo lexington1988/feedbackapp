@@ -12,6 +12,15 @@ const ENGINEER_DRAFTS_KEY = "ppc_engineer_summary_drafts_v1";
 const ANALYTICS_DEFECTS_KEY = "ppc_analytics_defects_v1";
 const ANALYTICS_AUDITS_KEY = "ppc_analytics_audits_v1";
 
+const TCW_ERRORS_KEY =
+  "ppc_tcw_errors_v1";
+
+const MORGAN_LAMBERT_AUDITS_KEY =
+  "ppc_morgan_lambert_audits_v1";
+
+const PERFORMANCE_IMPORT_META_KEY =
+  "ppc_performance_import_meta_v1";
+
 const el = (id) => document.getElementById(id);
 const uid = () => Math.random().toString(16).slice(2) + Date.now().toString(16);
 function closeMobileKeyboard(input = null) {
@@ -38,6 +47,62 @@ const analyticsState = {
   audits: loadAnalyticsArray(ANALYTICS_AUDITS_KEY)
 };
 
+const performanceState = {
+  tcwErrors:
+    loadAnalyticsArray(
+      TCW_ERRORS_KEY
+    ),
+
+  morganLambertAudits:
+    loadAnalyticsArray(
+      MORGAN_LAMBERT_AUDITS_KEY
+    ),
+
+  importMeta:
+    loadPerformanceImportMeta()
+};
+function loadPerformanceImportMeta() {
+  try {
+    const parsed =
+      JSON.parse(
+        localStorage.getItem(
+          PERFORMANCE_IMPORT_META_KEY
+        ) || "null"
+      );
+
+    return parsed &&
+      typeof parsed === "object"
+      ? parsed
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+
+function savePerformanceState() {
+  localStorage.setItem(
+    TCW_ERRORS_KEY,
+    JSON.stringify(
+      performanceState.tcwErrors
+    )
+  );
+
+  localStorage.setItem(
+    MORGAN_LAMBERT_AUDITS_KEY,
+    JSON.stringify(
+      performanceState
+        .morganLambertAudits
+    )
+  );
+
+  localStorage.setItem(
+    PERFORMANCE_IMPORT_META_KEY,
+    JSON.stringify(
+      performanceState.importMeta
+    )
+  );
+}
 function loadAnalyticsArray(key) {
   try {
     const parsed = JSON.parse(localStorage.getItem(key) || "[]");
@@ -1194,10 +1259,15 @@ initBoilersLibrary().then(() => {
   initBoilerTypeahead();
 
   });
-  initDefectsImportButton();
-  initAnalytics();
-initExecutiveDashboard();
-if (el("rangeSelect")) el("rangeSelect").value = "qCurrent";
+   initDefectsImportButton();
+   initAnalytics();
+  initExecutiveDashboard();
+  initPerformanceWorkbookImport();
+  initQuarterlyPowerPointGenerator();
+
+  if (el("rangeSelect")) {
+    el("rangeSelect").value = "qCurrent";
+  }
   
   const today = new Date();
   el("dateInput").value = today.toISOString().slice(0, 10);
@@ -5013,6 +5083,25 @@ const filename = `${clean(engineerName)} - ${clean(jobRef)} - ${datePretty}.pdf`
 
 
 // ================= Defects & audit analytics =================
+function updateAnalyticsComparisonControls() {
+  const custom =
+    el("analyticsCompareMode")?.value ===
+    "custom";
+
+  el("analyticsCompareFromWrap")
+    ?.classList.toggle(
+      "hidden",
+      !custom
+    );
+
+  el("analyticsCompareToWrap")
+    ?.classList.toggle(
+      "hidden",
+      !custom
+    );
+}
+
+
 function initAnalytics() {
   if (!el("tabAnalytics")) return;
 
@@ -5024,8 +5113,33 @@ function initAnalytics() {
   el("analyticsFrom").value = start.toISOString().slice(0,10);
   el("analyticsTo").value = today.toISOString().slice(0,10);
 
-  ["analyticsFrom","analyticsTo","analyticsEngineer","analyticsCategory","analyticsSeverity","analyticsSearch"]
-    .forEach(id => el(id)?.addEventListener(id === "analyticsSearch" ? "input" : "change", renderAnalytics));
+  [
+  "analyticsFrom",
+  "analyticsTo",
+  "analyticsEngineer",
+  "analyticsCategory",
+  "analyticsSeverity",
+  "analyticsSearch",
+  "analyticsCompareFrom",
+  "analyticsCompareTo"
+].forEach(id => {
+  el(id)?.addEventListener(
+    id === "analyticsSearch"
+      ? "input"
+      : "change",
+    renderAnalytics
+  );
+});
+
+el("analyticsCompareMode")?.addEventListener(
+  "change",
+  () => {
+    updateAnalyticsComparisonControls();
+    renderAnalytics();
+  }
+);
+
+updateAnalyticsComparisonControls();
 
   el("analyticsThisMonthBtn")?.addEventListener("click", () => {
     const d = new Date();
@@ -12532,6 +12646,1212 @@ function exportAnalyticsCsv() {
 }
 
 // ---------- Helpers ----------
+function normalizeWorkbookText(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+
+function workbookDateToIso(value) {
+  if (
+    value instanceof Date &&
+    !Number.isNaN(value.getTime())
+  ) {
+    return formatAnalyticsInputDate(
+      value
+    );
+  }
+
+  if (
+    typeof value === "number" &&
+    Number.isFinite(value)
+  ) {
+    const parsed =
+      window.XLSX?.SSF
+        ?.parse_date_code(value);
+
+    if (
+      parsed &&
+      parsed.y &&
+      parsed.m &&
+      parsed.d
+    ) {
+      return [
+        parsed.y,
+        String(parsed.m)
+          .padStart(2, "0"),
+        String(parsed.d)
+          .padStart(2, "0")
+      ].join("-");
+    }
+  }
+
+  const text =
+    String(value ?? "").trim();
+
+  if (!text) return "";
+
+  const isoMatch =
+    text.match(
+      /^(\d{4})-(\d{1,2})-(\d{1,2})/
+    );
+
+  if (isoMatch) {
+    return [
+      isoMatch[1],
+      String(isoMatch[2])
+        .padStart(2, "0"),
+      String(isoMatch[3])
+        .padStart(2, "0")
+    ].join("-");
+  }
+
+  const ukMatch =
+    text.match(
+      /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/
+    );
+
+  if (ukMatch) {
+    let year =
+      Number(ukMatch[3]);
+
+    if (year < 100) {
+      year += 2000;
+    }
+
+    return [
+      year,
+      String(ukMatch[2])
+        .padStart(2, "0"),
+      String(ukMatch[1])
+        .padStart(2, "0")
+    ].join("-");
+  }
+
+  const parsedDate =
+    new Date(text);
+
+  return Number.isNaN(
+    parsedDate.getTime()
+  )
+    ? ""
+    : formatAnalyticsInputDate(
+        parsedDate
+      );
+}
+
+
+function findWorkbookSheet(
+  workbook,
+  requestedName
+) {
+  const requested =
+    normalizeWorkbookText(
+      requestedName
+    );
+
+  const exact =
+    workbook.SheetNames.find(
+      name =>
+        normalizeWorkbookText(name) ===
+        requested
+    );
+
+  if (exact) {
+    return workbook.Sheets[exact];
+  }
+
+  const partial =
+    workbook.SheetNames.find(
+      name => {
+        const normalized =
+          normalizeWorkbookText(name);
+
+        return (
+          normalized.includes(
+            requested
+          ) ||
+          requested.includes(
+            normalized
+          )
+        );
+      }
+    );
+
+  return partial
+    ? workbook.Sheets[partial]
+    : null;
+}
+
+
+function workbookRows(sheet) {
+  if (!sheet) return [];
+
+  return window.XLSX.utils
+    .sheet_to_json(
+      sheet,
+      {
+        header: 1,
+        raw: true,
+        defval: null
+      }
+    );
+}
+
+
+function findWorkbookHeader(
+  rows,
+  requiredHeaderGroups
+) {
+  for (
+    let rowIndex = 0;
+    rowIndex <
+      Math.min(rows.length, 60);
+    rowIndex++
+  ) {
+    const normalizedRow =
+      (rows[rowIndex] || [])
+        .map(
+          normalizeWorkbookText
+        );
+
+    const indexes = {};
+
+    const allFound =
+      Object.entries(
+        requiredHeaderGroups
+      ).every(
+        ([key, alternatives]) => {
+          const index =
+            normalizedRow.findIndex(
+              value =>
+                alternatives.some(
+                  alternative =>
+                    value ===
+                      alternative ||
+                    value.includes(
+                      alternative
+                    )
+                )
+            );
+
+          indexes[key] = index;
+
+          return index >= 0;
+        }
+      );
+
+    if (allFound) {
+      return {
+        rowIndex,
+        indexes
+      };
+    }
+  }
+
+  return null;
+}
+
+
+function importTcwRecords(
+  workbook,
+  sourceFile
+) {
+  const sheet =
+    findWorkbookSheet(
+      workbook,
+      "TCW Fails"
+    );
+
+  if (!sheet) {
+    return [];
+  }
+
+  const rows =
+    workbookRows(sheet);
+
+  const header =
+    findWorkbookHeader(
+      rows,
+      {
+        date: [
+          "date",
+          "audit date",
+          "error date"
+        ]
+      }
+    );
+
+  if (!header) {
+    throw new Error(
+      `A Date heading could not be found on the "TCW Fails" sheet in ${sourceFile.fileName}.`
+    );
+  }
+
+  const imported = [];
+
+  const occurrencesByDate =
+    new Map();
+
+  for (
+    let rowIndex =
+      header.rowIndex + 1;
+    rowIndex < rows.length;
+    rowIndex++
+  ) {
+    const row =
+      rows[rowIndex] || [];
+
+    const date =
+      workbookDateToIso(
+        row[
+          header.indexes.date
+        ]
+      );
+
+    if (!date) continue;
+
+    const occurrence =
+      (
+        occurrencesByDate.get(
+          date
+        ) || 0
+      ) + 1;
+
+    occurrencesByDate.set(
+      date,
+      occurrence
+    );
+
+    imported.push({
+      id:
+        `tcw-${sourceFile.fileKey}-${date}-${occurrence}`,
+
+      date,
+
+      sourceFile:
+        sourceFile.fileName,
+
+      sourceFileKey:
+        sourceFile.fileKey
+    });
+  }
+
+  return imported;
+}
+
+
+function normalizeMorganOutcome(value) {
+  const normalized =
+    normalizeWorkbookText(value);
+
+  if (
+    normalized === "pass" ||
+    normalized.startsWith("pass ")
+  ) {
+    return "PASS";
+  }
+
+  if (
+    normalized === "fail" ||
+    normalized.startsWith("fail ")
+  ) {
+    return "FAIL";
+  }
+
+  return "";
+}
+
+
+function normalizeMorganScore(value) {
+  if (
+    typeof value === "number" &&
+    Number.isFinite(value)
+  ) {
+    return value <= 1.000001
+      ? value * 100
+      : value;
+  }
+
+  const text =
+    String(value ?? "")
+      .replace(/%/g, "")
+      .trim();
+
+  if (!text) return null;
+
+  const number =
+    Number(text);
+
+  if (!Number.isFinite(number)) {
+    return null;
+  }
+
+  return number <= 1.000001
+    ? number * 100
+    : number;
+}
+
+
+function importMorganLambertRecords(
+  workbook,
+  sourceFile
+) {
+  const sheet =
+    findWorkbookSheet(
+      workbook,
+      "Morgan & Lambert"
+    );
+
+  if (!sheet) {
+    return [];
+  }
+
+  const rows =
+    workbookRows(sheet);
+
+  const header =
+    findWorkbookHeader(
+      rows,
+      {
+        date: [
+          "date",
+          "audit date"
+        ],
+
+        score: [
+          "score",
+          "average score",
+          "audit score"
+        ],
+
+        outcome: [
+          "pass fail",
+          "pass or fail",
+          "outcome",
+          "result"
+        ]
+      }
+    );
+
+  if (!header) {
+    throw new Error(
+      `Date, Score and PASS/FAIL headings could not all be found on the "Morgan & Lambert" sheet in ${sourceFile.fileName}.`
+    );
+  }
+
+  const imported = [];
+
+  for (
+    let rowIndex =
+      header.rowIndex + 1;
+    rowIndex < rows.length;
+    rowIndex++
+  ) {
+    const row =
+      rows[rowIndex] || [];
+
+    const date =
+      workbookDateToIso(
+        row[
+          header.indexes.date
+        ]
+      );
+
+    const outcome =
+      normalizeMorganOutcome(
+        row[
+          header.indexes.outcome
+        ]
+      );
+
+    const score =
+      normalizeMorganScore(
+        row[
+          header.indexes.score
+        ]
+      );
+
+    if (
+      !date ||
+      !outcome
+    ) {
+      continue;
+    }
+
+    imported.push({
+      id:
+        `morgan-${sourceFile.fileKey}-${rowIndex}`,
+
+      date,
+      outcome,
+
+      score:
+        Number.isFinite(score)
+          ? score
+          : null,
+
+      sourceFile:
+        sourceFile.fileName,
+
+      sourceFileKey:
+        sourceFile.fileKey
+    });
+  }
+
+  return imported;
+}
+
+
+function performanceWorkbookFileKey(
+  file
+) {
+  const safeName =
+    String(file.name || "")
+      .toLowerCase()
+      .replace(
+        /[^a-z0-9]+/g,
+        "-"
+      )
+      .replace(
+        /^-+|-+$/g,
+        ""
+      );
+
+  return [
+    safeName,
+    file.size || 0,
+    file.lastModified || 0
+  ].join("-");
+}
+
+
+function mergePerformanceRecords(
+  existingRecords,
+  importedRecords
+) {
+  const records =
+    new Map();
+
+  (existingRecords || [])
+    .forEach(record => {
+      if (!record?.id) return;
+
+      records.set(
+        record.id,
+        record
+      );
+    });
+
+  (importedRecords || [])
+    .forEach(record => {
+      if (!record?.id) return;
+
+      records.set(
+        record.id,
+        record
+      );
+    });
+
+  return Array.from(
+    records.values()
+  ).sort(
+    (a, b) =>
+      String(a.date || "")
+        .localeCompare(
+          String(b.date || "")
+        )
+  );
+}
+
+
+function hasLegacyPerformanceRecords() {
+  return [
+    ...(performanceState
+      .tcwErrors || []),
+
+    ...(performanceState
+      .morganLambertAudits || [])
+  ].some(
+    record =>
+      !record.sourceFileKey
+  );
+}
+
+
+async function importPerformanceWorkbooks(
+  files
+) {
+  if (!window.XLSX) {
+    throw new Error(
+      "The Excel import library has not loaded."
+    );
+  }
+
+  const selectedFiles =
+    Array.from(files || []);
+
+  if (!selectedFiles.length) {
+    throw new Error(
+      "No workbook files were selected."
+    );
+  }
+
+  if (
+    hasLegacyPerformanceRecords()
+  ) {
+    const replaceLegacy =
+      window.confirm(
+        "Older imported performance data was found.\n\n" +
+        "Select OK to replace that older data and build a clean historical archive from the files selected now.\n\n" +
+        "Select Cancel to keep the older data and merge these files into it."
+      );
+
+    if (replaceLegacy) {
+      performanceState.tcwErrors =
+        [];
+
+      performanceState
+        .morganLambertAudits =
+          [];
+    }
+  }
+
+  const importedTcw = [];
+  const importedMorgan = [];
+
+  const importedFileNames = [];
+
+  const skippedFileNames = [];
+
+  for (const file of selectedFiles) {
+    const buffer =
+      await file.arrayBuffer();
+
+    const workbook =
+      window.XLSX.read(
+        buffer,
+        {
+          type: "array",
+          cellDates: true
+        }
+      );
+
+    const hasTcwSheet =
+      !!findWorkbookSheet(
+        workbook,
+        "TCW Fails"
+      );
+
+    const hasMorganSheet =
+      !!findWorkbookSheet(
+        workbook,
+        "Morgan & Lambert"
+      );
+
+    if (
+      !hasTcwSheet &&
+      !hasMorganSheet
+    ) {
+      skippedFileNames.push(
+        file.name
+      );
+
+      continue;
+    }
+
+    const sourceFile = {
+      fileName:
+        file.name,
+
+      fileKey:
+        performanceWorkbookFileKey(
+          file
+        )
+    };
+
+    if (hasTcwSheet) {
+      importedTcw.push(
+        ...importTcwRecords(
+          workbook,
+          sourceFile
+        )
+      );
+    }
+
+    if (hasMorganSheet) {
+      importedMorgan.push(
+        ...importMorganLambertRecords(
+          workbook,
+          sourceFile
+        )
+      );
+    }
+
+    importedFileNames.push(
+      file.name
+    );
+  }
+
+  if (
+    !importedFileNames.length
+  ) {
+    throw new Error(
+      'None of the selected files contained a "TCW Fails" or "Morgan & Lambert" sheet.'
+    );
+  }
+
+  const tcwBefore =
+    performanceState
+      .tcwErrors.length;
+
+  const morganBefore =
+    performanceState
+      .morganLambertAudits
+      .length;
+
+  performanceState.tcwErrors =
+    mergePerformanceRecords(
+      performanceState.tcwErrors,
+      importedTcw
+    );
+
+  performanceState
+    .morganLambertAudits =
+      mergePerformanceRecords(
+        performanceState
+          .morganLambertAudits,
+
+        importedMorgan
+      );
+
+  const tcwAdded =
+    performanceState
+      .tcwErrors.length -
+    tcwBefore;
+
+  const morganAdded =
+    performanceState
+      .morganLambertAudits
+      .length -
+    morganBefore;
+
+  performanceState.importMeta = {
+    fileName:
+      importedFileNames.length === 1
+        ? importedFileNames[0]
+        : `${importedFileNames.length} workbooks`,
+
+    fileNames:
+      importedFileNames,
+
+    importedAt:
+      new Date().toISOString(),
+
+    tcwCount:
+      performanceState
+        .tcwErrors.length,
+
+    morganCount:
+      performanceState
+        .morganLambertAudits
+        .length,
+
+    importedTcwCount:
+      importedTcw.length,
+
+    importedMorganCount:
+      importedMorgan.length,
+
+    tcwAdded,
+    morganAdded
+  };
+
+  savePerformanceState();
+
+  renderExecutiveDashboard();
+
+  return {
+    processedFiles:
+      importedFileNames.length,
+
+    skippedFiles:
+      skippedFileNames,
+
+    importedTcwCount:
+      importedTcw.length,
+
+    importedMorganCount:
+      importedMorgan.length,
+
+    tcwAdded,
+    morganAdded,
+
+    tcwCount:
+      performanceState
+        .tcwErrors.length,
+
+    morganCount:
+      performanceState
+        .morganLambertAudits
+        .length
+  };
+}
+
+
+function initPerformanceWorkbookImport() {
+  const button =
+    el(
+      "importPerformanceWorkbookBtn"
+    );
+
+  const input =
+    el(
+      "performanceWorkbookInput"
+    );
+
+  if (
+    !button ||
+    !input ||
+    button.dataset.initialised ===
+      "true"
+  ) {
+    return;
+  }
+
+  button.dataset.initialised =
+    "true";
+
+  button.addEventListener(
+    "click",
+    () => input.click()
+  );
+
+   input.addEventListener(
+    "change",
+    async event => {
+      const files =
+        Array.from(
+          event.target.files || []
+        );
+
+      if (!files.length) return;
+
+      const originalText =
+        button.textContent;
+
+      try {
+        button.disabled = true;
+
+        button.textContent =
+          `Importing ${files.length} workbook${
+            files.length === 1
+              ? ""
+              : "s"
+          }…`;
+
+        const result =
+          await importPerformanceWorkbooks(
+            files
+          );
+
+        const messageParts = [
+          `${result.processedFiles} workbook${
+            result.processedFiles === 1
+              ? ""
+              : "s"
+          } processed.`,
+
+          "",
+
+          `TCW rows read: ${result.importedTcwCount}`,
+          `New TCW rows added: ${result.tcwAdded}`,
+          `Stored TCW history: ${result.tcwCount}`,
+
+          "",
+
+          `Morgan & Lambert rows read: ${result.importedMorganCount}`,
+          `New Morgan & Lambert rows added: ${result.morganAdded}`,
+          `Stored Morgan & Lambert history: ${result.morganCount}`
+        ];
+
+        if (
+          result.skippedFiles.length
+        ) {
+          messageParts.push(
+            "",
+            `Skipped unsupported files: ${result.skippedFiles.length}`
+          );
+        }
+
+        alert(
+          messageParts.join("\n")
+        );
+      } catch (error) {
+        console.error(
+          "Performance workbook import failed",
+          error
+        );
+
+        alert(
+          `The workbook could not be imported:\n\n${error?.message || error}`
+        );
+      } finally {
+        button.disabled = false;
+
+        button.textContent =
+          originalText;
+
+        input.value = "";
+      }
+    }
+  );
+}
+
+
+function performanceRecordsInRange(
+  records,
+  from,
+  to
+) {
+  return (records || []).filter(
+    record =>
+      analyticsDateInRange(
+        record.date,
+        from,
+        to
+      )
+  );
+}
+
+
+function getMorganMetrics(records) {
+  const total =
+    records.length;
+
+  const passes =
+    records.filter(
+      record =>
+        record.outcome === "PASS"
+    ).length;
+
+  const fails =
+    records.filter(
+      record =>
+        record.outcome === "FAIL"
+    ).length;
+
+  const scored =
+    records.filter(
+      record =>
+        Number.isFinite(
+          Number(record.score)
+        )
+    );
+
+  const averageScore =
+    scored.length
+      ? scored.reduce(
+          (totalScore, record) =>
+            totalScore +
+            Number(record.score),
+          0
+        ) / scored.length
+      : 0;
+
+  return {
+    total,
+    passes,
+    fails,
+
+    passRate:
+      total
+        ? Math.round(
+            passes /
+            total *
+            100
+          )
+        : 0,
+
+    averageScore
+  };
+}
+
+
+function renderExternalMetricCard(
+  label,
+  value,
+  detail = ""
+) {
+  return `
+    <div class="dashboard-external-metric">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      ${
+        detail
+          ? `<small>${escapeHtml(detail)}</small>`
+          : ""
+      }
+    </div>
+  `;
+}
+
+
+function renderExternalPerformanceMetrics(
+  periods
+) {
+  const status =
+    el(
+      "performanceWorkbookStatus"
+    );
+
+  const tcwContainer =
+    el(
+      "dashboardTcwMetrics"
+    );
+
+  const tcwChart =
+    el(
+      "dashboardTcwChart"
+    );
+
+  const morganContainer =
+    el(
+      "dashboardMorganMetrics"
+    );
+
+  const morganComparison =
+    el(
+      "dashboardMorganComparison"
+    );
+
+  if (
+    !tcwContainer ||
+    !tcwChart ||
+    !morganContainer ||
+    !morganComparison
+  ) {
+    return;
+  }
+
+  if (
+    performanceState.importMeta
+  ) {
+    const imported =
+      new Date(
+        performanceState
+          .importMeta
+          .importedAt
+      );
+
+    status.textContent =
+      `${performanceState.importMeta.fileName} • ` +
+      `${performanceState.importMeta.tcwCount} TCW errors • ` +
+      `${performanceState.importMeta.morganCount} Morgan & Lambert audits • ` +
+      `imported ${imported.toLocaleString("en-GB")}`;
+
+    status.classList.remove(
+      "dashboard-import-error"
+    );
+  } else {
+    status.textContent =
+      "No workbook imported";
+  }
+
+  if (!periods) {
+    const message = `
+      <div class="dashboard-empty">
+        Choose a valid Analytics date range.
+      </div>
+    `;
+
+    tcwContainer.innerHTML =
+      message;
+
+    tcwChart.innerHTML = "";
+
+    morganContainer.innerHTML =
+      message;
+
+    morganComparison.innerHTML =
+      "";
+
+    return;
+  }
+
+  const currentTcw =
+    performanceRecordsInRange(
+      performanceState.tcwErrors,
+      periods.currentFrom,
+      periods.currentTo
+    );
+
+  const previousTcw =
+    performanceRecordsInRange(
+      performanceState.tcwErrors,
+      periods.previousFrom,
+      periods.previousTo
+    );
+
+  const tcwChange =
+    currentTcw.length -
+    previousTcw.length;
+
+  const tcwPercentChange =
+    previousTcw.length
+      ? Math.round(
+          tcwChange /
+          previousTcw.length *
+          100
+        )
+      : null;
+
+  tcwContainer.innerHTML =
+    renderExternalMetricCard(
+      "Both periods",
+      currentTcw.length +
+        previousTcw.length
+    ) +
+    renderExternalMetricCard(
+      "Comparison",
+      previousTcw.length
+    ) +
+    renderExternalMetricCard(
+      "Current",
+      currentTcw.length
+    ) +
+    renderExternalMetricCard(
+      "Change",
+      `${tcwChange >= 0 ? "+" : ""}${tcwChange}`,
+
+      tcwPercentChange === null
+        ? "No comparison baseline"
+        : `${tcwPercentChange >= 0 ? "+" : ""}${tcwPercentChange}%`
+    );
+
+  const largestTcw =
+    Math.max(
+      1,
+      currentTcw.length,
+      previousTcw.length
+    );
+
+  tcwChart.innerHTML = [
+    {
+      label:
+        "Comparison period",
+      value:
+        previousTcw.length
+    },
+    {
+      label:
+        "Current period",
+      value:
+        currentTcw.length
+    }
+  ].map(item => `
+    <div class="dashboard-mini-column">
+      <strong>${item.value}</strong>
+
+      <div class="dashboard-mini-bar-wrap">
+        <div
+          class="dashboard-mini-bar"
+          style="
+            height:${
+              Math.max(
+                3,
+                item.value /
+                largestTcw *
+                100
+              )
+            }%;
+          "
+        ></div>
+      </div>
+
+      <span>${item.label}</span>
+    </div>
+  `).join("");
+
+  const currentMorganRecords =
+    performanceRecordsInRange(
+      performanceState
+        .morganLambertAudits,
+
+      periods.currentFrom,
+      periods.currentTo
+    );
+
+  const previousMorganRecords =
+    performanceRecordsInRange(
+      performanceState
+        .morganLambertAudits,
+
+      periods.previousFrom,
+      periods.previousTo
+    );
+
+  const currentMorgan =
+    getMorganMetrics(
+      currentMorganRecords
+    );
+
+  const previousMorgan =
+    getMorganMetrics(
+      previousMorganRecords
+    );
+
+  morganContainer.innerHTML =
+    renderExternalMetricCard(
+      "Audits",
+      currentMorgan.total
+    ) +
+    renderExternalMetricCard(
+      "PASS",
+      currentMorgan.passes
+    ) +
+    renderExternalMetricCard(
+      "FAIL",
+      currentMorgan.fails
+    ) +
+    renderExternalMetricCard(
+      "PASS rate",
+      `${currentMorgan.passRate}%`
+    ) +
+    renderExternalMetricCard(
+      "Average score",
+      `${currentMorgan.averageScore.toFixed(1)}%`
+    );
+
+  morganComparison.innerHTML = `
+    <div class="dashboard-morgan-summary">
+      <div class="dashboard-morgan-period">
+        <strong>Current period</strong>
+        <span>
+          ${currentMorgan.total} audits •
+          ${currentMorgan.passRate}% PASS •
+          ${currentMorgan.averageScore.toFixed(1)}% average
+        </span>
+      </div>
+
+      <div class="dashboard-morgan-period">
+        <strong>Comparison period</strong>
+        <span>
+          ${previousMorgan.total} audits •
+          ${previousMorgan.passRate}% PASS •
+          ${previousMorgan.averageScore.toFixed(1)}% average
+        </span>
+      </div>
+    </div>
+  `;
+}
+
+
 function initExecutiveDashboard() {
   document
     .querySelectorAll(
@@ -12895,7 +14215,7 @@ function renderExecutiveDashboard() {
         "Select a From and To date in Analytics.";
     }
 
-    [
+        [
       "dashboardKpis",
       "dashboardRiskKpis",
       "dashboardTopIssues",
@@ -12913,7 +14233,9 @@ function renderExecutiveDashboard() {
         `;
       }
     });
-
+    renderExternalPerformanceMetrics(
+      null
+    );
     return;
   }
 
@@ -13333,8 +14655,12 @@ function renderExecutiveDashboard() {
       );
     });
 
-  renderExecutiveDashboardMonthlyTrend(
+   renderExecutiveDashboardMonthlyTrend(
     current.audits
+  );
+
+  renderExternalPerformanceMetrics(
+    periods
   );
 }
 
@@ -14326,6 +15652,3659 @@ async function buildEngineerPdfSplit(html, filename = "engineer.pdf") {
   // Page 2+: Audits section (forced new page)
   await renderNode(audits, true);
 
-  document.body.removeChild(container);
+   document.body.removeChild(container);
   return doc.output("blob");
 }
+
+
+// ================= QUARTERLY POWERPOINT EXPORT =================
+
+const PPT_THEME = {
+  navy: "050B35",
+  purple: "7C3AED",
+  purpleLight: "F2ECFF",
+  blue: "2563EB",
+  green: "20C463",
+  greenDark: "08A94F",
+  red: "F33D43",
+  amber: "EAB308",
+  grey: "DADAE0",
+  border: "D8D9E2",
+  grid: "E8E9EF",
+  muted: "526184",
+  white: "FFFFFF",
+  background: "F7F7FB",
+  font: "Aptos"
+};
+
+
+function pptPercent(value, total) {
+  return total
+    ? Math.round((value / total) * 100)
+    : 0;
+}
+
+
+function pptAuditPassed(audit) {
+  return isPassingOutcome(
+    audit?.outcome
+  );
+}
+
+
+function pptQuarterName(value) {
+  const date =
+    value instanceof Date
+      ? value
+      : parseDateSafe(value);
+
+  if (!date) {
+    return "Selected period";
+  }
+
+  return `Q${Math.floor(date.getMonth() / 3) + 1} ${date.getFullYear()}`;
+}
+
+
+function pptCategory(defect) {
+  const category = String(
+    defect?.category || ""
+  ).toLowerCase();
+
+  const title = String(
+    defect?.title || ""
+  ).toLowerCase();
+
+  const severity =
+    getAnalyticsSeverityLabel(
+      defect?.severity
+    );
+
+  if (
+    /document|paperwork|certificate|lgsr|record/.test(
+      `${category} ${title}`
+    )
+  ) {
+    return "Documentation Errors";
+  }
+
+  if (severity === "ID") {
+    return "Immediately Dangerous";
+  }
+
+  if (severity === "AR") {
+    return "At Risk";
+  }
+
+  if (severity === "NCS") {
+    return "Not to Current Standards";
+  }
+
+  if (
+    severity === "Advisory" ||
+    /observation|advisory/.test(category)
+  ) {
+    return "Observations";
+  }
+
+  return "Observations";
+}
+
+
+function pptCount(items, getKey) {
+  const map = new Map();
+
+  (items || []).forEach(item => {
+    const key =
+      String(
+        getKey(item) || "Other"
+      ).trim() || "Other";
+
+    map.set(
+      key,
+      (map.get(key) || 0) + 1
+    );
+  });
+
+  return map;
+}
+
+
+function pptSorted(
+  map,
+  limit = Infinity
+) {
+  return [...map.entries()]
+    .sort(
+      (a, b) =>
+        b[1] - a[1] ||
+        a[0].localeCompare(b[0])
+    )
+    .slice(0, limit);
+}
+
+
+function formatPptDate(date) {
+  if (!(date instanceof Date)) {
+    return "";
+  }
+
+  return [
+    date.getFullYear(),
+    String(
+      date.getMonth() + 1
+    ).padStart(2, "0"),
+    String(
+      date.getDate()
+    ).padStart(2, "0")
+  ].join("-");
+}
+
+
+function formatPptDisplayDate(value) {
+  const date =
+    parseAnalyticsDate(value);
+
+  if (!date) {
+    return "";
+  }
+
+  return date.toLocaleDateString(
+    "en-GB",
+    {
+      day: "2-digit",
+      month: "short",
+      year: "numeric"
+    }
+  );
+}
+
+
+function formatPptPeriodLabel(
+  from,
+  to
+) {
+  const fromDate =
+    parseAnalyticsDate(from);
+
+  const toDate =
+    parseAnalyticsDate(to);
+
+  if (!fromDate || !toDate) {
+    return "Selected period";
+  }
+
+  const sameQuarter =
+    fromDate.getFullYear() ===
+      toDate.getFullYear() &&
+    Math.floor(
+      fromDate.getMonth() / 3
+    ) ===
+      Math.floor(
+        toDate.getMonth() / 3
+      );
+
+  const quarterStartMonth =
+    Math.floor(
+      fromDate.getMonth() / 3
+    ) * 3;
+
+  const expectedQuarterStart =
+    new Date(
+      fromDate.getFullYear(),
+      quarterStartMonth,
+      1
+    );
+
+  const expectedQuarterEnd =
+    new Date(
+      fromDate.getFullYear(),
+      quarterStartMonth + 3,
+      0
+    );
+
+  const isFullQuarter =
+    sameQuarter &&
+    fromDate.getTime() ===
+      expectedQuarterStart.getTime() &&
+    toDate.getTime() ===
+      expectedQuarterEnd.getTime();
+
+  if (isFullQuarter) {
+    return `Q${
+      Math.floor(
+        fromDate.getMonth() / 3
+      ) + 1
+    } ${fromDate.getFullYear()}`;
+  }
+
+  return (
+    `${formatPptDisplayDate(from)} – ` +
+    `${formatPptDisplayDate(to)}`
+  );
+}
+
+
+function getQuarterDatesBefore(
+  currentFrom
+) {
+  const selected =
+    parseAnalyticsDate(
+      currentFrom
+    );
+
+  if (!selected) {
+    return null;
+  }
+
+  const currentQuarterStart =
+    Math.floor(
+      selected.getMonth() / 3
+    ) * 3;
+
+  const previousFrom =
+    new Date(
+      selected.getFullYear(),
+      currentQuarterStart - 3,
+      1
+    );
+
+  const previousTo =
+    new Date(
+      selected.getFullYear(),
+      currentQuarterStart,
+      0
+    );
+
+  return {
+    from:
+      formatPptDate(
+        previousFrom
+      ),
+
+    to:
+      formatPptDate(
+        previousTo
+      )
+  };
+}
+
+
+function getQuarterlyPptComparisonRange() {
+  const currentFrom =
+    el("analyticsFrom")?.value || "";
+
+  const currentTo =
+    el("analyticsTo")?.value || "";
+
+  const mode =
+    el("analyticsCompareMode")?.value ||
+    "previous-equivalent";
+
+  if (
+    !currentFrom ||
+    !currentTo
+  ) {
+    return null;
+  }
+
+  if (mode === "custom") {
+    const from =
+      el("analyticsCompareFrom")
+        ?.value || "";
+
+    const to =
+      el("analyticsCompareTo")
+        ?.value || "";
+
+    if (!from || !to) {
+      throw new Error(
+        "Choose both custom comparison dates."
+      );
+    }
+
+    return {
+      from,
+      to
+    };
+  }
+
+  if (
+    mode ===
+    "previous-quarter"
+  ) {
+    return getQuarterDatesBefore(
+      currentFrom
+    );
+  }
+
+  if (
+    mode ===
+    "previous-year"
+  ) {
+    const fromDate =
+      parseAnalyticsDate(
+        currentFrom
+      );
+
+    const toDate =
+      parseAnalyticsDate(
+        currentTo
+      );
+
+    if (!fromDate || !toDate) {
+      return null;
+    }
+
+    fromDate.setFullYear(
+      fromDate.getFullYear() - 1
+    );
+
+    toDate.setFullYear(
+      toDate.getFullYear() - 1
+    );
+
+    return {
+      from:
+        formatPptDate(
+          fromDate
+        ),
+
+      to:
+        formatPptDate(
+          toDate
+        )
+    };
+  }
+
+  const equivalent =
+    getAnalyticsComparisonPeriods();
+
+  if (!equivalent) {
+    return null;
+  }
+
+  return {
+    from:
+      equivalent.previousFrom,
+
+    to:
+      equivalent.previousTo
+  };
+}
+
+
+function buildQuarterlyPptData() {
+  const currentSelection =
+    getAnalyticsSelection();
+
+  const currentAudits =
+    currentSelection.audits || [];
+
+  const currentDefects =
+    currentSelection.defects || [];
+
+ const comparison =
+  getQuarterlyPptComparisonRange();
+
+let previousAudits = [];
+let previousDefects = [];
+let previousLabel =
+  "No comparison selected";
+
+if (comparison) {
+  const previousSelection =
+    getAnalyticsSelectionForRange(
+      comparison.from,
+      comparison.to
+    );
+
+  previousAudits =
+    previousSelection.audits || [];
+
+  previousDefects =
+    previousSelection.defects || [];
+
+  previousLabel =
+    formatPptPeriodLabel(
+      comparison.from,
+      comparison.to
+    );
+}
+
+const summarise = (
+  audits,
+  defects
+) => {
+  const passes =
+    audits.filter(
+      audit =>
+        pptAuditPassed(audit)
+    ).length;
+
+  const fails =
+    Math.max(
+      0,
+      audits.length - passes
+    );
+
+  return {
+    audits: audits.length,
+    defects: defects.length,
+    passes,
+    fails,
+
+    passRate:
+      pptPercent(
+        passes,
+        audits.length
+      ),
+
+    failRate:
+      pptPercent(
+        fails,
+        audits.length
+      ),
+
+    defectsPerAudit:
+      audits.length
+        ? defects.length /
+          audits.length
+        : 0
+  };
+};
+
+  const current =
+    summarise(
+      currentAudits,
+      currentDefects
+    );
+
+  const previous =
+    summarise(
+      previousAudits,
+      previousDefects
+    );
+
+  const engineerNames = [
+    ...new Set(
+      currentAudits.map(
+        audit =>
+          String(
+            audit.engineer ||
+            "Unassigned"
+          ).trim() ||
+          "Unassigned"
+      )
+    )
+  ].sort(
+    (a, b) =>
+      a.localeCompare(b)
+  );
+
+  const engineers =
+    engineerNames.map(
+      engineer => {
+        const audits =
+          currentAudits.filter(
+            audit =>
+              (
+                String(
+                  audit.engineer ||
+                  "Unassigned"
+                ).trim() ||
+                "Unassigned"
+              ) === engineer
+          );
+
+       const passes =
+  audits.filter(
+    audit =>
+      pptAuditPassed(audit)
+  ).length;
+
+        return {
+          name: engineer,
+          total: audits.length,
+          pass: passes,
+          fail:
+            audits.length -
+            passes
+        };
+      }
+    );
+
+  const categories = [
+    "Immediately Dangerous",
+    "At Risk",
+    "Not to Current Standards",
+    "Observations",
+    "Documentation Errors"
+  ];
+
+  const currentCategoryCounts =
+    pptCount(
+      currentDefects,
+      pptCategory
+    );
+
+  const previousCategoryCounts =
+    pptCount(
+      previousDefects,
+      pptCategory
+    );
+
+  return {
+    current,
+    previous,
+    engineers,
+
+    currentLabel:
+  formatPptPeriodLabel(
+    el("analyticsFrom")?.value || "",
+    el("analyticsTo")?.value || ""
+  ),
+
+    previousLabel,
+
+    commonDefects:
+      pptSorted(
+        pptCount(
+          currentDefects,
+          defect =>
+            defect.title ||
+            "Untitled defect"
+        ),
+        8
+      ),
+
+    categories:
+      categories.map(
+        category => ({
+          category,
+
+          current:
+            currentCategoryCounts.get(
+              category
+            ) || 0,
+
+          previous:
+            previousCategoryCounts.get(
+              category
+            ) || 0,
+
+          common:
+            pptSorted(
+              pptCount(
+                currentDefects.filter(
+                  defect =>
+                    pptCategory(
+                      defect
+                    ) === category
+                ),
+
+                defect =>
+                  defect.title ||
+                  "Untitled defect"
+              ),
+              3
+            )
+        })
+      )
+  };
+}
+
+
+function pptBackground(
+  pptx,
+  slide
+) {
+  slide.background = {
+    color: PPT_THEME.background
+  };
+
+  slide.addShape(
+    pptx.ShapeType.rect,
+    {
+      x: 0,
+      y: 0,
+      w: 13.333,
+      h: 7.5,
+
+      line: {
+        color:
+          PPT_THEME.background,
+        transparency: 100
+      },
+
+      fill: {
+        color:
+          PPT_THEME.background
+      }
+    }
+  );
+}
+
+
+function pptTitle(
+  slide,
+  title,
+  subtitle
+) {
+  slide.addText(
+    title,
+    {
+      x: 0.4,
+      y: 0.18,
+      w: 9.5,
+      h: 0.38,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 24,
+      bold: true,
+
+      color:
+        PPT_THEME.navy,
+
+      margin: 0
+    }
+  );
+
+  slide.addText(
+    subtitle || "",
+    {
+      x: 0.4,
+      y: 0.62,
+      w: 9.5,
+      h: 0.22,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 11,
+
+      color:
+        PPT_THEME.muted,
+
+      margin: 0
+    }
+  );
+}
+
+
+function pptCard(
+  pptx,
+  slide,
+  x,
+  y,
+  w,
+  h,
+  fill = PPT_THEME.white
+) {
+  slide.addShape(
+    pptx.ShapeType.roundRect,
+    {
+      x,
+      y,
+      w,
+      h,
+
+      rectRadius: 0.08,
+
+      line: {
+        color:
+          PPT_THEME.border,
+
+        width: 0.8
+      },
+
+      fill: {
+        color: fill
+      },
+
+      shadow: {
+        type: "outer",
+        color: "B7BAC8",
+        opacity: 0.12,
+        blur: 1,
+        angle: 45,
+        distance: 1
+      }
+    }
+  );
+}
+
+
+function pptMetric(
+  pptx,
+  slide,
+  x,
+  y,
+  w,
+  label,
+  value,
+  detail,
+  change,
+  good
+) {
+  pptCard(
+    pptx,
+    slide,
+    x,
+    y,
+    w,
+    1.38
+  );
+
+  slide.addText(
+    label,
+    {
+      x: x + 0.15,
+      y: y + 0.13,
+      w: w - 0.3,
+      h: 0.2,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 10.5,
+      bold: true,
+
+      color:
+        PPT_THEME.navy,
+
+      align: "center",
+      margin: 0
+    }
+  );
+
+  slide.addText(
+    String(value),
+    {
+      x: x + 0.15,
+      y: y + 0.39,
+      w: w - 0.3,
+      h: 0.44,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 28,
+      bold: true,
+
+      color:
+        PPT_THEME.navy,
+
+      align: "center",
+      margin: 0,
+      fit: "shrink"
+    }
+  );
+
+  if (change) {
+    slide.addText(
+      change,
+      {
+        x: x + 0.12,
+        y: y + 0.85,
+        w: w - 0.24,
+        h: 0.18,
+
+        fontFace:
+          PPT_THEME.font,
+
+        fontSize: 9.5,
+        bold: true,
+
+        color:
+          good
+            ? PPT_THEME.green
+            : PPT_THEME.red,
+
+        align: "center",
+        margin: 0
+      }
+    );
+  }
+
+  slide.addText(
+    detail || "",
+    {
+      x: x + 0.12,
+      y: y + 1.10,
+      w: w - 0.24,
+      h: 0.17,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 9,
+
+      color:
+        PPT_THEME.muted,
+
+      align: "center",
+      margin: 0
+    }
+  );
+}
+
+
+function pptPassFailDonut(
+  pptx,
+  slide,
+  x,
+  y,
+  passes,
+  fails,
+  previousPassRate
+) {
+  const total =
+    passes + fails;
+
+  const passRate =
+    pptPercent(
+      passes,
+      total
+    );
+
+  slide.addChart(
+    pptx.ChartType.doughnut,
+    [
+      {
+        name:
+          "Audit outcome",
+
+        labels: [
+          "PASS",
+          "FAIL"
+        ],
+
+        values: [
+          passes,
+          fails
+        ]
+      }
+    ],
+    {
+      x,
+      y,
+      w: 3.05,
+      h: 3.05,
+
+      holeSize: 62,
+
+      showLegend: false,
+      showTitle: false,
+      showValue: false,
+      showPercent: false,
+
+      chartColors: [
+        PPT_THEME.green,
+        PPT_THEME.red
+      ],
+
+      border: {
+        color:
+          PPT_THEME.white,
+
+        pt: 0
+      }
+    }
+  );
+
+  slide.addText(
+    `${passRate}%`,
+    {
+      x: x + 0.74,
+      y: y + 1.08,
+      w: 1.56,
+      h: 0.48,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 27,
+      bold: true,
+
+      color:
+        PPT_THEME.navy,
+
+      align: "center",
+      margin: 0
+    }
+  );
+
+  slide.addText(
+    `${passes}/${total}`,
+    {
+      x: x + 3.5,
+      y: y + 0.54,
+      w: 2.5,
+      h: 0.5,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 28,
+      bold: true,
+
+      color:
+        PPT_THEME.navy,
+
+      margin: 0
+    }
+  );
+
+  slide.addText(
+    "passed",
+    {
+      x: x + 3.5,
+      y: y + 1.03,
+      w: 2,
+      h: 0.25,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 13,
+
+      color:
+        PPT_THEME.muted,
+
+      margin: 0
+    }
+  );
+
+  slide.addShape(
+    pptx.ShapeType.roundRect,
+    {
+      x: x + 3.5,
+      y: y + 1.55,
+      w: 0.18,
+      h: 0.18,
+
+      rectRadius: 0.03,
+
+      line: {
+        color:
+          PPT_THEME.green,
+
+        transparency: 100
+      },
+
+      fill: {
+        color:
+          PPT_THEME.green
+      }
+    }
+  );
+
+  slide.addText(
+    `PASS   ${passes} (${passRate}%)`,
+    {
+      x: x + 3.82,
+      y: y + 1.49,
+      w: 2.8,
+      h: 0.3,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 12.5,
+      bold: true,
+
+      color:
+        PPT_THEME.navy,
+
+      margin: 0
+    }
+  );
+
+  slide.addShape(
+    pptx.ShapeType.roundRect,
+    {
+      x: x + 3.5,
+      y: y + 2.03,
+      w: 0.18,
+      h: 0.18,
+
+      rectRadius: 0.03,
+
+      line: {
+        color:
+          PPT_THEME.red,
+
+        transparency: 100
+      },
+
+      fill: {
+        color:
+          PPT_THEME.red
+      }
+    }
+  );
+
+  slide.addText(
+    `FAIL   ${fails} (${100 - passRate}%)`,
+    {
+      x: x + 3.82,
+      y: y + 1.97,
+      w: 2.8,
+      h: 0.3,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 12.5,
+      bold: true,
+
+      color:
+        PPT_THEME.navy,
+
+      margin: 0
+    }
+  );
+
+  if (
+    Number.isFinite(
+      previousPassRate
+    )
+  ) {
+    const difference =
+      passRate -
+      previousPassRate;
+
+    const movementText =
+      difference === 0
+        ? "— No change vs previous period"
+        : `${difference > 0 ? "↑" : "↓"} ${Math.abs(difference)}% vs previous period`;
+
+    slide.addText(
+      movementText,
+      {
+        x: x + 3.5,
+        y: y + 2.5,
+        w: 3.25,
+        h: 0.28,
+
+        fontFace:
+          PPT_THEME.font,
+
+        fontSize: 11,
+        bold: true,
+
+        color:
+          difference > 0
+            ? PPT_THEME.greenDark
+            : difference < 0
+              ? PPT_THEME.red
+              : PPT_THEME.muted,
+
+        margin: 0
+      }
+    );
+  }
+}
+
+
+function pptEngineerChart(
+  pptx,
+  slide,
+  engineers
+) {
+  if (!engineers.length) {
+    slide.addText(
+      "No engineer audit data is available for this period.",
+      {
+        x: 1,
+        y: 3.2,
+        w: 11.3,
+        h: 0.35,
+
+        fontFace:
+          PPT_THEME.font,
+
+        fontSize: 18,
+
+        color:
+          PPT_THEME.muted,
+
+        align: "center"
+      }
+    );
+
+    return;
+  }
+
+  slide.addChart(
+    pptx.ChartType.bar,
+    [
+      {
+        name: "Total audits",
+
+        labels:
+          engineers.map(
+            item => item.name
+          ),
+
+        values:
+          engineers.map(
+            item => item.total
+          )
+      },
+
+      {
+        name: "PASS",
+
+        labels:
+          engineers.map(
+            item => item.name
+          ),
+
+        values:
+          engineers.map(
+            item => item.pass
+          )
+      },
+
+      {
+        name: "FAIL",
+
+        labels:
+          engineers.map(
+            item => item.name
+          ),
+
+        values:
+          engineers.map(
+            item => item.fail
+          )
+      }
+    ],
+    {
+      x: 0.55,
+      y: 1.02,
+      w: 12.2,
+      h: 5.95,
+
+      catAxisLabelFontFace:
+        PPT_THEME.font,
+
+      catAxisLabelFontSize:
+        engineers.length > 16
+          ? 8
+          : 10,
+
+      valAxisLabelFontFace:
+        PPT_THEME.font,
+
+      valAxisLabelFontSize: 9,
+      valAxisMinVal: 0,
+
+      valGridLine: {
+        color:
+          PPT_THEME.grid,
+
+        pt: 1
+      },
+
+      showLegend: true,
+      legendPos: "b",
+
+      legendFontFace:
+        PPT_THEME.font,
+
+      legendFontSize: 11,
+
+      showTitle: false,
+      showValue: true,
+      showCatName: false,
+      showSerName: false,
+
+      dataLabelPosition:
+        "outEnd",
+
+      dataLabelColor:
+        PPT_THEME.navy,
+
+      dataLabelFormatCode:
+        "0",
+
+      chartColors: [
+        PPT_THEME.blue,
+        PPT_THEME.green,
+        PPT_THEME.red
+      ],
+
+      showBorder: false,
+      gapWidthPct: 45
+    }
+  );
+}
+
+
+function pptDefectBars(
+  pptx,
+  slide,
+  x,
+  y,
+  w,
+  h,
+  title,
+  values,
+  totalDefects
+) {
+  const categoryOrder = [
+    "Immediately Dangerous",
+    "At Risk",
+    "Not to Current Standards",
+    "Observations",
+    "Documentation Errors"
+  ];
+
+  const categoryLabels = {
+    "Immediately Dangerous":
+      "Immediately Dangerous",
+
+    "At Risk":
+      "At Risk",
+
+    "Not to Current Standards":
+      "Not to Current Standards",
+
+    "Observations":
+      "Observations",
+
+    "Documentation Errors":
+      "Documentation Errors"
+  };
+
+  const valueMap = new Map(
+    values.map(item => [
+      item.category,
+      Number(item.value) || 0
+    ])
+  );
+
+  const labels =
+    categoryOrder.map(
+      category =>
+        categoryLabels[category]
+    );
+
+  const chartValues =
+    categoryOrder.map(
+      category =>
+        valueMap.get(category) || 0
+    );
+
+  slide.addText(
+    title,
+    {
+      x: x + 0.18,
+      y: y + 0.12,
+      w: w - 0.36,
+      h: 0.24,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 14,
+      bold: true,
+
+      color:
+        PPT_THEME.navy,
+
+      margin: 0
+    }
+  );
+
+  slide.addChart(
+    pptx.ChartType.bar,
+    [
+      {
+        name: "Defects",
+        labels,
+        values: chartValues
+      }
+    ],
+    {
+      x: x + 0.18,
+      y: y + 0.48,
+      w: w - 0.36,
+      h: h - 1.18,
+
+      catAxisLabelFontFace:
+        PPT_THEME.font,
+
+      catAxisLabelFontSize: 8,
+
+      catAxisLabelRotate: 0,
+
+      valAxisLabelFontFace:
+        PPT_THEME.font,
+
+      valAxisLabelFontSize: 8,
+      valAxisMinVal: 0,
+
+      valGridLine: {
+        color:
+          PPT_THEME.grid,
+
+        pt: 1
+      },
+
+      showLegend: false,
+      showTitle: false,
+
+      showValue: true,
+      showCatName: false,
+      showSerName: false,
+
+      dataLabelPosition:
+        "outEnd",
+
+      dataLabelColor:
+        PPT_THEME.navy,
+
+      dataLabelFormatCode:
+        "0",
+
+      chartColors: [
+        "F33D43",
+        "E5BE01",
+        "67A315",
+        "686868",
+        "A9A9A9"
+      ],
+
+      varyColors: true,
+
+      showBorder: false,
+      gapWidthPct: 55
+    }
+  );
+
+  const legendItems = [
+    {
+      label:
+        "Immediately Dangerous",
+      colour:
+        "F33D43"
+    },
+    {
+      label:
+        "At Risk",
+      colour:
+        "E5BE01"
+    },
+    {
+      label:
+        "Not to Current Standards",
+      colour:
+        "67A315"
+    },
+    {
+      label:
+        "Observations",
+      colour:
+        "686868"
+    },
+    {
+      label:
+        "Documentation Errors",
+      colour:
+        "A9A9A9"
+    }
+  ];
+
+  const legendY =
+    y + h - 0.62;
+
+  const itemWidth =
+    (w - 0.4) /
+    legendItems.length;
+
+  legendItems.forEach(
+    (item, index) => {
+      const itemX =
+        x +
+        0.2 +
+        index * itemWidth;
+
+      slide.addShape(
+        pptx.ShapeType.rect,
+        {
+          x: itemX,
+          y: legendY,
+          w: 0.08,
+          h: 0.08,
+
+          line: {
+            color:
+              item.colour,
+
+            transparency: 100
+          },
+
+          fill: {
+            color:
+              item.colour
+          }
+        }
+      );
+
+      slide.addText(
+        item.label,
+        {
+          x: itemX + 0.11,
+          y: legendY - 0.01,
+          w: itemWidth - 0.12,
+          h: 0.12,
+
+          fontFace:
+            PPT_THEME.font,
+
+          fontSize: 6.8,
+
+          color:
+            PPT_THEME.muted,
+
+          margin: 0,
+          fit: "shrink"
+        }
+      );
+    }
+  );
+
+  slide.addText(
+    `Total defects: ${totalDefects}`,
+    {
+      x: x + 0.15,
+      y: y + h - 0.28,
+      w: w - 0.3,
+      h: 0.16,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 9.5,
+      bold: true,
+
+      color:
+        PPT_THEME.navy,
+
+      align: "center",
+      margin: 0
+    }
+  );
+}
+
+function pptCategoryChangeSummary(data) {
+  const shortLabel = category => {
+    if (category === "Immediately Dangerous") {
+      return "ID";
+    }
+
+    if (category === "At Risk") {
+      return "AR";
+    }
+
+    if (
+      category ===
+      "Not to Current Standards"
+    ) {
+      return "NCS";
+    }
+
+    if (category === "Observations") {
+      return "Observations";
+    }
+
+    if (
+      category ===
+      "Documentation Errors"
+    ) {
+      return "Documentation Errors";
+    }
+
+    return category;
+  };
+
+  return data.categories
+    .map(
+      item =>
+        `${shortLabel(item.category)} ${item.previous}→${item.current}`
+    )
+    .join(", ");
+}
+
+
+function pptTopDefectsPanel(
+  pptx,
+  slide,
+  x,
+  y,
+  w,
+  h,
+  defectEntries,
+  categories
+) {
+  pptCard(
+    pptx,
+    slide,
+    x,
+    y,
+    w,
+    h
+  );
+
+  slide.addText(
+    "Most common defects this quarter",
+    {
+      x: x + 0.18,
+      y: y + 0.12,
+      w: w - 0.36,
+      h: 0.22,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 13.5,
+      bold: true,
+
+      color:
+        PPT_THEME.navy,
+
+      margin: 0
+    }
+  );
+
+  const entries =
+    defectEntries.slice(0, 9);
+
+  const leftEntries =
+    entries.slice(0, 5);
+
+  const rightEntries =
+    entries.slice(5, 9);
+
+  const maxCount =
+    Math.max(
+      1,
+      ...entries.map(
+        item => item[1]
+      )
+    );
+
+  const contentTop =
+    y + 0.43;
+
+  const rowGap = 0.275;
+
+  const columnWidth =
+    (w - 0.72) / 2;
+
+  function drawColumn(
+    items,
+    columnX,
+    startNumber
+  ) {
+    items.forEach(
+      ([title, count], index) => {
+        const rowY =
+          contentTop +
+          index * rowGap;
+
+        slide.addShape(
+          pptx.ShapeType.ellipse,
+          {
+            x: columnX,
+            y: rowY + 0.015,
+            w: 0.15,
+            h: 0.15,
+
+            line: {
+              color:
+                PPT_THEME.navy,
+
+              transparency: 100
+            },
+
+            fill: {
+              color:
+                PPT_THEME.navy
+            }
+          }
+        );
+
+        slide.addText(
+          String(
+            startNumber + index
+          ),
+          {
+            x: columnX,
+            y: rowY + 0.04,
+            w: 0.15,
+            h: 0.07,
+
+            fontFace:
+              PPT_THEME.font,
+
+            fontSize: 6.5,
+            bold: true,
+
+            color:
+              PPT_THEME.white,
+
+            align: "center",
+            margin: 0
+          }
+        );
+
+        slide.addText(
+          title,
+          {
+            x: columnX + 0.21,
+            y: rowY,
+            w: columnWidth * 0.49,
+            h: 0.19,
+
+            fontFace:
+              PPT_THEME.font,
+
+            fontSize: 8.5,
+
+            color:
+              PPT_THEME.navy,
+
+            margin: 0,
+            fit: "shrink"
+          }
+        );
+
+        const trackX =
+          columnX +
+          columnWidth * 0.53;
+
+        const trackWidth =
+          columnWidth * 0.35;
+
+        slide.addShape(
+          pptx.ShapeType.line,
+          {
+            x: trackX,
+            y: rowY + 0.09,
+            w: trackWidth,
+            h: 0,
+
+            line: {
+              color:
+                PPT_THEME.grid,
+
+              width: 2
+            }
+          }
+        );
+
+        slide.addShape(
+          pptx.ShapeType.line,
+          {
+            x: trackX,
+            y: rowY + 0.09,
+
+            w:
+              trackWidth *
+              (
+                count /
+                maxCount
+              ),
+
+            h: 0,
+
+            line: {
+              color:
+                PPT_THEME.navy,
+
+              width: 2.4
+            }
+          }
+        );
+
+        slide.addText(
+          String(count),
+          {
+            x:
+              columnX +
+              columnWidth -
+              0.3,
+
+            y: rowY,
+            w: 0.26,
+            h: 0.15,
+
+            fontFace:
+              PPT_THEME.font,
+
+            fontSize: 8.5,
+            bold: true,
+
+            color:
+              PPT_THEME.navy,
+
+            align: "right",
+            margin: 0
+          }
+        );
+      }
+    );
+  }
+
+  drawColumn(
+    leftEntries,
+    x + 0.2,
+    1
+  );
+
+  if (rightEntries.length) {
+    const dividerX =
+      x + w / 2;
+
+    slide.addShape(
+      pptx.ShapeType.line,
+      {
+        x: dividerX,
+        y: y + 0.42,
+        w: 0,
+        h: 1.28,
+
+        line: {
+          color:
+            PPT_THEME.border,
+
+          width: 0.8
+        }
+      }
+    );
+
+    drawColumn(
+      rightEntries,
+      dividerX + 0.2,
+      6
+    );
+  }
+}
+
+
+
+function pptCategoryCardMeta(category) {
+  if (category === "At Risk") {
+    return {
+      title: "At Risk (AR)",
+      colour: "E5BE01",
+      icon: "!",
+      iconFilled: false,
+      iconFont: PPT_THEME.font,
+      iconSize: 16
+    };
+  }
+
+  if (
+    category ===
+    "Not to Current Standards"
+  ) {
+    return {
+      title:
+        "Not to Current Standards (NCS)",
+      colour: "67A315",
+      icon: "✓",
+      iconFilled: false,
+      iconFont: PPT_THEME.font,
+      iconSize: 16
+    };
+  }
+
+  if (category === "Observations") {
+    return {
+      title: "Observations",
+      colour: "686868",
+      icon: "👁",
+      iconFilled: true,
+      iconFont: "Segoe UI Symbol",
+      iconSize: 15
+    };
+  }
+
+  if (
+    category ===
+    "Documentation Errors"
+  ) {
+    return {
+      title: "Document Errors",
+      colour: "A9A9A9",
+      icon: "📄",
+      iconFilled: true,
+      iconFont: "Segoe UI Symbol",
+      iconSize: 14
+    };
+  }
+
+  return {
+    title: category,
+    colour: PPT_THEME.purple,
+    icon: "•",
+    iconFilled: false,
+    iconFont: PPT_THEME.font,
+    iconSize: 14
+  };
+}
+
+
+function pptCategoryBreakdownCard(
+  pptx,
+  slide,
+  x,
+  y,
+  w,
+  h,
+  categoryItem
+) {
+  const meta =
+    pptCategoryCardMeta(
+      categoryItem.category
+    );
+
+  const topDefects =
+    (categoryItem.common || []).slice(
+      0,
+      3
+    );
+
+  const maxCount = Math.max(
+    1,
+    ...topDefects.map(
+      entry => entry[1]
+    )
+  );
+
+  pptCard(
+    pptx,
+    slide,
+    x,
+    y,
+    w,
+    h
+  );
+
+  slide.addShape(
+    pptx.ShapeType.rect,
+    {
+      x: x + 0.12,
+      y: y + 0.2,
+      w: 0.04,
+      h: 0.46,
+
+      line: {
+        color: meta.colour,
+        transparency: 100
+      },
+
+      fill: {
+        color: meta.colour
+      }
+    }
+  );
+
+ const iconX = x + 0.28;
+const iconY = y + 0.24;
+const iconSize = 0.32;
+
+slide.addShape(
+  pptx.ShapeType.ellipse,
+  {
+    x: iconX,
+    y: iconY,
+    w: iconSize,
+    h: iconSize,
+
+    line: {
+      color: meta.colour,
+      width: 1.4
+    },
+
+    fill: meta.iconFilled
+      ? {
+          color: meta.colour
+        }
+      : {
+          color: PPT_THEME.white,
+          transparency: 100
+        }
+  }
+);
+
+slide.addText(
+  meta.icon,
+  {
+    x: iconX,
+    y: iconY,
+    w: iconSize,
+    h: iconSize,
+
+    fontFace:
+      meta.iconFont ||
+      PPT_THEME.font,
+
+    fontSize:
+      meta.iconSize || 15,
+
+    bold: true,
+
+    color: meta.iconFilled
+      ? PPT_THEME.white
+      : meta.colour,
+
+    align: "center",
+    valign: "mid",
+    margin: 0,
+    fit: "shrink"
+  }
+);
+
+  slide.addText(
+    meta.title,
+    {
+      x: x + 0.72,
+      y: y + 0.2,
+      w: w - 0.86,
+      h: 0.42,
+
+      fontFace: PPT_THEME.font,
+      fontSize: 11.5,
+      bold: true,
+
+      color: PPT_THEME.navy,
+
+      margin: 0,
+      fit: "shrink"
+    }
+  );
+
+  slide.addText(
+    String(categoryItem.current || 0),
+    {
+      x: x + 0.18,
+      y: y + 0.9,
+      w: w - 0.36,
+      h: 0.52,
+
+      fontFace: PPT_THEME.font,
+      fontSize: 34,
+      bold: true,
+
+      color: PPT_THEME.navy,
+
+      align: "center",
+      margin: 0
+    }
+  );
+
+  slide.addText(
+    "defects",
+    {
+      x: x + 0.18,
+      y: y + 1.48,
+      w: w - 0.36,
+      h: 0.2,
+
+      fontFace: PPT_THEME.font,
+      fontSize: 12,
+
+      color: PPT_THEME.muted,
+
+      align: "center",
+      margin: 0
+    }
+  );
+
+  slide.addShape(
+    pptx.ShapeType.line,
+    {
+      x: x + 0.16,
+      y: y + 2.02,
+      w: w - 0.32,
+      h: 0,
+
+      line: {
+        color: PPT_THEME.border,
+        width: 0.9
+      }
+    }
+  );
+
+  slide.addText(
+    "Most common defects",
+    {
+      x: x + 0.18,
+      y: y + 2.24,
+      w: w - 0.36,
+      h: 0.18,
+
+      fontFace: PPT_THEME.font,
+      fontSize: 11,
+      bold: true,
+
+      color: PPT_THEME.navy,
+
+      margin: 0
+    }
+  );
+
+  if (!topDefects.length) {
+    slide.addText(
+      "No defects recorded",
+      {
+        x: x + 0.18,
+        y: y + 2.45,
+        w: w - 0.36,
+        h: 0.2,
+
+        fontFace: PPT_THEME.font,
+        fontSize: 10,
+
+        color: PPT_THEME.muted,
+
+        margin: 0
+      }
+    );
+
+    return;
+  }
+
+  topDefects.forEach(
+    ([title, count], index) => {
+      const rowY =
+  y + 2.72 + index * 1.02;
+
+      slide.addShape(
+        pptx.ShapeType.ellipse,
+        {
+          x: x + 0.18,
+          y: rowY,
+          w: 0.18,
+          h: 0.18,
+
+          line: {
+            color: meta.colour,
+            transparency: 100
+          },
+
+          fill: {
+            color: meta.colour
+          }
+        }
+      );
+
+      slide.addText(
+        String(index + 1),
+        {
+          x: x + 0.18,
+          y: rowY + 0.048,
+          w: 0.18,
+          h: 0.07,
+
+          fontFace: PPT_THEME.font,
+          fontSize: 7.5,
+          bold: true,
+
+          color: PPT_THEME.white,
+
+          align: "center",
+          margin: 0
+        }
+      );
+
+      slide.addText(
+        title,
+        {
+          x: x + 0.44,
+          y: rowY - 0.01,
+         w: w - 0.74,
+          h: 0.34,
+
+          fontFace: PPT_THEME.font,
+          fontSize: 9.2,
+
+          color: PPT_THEME.navy,
+
+          margin: 0,
+          fit: "shrink"
+        }
+      );
+
+      const trackX =
+        x + 0.46;
+
+      const trackY =
+        rowY + 0.42;
+
+      const trackW =
+  w - 0.88;
+
+      slide.addShape(
+        pptx.ShapeType.line,
+        {
+          x: trackX,
+          y: trackY,
+          w: trackW,
+          h: 0,
+
+          line: {
+            color: PPT_THEME.grid,
+            width: 3
+          }
+        }
+      );
+
+      slide.addShape(
+        pptx.ShapeType.line,
+        {
+          x: trackX,
+          y: trackY,
+          w:
+            trackW *
+            (count / maxCount),
+          h: 0,
+
+          line: {
+            color: meta.colour,
+            width: 3.2
+          }
+        }
+      );
+
+      slide.addText(
+        String(count),
+        {
+          x: x + w - 0.24,
+          y: rowY + 0.33,
+          w: 0.18,
+          h: 0.1,
+
+          fontFace: PPT_THEME.font,
+          fontSize: 10,
+          bold: true,
+
+          color: PPT_THEME.navy,
+
+          align: "right",
+          margin: 0
+        }
+      );
+
+      if (index < topDefects.length - 1) {
+        slide.addShape(
+          pptx.ShapeType.line,
+          {
+            x: x + 0.16,
+            y: rowY + 0.68,
+            w: w - 0.32,
+            h: 0,
+
+            line: {
+              color: PPT_THEME.border,
+              width: 0.6,
+              dash: "dot"
+            }
+          }
+        );
+      }
+    }
+  );
+}
+
+
+function getPerformanceRecordsForPpt(records, from, to) {
+  return (records || []).filter(record =>
+    analyticsDateInRange(
+      record.date,
+      from,
+      to
+    )
+  );
+}
+
+
+function getMorganPptMetrics(records) {
+  const total = records.length;
+
+  const passes = records.filter(
+    record => record.outcome === "PASS"
+  ).length;
+
+  const fails = records.filter(
+    record => record.outcome === "FAIL"
+  ).length;
+
+  const scored = records.filter(record =>
+    Number.isFinite(Number(record.score))
+  );
+
+  const averageScore = scored.length
+    ? scored.reduce(
+        (sum, record) =>
+          sum + Number(record.score),
+        0
+      ) / scored.length
+    : 0;
+
+  return {
+    total,
+    passes,
+    fails,
+    passRate: total
+      ? Math.round((passes / total) * 100)
+      : 0,
+    averageScore
+  };
+}
+
+
+function buildExternalPerformancePptData() {
+  const currentFrom =
+    el("analyticsFrom")?.value || "";
+
+  const currentTo =
+    el("analyticsTo")?.value || "";
+
+  const comparison =
+    getQuarterlyPptComparisonRange();
+
+  const previousFrom =
+    comparison?.from || "";
+
+  const previousTo =
+    comparison?.to || "";
+
+  const tcwRecords =
+    performanceState?.tcwErrors || [];
+
+  const morganRecords =
+    performanceState?.morganLambertAudits || [];
+
+  const currentTcw =
+    getPerformanceRecordsForPpt(
+      tcwRecords,
+      currentFrom,
+      currentTo
+    );
+
+  const previousTcw =
+    getPerformanceRecordsForPpt(
+      tcwRecords,
+      previousFrom,
+      previousTo
+    );
+
+  const currentMorganRecords =
+    getPerformanceRecordsForPpt(
+      morganRecords,
+      currentFrom,
+      currentTo
+    );
+
+  const previousMorganRecords =
+    getPerformanceRecordsForPpt(
+      morganRecords,
+      previousFrom,
+      previousTo
+    );
+
+  return {
+    currentLabel:
+      formatPptPeriodLabel(
+        currentFrom,
+        currentTo
+      ),
+
+    previousLabel:
+      formatPptPeriodLabel(
+        previousFrom,
+        previousTo
+      ),
+
+    tcw: {
+      current: currentTcw.length,
+      previous: previousTcw.length,
+      total:
+        currentTcw.length +
+        previousTcw.length
+    },
+
+    morgan: {
+      current:
+        getMorganPptMetrics(
+          currentMorganRecords
+        ),
+
+      previous:
+        getMorganPptMetrics(
+          previousMorganRecords
+        )
+    }
+  };
+}
+
+
+function pptTcwSlide(
+  pptx,
+  externalData
+) {
+  const slide =
+    pptx.addSlide();
+
+  pptBackground(
+    pptx,
+    slide
+  );
+
+  pptTitle(
+    slide,
+    "TCW Errors",
+    `${externalData.currentLabel} vs ${externalData.previousLabel}`
+  );
+
+  const current =
+    externalData.tcw.current;
+
+  const previous =
+    externalData.tcw.previous;
+
+  const total =
+    externalData.tcw.total;
+
+  const change =
+    current - previous;
+
+  const percentChange =
+    previous
+      ? Math.round(
+          (change / previous) * 100
+        )
+      : null;
+
+  const previousShare =
+    total
+      ? Math.round(
+          (previous / total) * 100
+        )
+      : 0;
+
+  const currentShare =
+    total
+      ? Math.round(
+          (current / total) * 100
+        )
+      : 0;
+
+  pptMetric(
+    pptx,
+    slide,
+    0.35,
+    0.92,
+    3.0,
+    "Total TCW errors",
+    total,
+    "Across both periods",
+    "",
+    true
+  );
+
+  pptMetric(
+    pptx,
+    slide,
+    3.55,
+    0.92,
+    3.0,
+    "Comparison period",
+    previous,
+    `${previousShare}% of total`,
+    "",
+    true
+  );
+
+  pptMetric(
+    pptx,
+    slide,
+    6.75,
+    0.92,
+    3.0,
+    "Current period",
+    current,
+    `${currentShare}% of total`,
+    "",
+    true
+  );
+
+  pptMetric(
+    pptx,
+    slide,
+    9.95,
+    0.92,
+    3.0,
+    "Change vs comparison",
+    `${change >= 0 ? "+" : ""}${change}`,
+    percentChange === null
+      ? "No comparison baseline"
+      : `${Math.abs(percentChange)}% ${
+          change >= 0
+            ? "increase"
+            : "decrease"
+        }`,
+    percentChange === null
+      ? ""
+      : `${change >= 0 ? "↑" : "↓"} ${Math.abs(percentChange)}%`,
+    change <= 0
+  );
+
+  pptCard(
+    pptx,
+    slide,
+    0.35,
+    2.55,
+    12.63,
+    3.05
+  );
+
+  slide.addText(
+    "TCW Errors: Comparison Period vs Current Period",
+    {
+      x: 0.75,
+      y: 2.83,
+      w: 11.8,
+      h: 0.28,
+      fontFace: PPT_THEME.font,
+      fontSize: 16,
+      bold: true,
+      color: PPT_THEME.navy,
+      align: "center",
+      margin: 0
+    }
+  );
+
+  slide.addText(
+    "Number of errors",
+    {
+      x: 0.75,
+      y: 3.13,
+      w: 11.8,
+      h: 0.2,
+      fontFace: PPT_THEME.font,
+      fontSize: 10.5,
+      color: PPT_THEME.muted,
+      align: "center",
+      margin: 0
+    }
+  );
+
+  slide.addChart(
+    pptx.ChartType.bar,
+    [
+      {
+        name: "TCW errors",
+        labels: [
+          "Comparison period",
+          "Current period"
+        ],
+        values: [
+          previous,
+          current
+        ]
+      }
+    ],
+    {
+      x: 1.15,
+      y: 3.35,
+      w: 11.05,
+      h: 1.85,
+
+      catAxisLabelFontFace: PPT_THEME.font,
+      catAxisLabelFontSize: 10,
+
+      valAxisLabelFontFace: PPT_THEME.font,
+      valAxisLabelFontSize: 9,
+      valAxisMinVal: 0,
+
+      valGridLine: {
+        color: PPT_THEME.grid,
+        pt: 1,
+        dash: "dash"
+      },
+
+      showLegend: false,
+      showTitle: false,
+      showValue: true,
+
+      dataLabelPosition: "outEnd",
+      dataLabelColor: PPT_THEME.navy,
+      dataLabelFormatCode: "0",
+
+      chartColors: [
+        PPT_THEME.purple
+      ],
+
+      showBorder: false,
+      gapWidthPct: 45
+    }
+  );
+
+  pptCard(
+    pptx,
+    slide,
+    0.35,
+    5.85,
+    12.63,
+    0.72
+  );
+
+  slide.addShape(
+    pptx.ShapeType.ellipse,
+    {
+      x: 0.85,
+      y: 6.02,
+      w: 0.36,
+      h: 0.36,
+
+      line: {
+        color: PPT_THEME.purple,
+        width: 1.2
+      },
+
+      fill: {
+        color: PPT_THEME.white,
+        transparency: 100
+      }
+    }
+  );
+
+  slide.addText(
+    "↗",
+    {
+      x: 0.85,
+      y: 6.05,
+      w: 0.36,
+      h: 0.24,
+      fontFace: PPT_THEME.font,
+      fontSize: 17,
+      bold: true,
+      color: PPT_THEME.purple,
+      align: "center",
+      valign: "mid",
+      margin: 0
+    }
+  );
+
+  slide.addShape(
+    pptx.ShapeType.line,
+    {
+      x: 1.55,
+      y: 5.98,
+      w: 0,
+      h: 0.46,
+      line: {
+        color: PPT_THEME.purple,
+        width: 2
+      }
+    }
+  );
+
+  slide.addText(
+    percentChange === null
+      ? `TCW errors were ${current} in the current period, with no comparison baseline available.`
+      : `TCW errors ${
+          change >= 0
+            ? "increased"
+            : "decreased"
+        } from ${previous} in the comparison period to ${current} in the current period — a change of ${Math.abs(change)} errors (${Math.abs(percentChange)}%).`,
+    {
+      x: 1.9,
+      y: 6.08,
+      w: 10.5,
+      h: 0.22,
+      fontFace: PPT_THEME.font,
+      fontSize: 12.5,
+      bold: true,
+      color: PPT_THEME.navy,
+      margin: 0,
+      fit: "shrink"
+    }
+  );
+}
+
+
+function pptMorganLambertSlide(
+  pptx,
+  externalData
+) {
+  const slide =
+    pptx.addSlide();
+
+  pptBackground(
+    pptx,
+    slide
+  );
+
+  pptTitle(
+    slide,
+    "Morgan & Lambert Audit Performance",
+    `${externalData.currentLabel} vs ${externalData.previousLabel}`
+  );
+
+  const current =
+    externalData.morgan.current;
+
+  const previous =
+    externalData.morgan.previous;
+
+  const passRateChange =
+    current.passRate -
+    previous.passRate;
+
+  const scoreChange =
+    current.averageScore -
+    previous.averageScore;
+
+  pptMetric(
+    pptx,
+    slide,
+    0.35,
+    0.92,
+    2.4,
+    "Total audits",
+    current.total,
+    "Current period",
+    "",
+    true
+  );
+
+  pptMetric(
+    pptx,
+    slide,
+    2.95,
+    0.92,
+    2.4,
+    "PASS",
+    current.passes,
+    `${current.passRate}% pass rate`,
+    "",
+    true
+  );
+
+  pptMetric(
+    pptx,
+    slide,
+    5.55,
+    0.92,
+    2.4,
+    "FAIL",
+    current.fails,
+    `${100 - current.passRate}% fail rate`,
+    "",
+    current.fails === 0
+  );
+
+  pptMetric(
+    pptx,
+    slide,
+    8.15,
+    0.92,
+    2.4,
+    "PASS rate",
+    `${current.passRate}%`,
+    "vs comparison period",
+    previous.total
+      ? `${passRateChange >= 0 ? "↑" : "↓"} ${Math.abs(passRateChange)}%`
+      : "",
+    passRateChange >= 0
+  );
+
+  pptMetric(
+    pptx,
+    slide,
+    10.75,
+    0.92,
+    2.25,
+    "Average score",
+    `${current.averageScore.toFixed(1)}%`,
+    "vs comparison period",
+    previous.total
+      ? `${scoreChange >= 0 ? "↑" : "↓"} ${Math.abs(scoreChange).toFixed(1)}%`
+      : "",
+    scoreChange >= 0
+  );
+
+   pptCard(
+    pptx,
+    slide,
+    0.35,
+    2.55,
+    6.85,
+    3.55
+  );
+
+  slide.addText(
+    "PASS / FAIL Rate",
+    {
+      x: 0.75,
+      y: 2.88,
+      w: 5.2,
+      h: 0.28,
+      fontFace: PPT_THEME.font,
+      fontSize: 16,
+      bold: true,
+      color: PPT_THEME.navy,
+      margin: 0
+    }
+  );
+
+  if (current.total) {
+       pptPassFailDonut(
+      pptx,
+      slide,
+      0.58,
+      3.02,
+      current.passes,
+      current.fails,
+      previous.total
+        ? previous.passRate
+        : NaN
+    );
+  } else {
+    slide.addText(
+      "No Morgan & Lambert audits in the selected period.",
+      {
+        x: 0.8,
+        y: 4,
+        w: 5,
+        h: 0.4,
+        fontFace: PPT_THEME.font,
+        fontSize: 14,
+        color: PPT_THEME.muted,
+        align: "center",
+        margin: 0
+      }
+    );
+  }
+
+   pptCard(
+    pptx,
+    slide,
+    7.05,
+    2.55,
+    5.93,
+    3.55
+  );
+
+    slide.addText(
+    "Current vs Comparison",
+    {
+      x: 7.35,
+      y: 2.88,
+      w: 5.0,
+      h: 0.28,
+      fontFace: PPT_THEME.font,
+      fontSize: 16,
+      bold: true,
+      color: PPT_THEME.navy,
+      align: "center",
+      margin: 0
+    }
+  );
+
+  slide.addChart(
+    pptx.ChartType.bar,
+    [
+      {
+        name: "Audits",
+        labels: [
+          "Comparison",
+          "Current"
+        ],
+        values: [
+          previous.total,
+          current.total
+        ]
+      },
+      {
+        name: "PASS",
+        labels: [
+          "Comparison",
+          "Current"
+        ],
+        values: [
+          previous.passes,
+          current.passes
+        ]
+      },
+      {
+        name: "FAIL",
+        labels: [
+          "Comparison",
+          "Current"
+        ],
+        values: [
+          previous.fails,
+          current.fails
+        ]
+      }
+    ],
+    {
+            x: 7.32,
+      y: 3.33,
+      w: 5.15,
+      h: 2.05,
+
+      catAxisLabelFontFace: PPT_THEME.font,
+      catAxisLabelFontSize: 9,
+
+      valAxisLabelFontFace: PPT_THEME.font,
+      valAxisLabelFontSize: 8,
+      valAxisMinVal: 0,
+
+      valGridLine: {
+        color: PPT_THEME.grid,
+        pt: 1
+      },
+
+      showLegend: true,
+      legendPos: "b",
+      legendFontFace: PPT_THEME.font,
+      legendFontSize: 8,
+
+      showTitle: false,
+      showValue: true,
+
+      dataLabelPosition: "outEnd",
+      dataLabelColor: PPT_THEME.navy,
+      dataLabelFormatCode: "0",
+
+      chartColors: [
+        PPT_THEME.blue,
+        PPT_THEME.green,
+        PPT_THEME.red
+      ],
+
+      showBorder: false,
+      gapWidthPct: 50
+    }
+  );
+
+    pptCard(
+    pptx,
+    slide,
+    0.35,
+    6.82,
+    12.63,
+    0.48
+  );
+
+   slide.addText(
+    `Morgan & Lambert completed ${current.total} audits in the current period, with ${current.passes} PASS, ${current.fails} FAIL and an average score of ${current.averageScore.toFixed(1)}%.`,
+    {
+      x: 0.75,
+      y: 6.96,
+      w: 11.9,
+      h: 0.16,
+      fontFace: PPT_THEME.font,
+      fontSize: 11.5,
+      bold: true,
+      color: PPT_THEME.navy,
+      align: "center",
+      margin: 0,
+      fit: "shrink"
+    }
+  );
+}
+
+
+async function generateQuarterlyPowerPoint() {
+  const button =
+    el(
+      "generateQuarterlyPptBtn"
+    );
+
+  const originalText =
+    button?.textContent ||
+    "Generate Quarterly PowerPoint";
+
+  try {
+    if (!window.PptxGenJS) {
+      throw new Error(
+        "PptxGenJS has not loaded. Check the PowerPoint script tag in the HTML panel."
+      );
+    }
+
+    const data =
+      buildQuarterlyPptData();
+
+    if (
+      !data.current.audits &&
+      !data.current.defects
+    ) {
+      throw new Error(
+        "There is no analytics data for the selected period."
+      );
+    }
+
+    if (button) {
+      button.disabled = true;
+
+      button.textContent =
+        "Generating PowerPoint…";
+    }
+
+    const pptx =
+      new window.PptxGenJS();
+
+    pptx.layout =
+      "LAYOUT_WIDE";
+
+    pptx.author =
+      "Property Care Auditing";
+
+    pptx.subject =
+      "Quarterly Audit Scorecard";
+
+    pptx.title =
+      `${data.currentLabel} Quarterly Audit Scorecard`;
+
+    pptx.company =
+      "Property Care";
+
+    pptx.lang =
+      "en-GB";
+
+    pptx.theme = {
+      headFontFace:
+        PPT_THEME.font,
+
+      bodyFontFace:
+        PPT_THEME.font,
+
+      lang: "en-GB"
+    };
+
+
+  // Slide 1
+{
+  const slide =
+    pptx.addSlide();
+
+  pptBackground(
+    pptx,
+    slide
+  );
+
+  pptTitle(
+    slide,
+    "Quarterly Audit Dashboard",
+    `${data.currentLabel} compared with ${data.previousLabel}`
+  );
+
+  const passRateChange =
+    data.current.passRate -
+    data.previous.passRate;
+
+  const defectChange =
+    data.current.defects -
+    data.previous.defects;
+
+  const defectsPerAuditChange =
+    data.current.defectsPerAudit -
+    data.previous.defectsPerAudit;
+
+  const movementText = (
+    value,
+    suffix = "%"
+  ) => {
+    if (!data.previous.audits) {
+      return "";
+    }
+
+    if (
+      Math.abs(value) < 0.005
+    ) {
+      return "— No change";
+    }
+
+    return `${
+      value > 0 ? "↑" : "↓"
+    } ${
+      Math.abs(value).toFixed(
+        suffix === "%"
+          ? 0
+          : 2
+      )
+    }${suffix}`;
+  };
+
+  pptMetric(
+    pptx,
+    slide,
+    0.35,
+    1.02,
+    3.0,
+    "Total audits",
+    data.current.audits,
+    `${data.currentLabel}`,
+    "",
+    true
+  );
+
+  pptMetric(
+    pptx,
+    slide,
+    3.55,
+    1.02,
+    3.0,
+    "PASS rate",
+    `${data.current.passRate}%`,
+    "vs previous period",
+    movementText(
+      passRateChange
+    ),
+    passRateChange >= 0
+  );
+
+  pptMetric(
+    pptx,
+    slide,
+    6.75,
+    1.02,
+    3.0,
+    "Defects",
+    data.current.defects,
+    "vs previous period",
+
+    data.previous.audits
+      ? movementText(
+          defectChange,
+          ""
+        )
+      : "",
+
+    defectChange <= 0
+  );
+
+  pptMetric(
+    pptx,
+    slide,
+    9.95,
+    1.02,
+    3.0,
+    "Defects / audit",
+    data.current.defectsPerAudit.toFixed(
+      2
+    ),
+    "vs previous period",
+
+    data.previous.audits
+      ? movementText(
+          defectsPerAuditChange,
+          ""
+        )
+      : "",
+
+    defectsPerAuditChange <= 0
+  );
+
+  pptCard(
+    pptx,
+    slide,
+    0.35,
+    2.72,
+    12.63,
+    4.1
+  );
+
+  slide.addText(
+    "Audit PASS / FAIL Rate",
+    {
+      x: 0.72,
+      y: 3.08,
+      w: 5,
+      h: 0.32,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 18,
+      bold: true,
+
+      color:
+        PPT_THEME.navy,
+
+      margin: 0
+    }
+  );
+
+  slide.addText(
+    `${data.current.passes}/${data.current.audits} passed`,
+    {
+      x: 10.2,
+      y: 3.1,
+      w: 2.2,
+      h: 0.25,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 10.5,
+
+      color:
+        PPT_THEME.muted,
+
+      align: "right",
+      margin: 0
+    }
+  );
+
+  pptPassFailDonut(
+    pptx,
+    slide,
+    2.35,
+    3.55,
+    data.current.passes,
+    data.current.fails,
+
+    data.previous.audits
+      ? data.previous.passRate
+      : NaN
+  );
+}
+
+
+   // Slide 2
+{
+  const slide =
+    pptx.addSlide();
+
+  pptBackground(
+    pptx,
+    slide
+  );
+
+  pptTitle(
+    slide,
+    "Audit PASS / FAIL Rate",
+    `${data.currentLabel} compared with ${data.previousLabel}`
+  );
+
+  pptCard(
+    pptx,
+    slide,
+    0.35,
+    1.05,
+    12.63,
+    5.95
+  );
+
+  slide.addText(
+    "Audit PASS / FAIL Rate",
+    {
+      x: 0.75,
+      y: 1.48,
+      w: 5,
+      h: 0.32,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 18,
+      bold: true,
+
+      color:
+        PPT_THEME.navy,
+
+      margin: 0
+    }
+  );
+
+  slide.addText(
+    `${data.current.passes}/${data.current.audits} passed`,
+    {
+      x: 10.15,
+      y: 1.51,
+      w: 2.25,
+      h: 0.25,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 10.5,
+
+      color:
+        PPT_THEME.muted,
+
+      align: "right",
+      margin: 0
+    }
+  );
+
+  pptPassFailDonut(
+    pptx,
+    slide,
+    2.32,
+    2.28,
+    data.current.passes,
+    data.current.fails,
+
+    data.previous.audits
+      ? data.previous.passRate
+      : NaN
+  );
+
+  slide.addText(
+    `Average defects per audit: ${data.current.defectsPerAudit.toFixed(2)}`,
+    {
+      x: 0.75,
+      y: 6.53,
+      w: 3.8,
+      h: 0.23,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 10.5,
+      bold: true,
+
+      color:
+        PPT_THEME.purple,
+
+      margin: 0
+    }
+  );
+}
+
+
+    // Slide 3
+    {
+      const slide =
+        pptx.addSlide();
+
+      pptBackground(
+        pptx,
+        slide
+      );
+
+      pptTitle(
+        slide,
+        "Engineer Audit Performance",
+        `${data.currentLabel} • total audits, passes and failures`
+      );
+
+      pptEngineerChart(
+        pptx,
+        slide,
+        data.engineers
+      );
+    }
+
+
+  // Slide 4
+{
+  const slide =
+    pptx.addSlide();
+
+  pptBackground(
+    pptx,
+    slide
+  );
+
+  pptTitle(
+    slide,
+    "Quarterly Defect Comparison",
+    `${data.currentLabel} compared with ${data.previousLabel}`
+  );
+
+  const change =
+    data.current.defects -
+    data.previous.defects;
+
+  const changePct =
+    data.previous.defects
+      ? Math.round(
+          (
+            change /
+            data.previous.defects
+          ) * 100
+        )
+      : null;
+
+  const largest =
+    [...data.categories]
+      .sort(
+        (a, b) =>
+          b.current -
+          a.current
+      )[0];
+
+  const largestLabel =
+    largest?.category ===
+    "Not to Current Standards"
+      ? "NCS"
+      : largest?.category ||
+        "—";
+
+  pptMetric(
+    pptx,
+    slide,
+    0.32,
+    0.88,
+    3.02,
+    "Current period defects",
+    data.current.defects,
+    `${data.current.audits} audits • ${data.current.defectsPerAudit.toFixed(2)} defects/audit`,
+    "",
+    true
+  );
+
+  pptMetric(
+    pptx,
+    slide,
+    3.54,
+    0.88,
+    3.02,
+    "Comparison period defects",
+    data.previous.defects,
+    `${data.previous.audits} audits • ${data.previous.defectsPerAudit.toFixed(2)} defects/audit`,
+    "",
+    true
+  );
+
+  pptMetric(
+    pptx,
+    slide,
+    6.76,
+    0.88,
+    3.02,
+    "Change vs comparison",
+    `${change >= 0 ? "+" : ""}${change}`,
+
+    changePct === null
+      ? "No comparison data available"
+      : `${Math.abs(changePct)}% ${
+          change >= 0
+            ? "more defects"
+            : "fewer defects"
+        }`,
+
+    changePct === null
+      ? ""
+      : `${change >= 0 ? "↑" : "↓"} ${Math.abs(changePct)}%`,
+
+    change <= 0
+  );
+
+  pptMetric(
+    pptx,
+    slide,
+    9.98,
+    0.88,
+    3.02,
+    "Largest category",
+    largestLabel,
+
+    largest
+      ? `${largest.current} current • ${largest.previous} comparison`
+      : "No data",
+
+    "",
+    true
+  );
+
+  /*
+    Taller chart panels matching the
+    proportions of the reference slide.
+  */
+  pptCard(
+    pptx,
+    slide,
+    0.32,
+    2.44,
+    6.25,
+    2.55
+  );
+
+  pptDefectBars(
+    pptx,
+    slide,
+    0.32,
+    2.44,
+    6.25,
+    2.55,
+    "Current period",
+
+    data.categories.map(
+      item => ({
+        category:
+          item.category,
+
+        value:
+          item.current
+      })
+    ),
+
+    data.current.defects
+  );
+
+  pptCard(
+    pptx,
+    slide,
+    6.76,
+    2.44,
+    6.25,
+    2.55
+  );
+
+  pptDefectBars(
+    pptx,
+    slide,
+    6.76,
+    2.44,
+    6.25,
+    2.55,
+    "Comparison period",
+
+    data.categories.map(
+      item => ({
+        category:
+          item.category,
+
+        value:
+          item.previous
+      })
+    ),
+
+    data.previous.defects
+  );
+
+  /*
+    Narrow category-change strip.
+  */
+  pptCard(
+    pptx,
+    slide,
+    2.35,
+    5.07,
+    8.63,
+    0.32
+  );
+
+  slide.addText(
+    `Category change: ${pptCategoryChangeSummary(data)}`,
+    {
+      x: 2.55,
+      y: 5.165,
+      w: 8.23,
+      h: 0.11,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 8.5,
+      bold: true,
+
+      color:
+        PPT_THEME.navy,
+
+      align: "center",
+      margin: 0,
+      fit: "shrink"
+    }
+  );
+
+  /*
+    Bottom panel now has enough height
+    for five rows and the footer.
+  */
+  pptTopDefectsPanel(
+    pptx,
+    slide,
+    0.32,
+    5.48,
+    12.69,
+    1.72,
+    data.commonDefects,
+    data.categories
+  );
+}
+
+
+   // Slide 5
+{
+  const slide =
+    pptx.addSlide();
+
+  pptBackground(
+    pptx,
+    slide
+  );
+
+  pptTitle(
+    slide,
+    "Most Common Defects by Category",
+    `${data.currentLabel} breakdown`
+  );
+
+  const visibleCategories =
+    data.categories.filter(
+      item =>
+        item.category === "At Risk" ||
+        item.category ===
+          "Not to Current Standards" ||
+        item.category ===
+          "Observations" ||
+        item.category ===
+          "Documentation Errors"
+    );
+
+  const cardWidth = 3.06;
+const cardGap = 0.12;
+const startX = 0.27;
+const startY = 1.05;
+const cardHeight = 6.05;
+
+  visibleCategories.forEach(
+    (item, index) => {
+      pptCategoryBreakdownCard(
+        pptx,
+        slide,
+        startX +
+          index *
+            (cardWidth + cardGap),
+        startY,
+        cardWidth,
+        cardHeight,
+        item
+      );
+    }
+  );
+}
+    const externalData =
+      buildExternalPerformancePptData();
+
+    pptTcwSlide(
+      pptx,
+      externalData
+    );
+
+    pptMorganLambertSlide(
+      pptx,
+      externalData
+    );
+    const safeName =
+      String(
+        data.currentLabel ||
+        "Quarterly"
+      )
+        .replace(
+          /[^a-z0-9]+/gi,
+          "-"
+        )
+        .replace(
+          /^-+|-+$/g,
+          ""
+        );
+
+    await pptx.writeFile({
+      fileName:
+        `Property-Care-Quarterly-Audit-Scorecard-${safeName || "Report"}.pptx`
+    });
+  } catch (error) {
+    console.error(
+      "Quarterly PowerPoint generation failed",
+      error
+    );
+
+    alert(
+      `The PowerPoint could not be generated: ${error?.message || error}`
+    );
+  } finally {
+    if (button) {
+      button.disabled = false;
+
+      button.textContent =
+        originalText;
+    }
+  }
+}
+
+
+function initQuarterlyPowerPointGenerator() {
+  const button =
+    el(
+      "generateQuarterlyPptBtn"
+    );
+
+  if (
+    !button ||
+    button.dataset.pptInitialised ===
+      "true"
+  ) {
+    return;
+  }
+
+  button.dataset.pptInitialised =
+    "true";
+
+  button.addEventListener(
+    "click",
+    generateQuarterlyPowerPoint
+  );
+}
+
+// =============== END QUARTERLY POWERPOINT EXPORT ===============
