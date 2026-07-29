@@ -6428,7 +6428,7 @@ function openEngineerAuditDrilldown(
             box-sizing: border-box;
           }
 
-          body {
+                   body {
             margin: 0;
             padding: 30px;
             background: #f4f1f7;
@@ -6437,6 +6437,7 @@ function openEngineerAuditDrilldown(
               Arial,
               Helvetica,
               sans-serif;
+            overflow-x: hidden;
           }
 
           .toolbar {
@@ -9324,8 +9325,13 @@ renderHorizontalBars(
   "severity"
 );
 
-  renderMonthlyAuditChart(audits);
+   renderMonthlyAuditChart(audits);
   renderEngineerPerformanceChart(audits);
+
+  renderAnalyticsExternalPerformanceMetrics(
+    getAnalyticsComparisonPeriods()
+  );
+
   renderAnalyticsTable(defects);
 }
 
@@ -11257,8 +11263,12 @@ const severityCounts = {
   const toDate =
     el("analyticsTo")?.value || "";
 
-  const selectedEngineer =
+   const selectedEngineerValue =
     el("analyticsEngineer")?.value ||
+    "";
+
+  const selectedEngineer =
+    selectedEngineerValue ||
     "All engineers";
 
   const selectedCategory =
@@ -11270,6 +11280,305 @@ const severityCounts = {
       ?.selectedOptions?.[0]
       ?.textContent ||
     "All severities";
+
+    const currentTcwRecords =
+    performanceRecordsInRange(
+      performanceState.tcwErrors,
+      fromDate,
+      toDate,
+      selectedEngineerValue
+    );
+
+  const previousTcwRecords =
+    comparisonPeriods
+      ? performanceRecordsInRange(
+          performanceState.tcwErrors,
+          comparisonPeriods.previousFrom,
+          comparisonPeriods.previousTo,
+          selectedEngineerValue
+        )
+      : [];
+
+  const currentMorganRecords =
+    performanceRecordsInRange(
+      performanceState
+        .morganLambertAudits,
+      fromDate,
+      toDate,
+      selectedEngineerValue
+    );
+
+  const previousMorganRecords =
+    comparisonPeriods
+      ? performanceRecordsInRange(
+          performanceState
+            .morganLambertAudits,
+          comparisonPeriods.previousFrom,
+          comparisonPeriods.previousTo,
+          selectedEngineerValue
+        )
+      : [];
+
+  const currentMorganMetrics =
+    getMorganMetrics(
+      currentMorganRecords
+    );
+
+  const previousMorganMetrics =
+    getMorganMetrics(
+      previousMorganRecords
+    );
+
+  const tcwChange =
+    currentTcwRecords.length -
+    previousTcwRecords.length;
+
+  const tcwComparisonHtml =
+    buildManagementKpiComparison(
+      currentTcwRecords.length,
+      previousTcwRecords.length,
+      {
+        lowerIsBetter: true
+      }
+    );
+
+  const morganAuditComparisonHtml =
+    buildManagementKpiComparison(
+      currentMorganMetrics.total,
+      previousMorganMetrics.total,
+      {
+        neutralChange: true
+      }
+    );
+
+  const morganPassRateComparisonHtml =
+    buildManagementKpiComparison(
+      currentMorganMetrics.passRate,
+      previousMorganMetrics.passRate,
+      {
+        suffix: "%",
+        percentagePoints: true
+      }
+    );
+
+  const morganScoreComparisonHtml =
+    buildManagementKpiComparison(
+      currentMorganMetrics.averageScore,
+      previousMorganMetrics.averageScore,
+      {
+        decimals: 1,
+        suffix: "%",
+        percentagePoints: true
+      }
+    );
+
+
+  const tcwEngineerMap =
+    new Map();
+
+  currentTcwRecords.forEach(
+    record => {
+      const engineer =
+        String(
+          record.engineer ||
+          "Not recorded"
+        ).trim() ||
+        "Not recorded";
+
+      tcwEngineerMap.set(
+        engineer,
+        (
+          tcwEngineerMap.get(
+            engineer
+          ) || 0
+        ) + 1
+      );
+    }
+  );
+
+  const tcwEngineerData =
+    Array.from(
+      tcwEngineerMap.entries()
+    ).sort(
+      (a, b) =>
+        b[1] - a[1] ||
+        a[0].localeCompare(b[0])
+    );
+
+  const maximumTcwEngineerCount =
+    Math.max(
+      1,
+      ...tcwEngineerData.map(
+        item => item[1]
+      )
+    );
+
+  const tcwEngineerHtml =
+    tcwEngineerData.length
+      ? tcwEngineerData
+          .map(
+            ([engineer, count]) => `
+              <div class="report-bar-row">
+                <div class="report-bar-heading">
+                  <span class="report-bar-label">
+                    ${escapeHtml(engineer)}
+                  </span>
+
+                  <strong>${count}</strong>
+                </div>
+
+                <div class="report-bar-track">
+                  <div
+                    class="report-bar-fill"
+                    style="width:${
+                      Math.max(
+                        3,
+                        count /
+                        maximumTcwEngineerCount *
+                        100
+                      )
+                    }%"
+                  ></div>
+                </div>
+              </div>
+            `
+          )
+          .join("")
+      : `
+          <div class="report-empty">
+            No TCW engineer data was recorded.
+          </div>
+        `;
+
+  const morganEngineerMap =
+    new Map();
+
+  currentMorganRecords.forEach(
+    record => {
+      const engineer =
+        String(
+          record.engineer ||
+          "Not recorded"
+        ).trim() ||
+        "Not recorded";
+
+      if (
+        !morganEngineerMap.has(
+          engineer
+        )
+      ) {
+        morganEngineerMap.set(
+          engineer,
+          {
+            engineer,
+            audits: 0,
+            passes: 0,
+            fails: 0,
+            scoreTotal: 0,
+            scoredAudits: 0
+          }
+        );
+      }
+
+      const item =
+        morganEngineerMap.get(
+          engineer
+        );
+
+      item.audits++;
+
+      if (
+        String(
+          record.outcome || ""
+        ).toUpperCase() === "PASS"
+      ) {
+        item.passes++;
+      } else {
+        item.fails++;
+      }
+
+      const score =
+        Number(record.score);
+
+      if (
+        Number.isFinite(score)
+      ) {
+        item.scoreTotal += score;
+        item.scoredAudits++;
+      }
+    }
+  );
+
+  const morganEngineerData =
+    Array.from(
+      morganEngineerMap.values()
+    )
+      .map(item => ({
+        ...item,
+
+        passRate:
+          item.audits
+            ? Math.round(
+                item.passes /
+                item.audits *
+                100
+              )
+            : 0,
+
+        averageScore:
+          item.scoredAudits
+            ? item.scoreTotal /
+              item.scoredAudits
+            : 0
+      }))
+      .sort(
+        (a, b) =>
+          b.audits - a.audits ||
+          b.averageScore -
+            a.averageScore ||
+          a.engineer.localeCompare(
+            b.engineer
+          )
+      );
+
+  const morganEngineerRowsHtml =
+    morganEngineerData.length
+      ? morganEngineerData
+          .map(item => `
+            <tr>
+              <td>
+                ${escapeHtml(
+                  item.engineer
+                )}
+              </td>
+
+              <td>${item.audits}</td>
+
+              <td>
+                ${item.averageScore.toFixed(
+                  1
+                )}%
+              </td>
+
+              <td class="report-pass-text">
+                ${item.passes}
+              </td>
+
+              <td class="report-fail-text">
+                ${item.fails}
+              </td>
+
+              <td>${item.passRate}%</td>
+            </tr>
+          `)
+          .join("")
+      : `
+          <tr>
+            <td colspan="6">
+              No Morgan &amp; Lambert engineer data is available.
+            </td>
+          </tr>
+        `;
 
   const periodLabel =
     getAnalyticsPeriodLabel();
@@ -11597,6 +11906,47 @@ const strongestEngineer =
   );
 }
 
+    managementPoints.push(
+    `TCW recorded ${currentTcwRecords.length} error${
+      currentTcwRecords.length === 1
+        ? ""
+        : "s"
+    } in the current period, compared with ${previousTcwRecords.length} in the comparison period.`
+  );
+
+
+
+  managementPoints.push(
+    `Morgan & Lambert completed ${currentMorganMetrics.total} audit${
+      currentMorganMetrics.total === 1
+        ? ""
+        : "s"
+    }, achieving a ${currentMorganMetrics.passRate}% PASS rate and an average score of ${currentMorganMetrics.averageScore.toFixed(
+      1
+    )}%.`
+  );
+
+  if (morganEngineerData.length) {
+    const strongestMorganEngineer =
+      [...morganEngineerData].sort(
+        (a, b) =>
+          b.passRate - a.passRate ||
+          b.averageScore -
+            a.averageScore ||
+          b.audits - a.audits
+      )[0];
+
+    managementPoints.push(
+      `${strongestMorganEngineer.engineer} recorded the strongest Morgan & Lambert performance, with a ${strongestMorganEngineer.passRate}% PASS rate and an average score of ${strongestMorganEngineer.averageScore.toFixed(
+        1
+      )}% across ${strongestMorganEngineer.audits} audit${
+        strongestMorganEngineer.audits === 1
+          ? ""
+          : "s"
+      }.`
+    );
+  }
+
   const managementSummaryHtml =
     managementPoints
       .map(point => `
@@ -11640,7 +11990,7 @@ const strongestEngineer =
             box-sizing: border-box;
           }
 
-          body {
+                    body {
             margin: 0;
             padding: 30px;
             background: #f4f1f7;
@@ -11670,8 +12020,8 @@ const strongestEngineer =
             cursor: pointer;
           }
 
-          .report-page {
-            width: min(1250px, 100%);
+                    .report-page {
+            width: min(1250px, 125%);
             margin: 0 auto;
             padding: 34px;
             border: 1px solid #ddd7e4;
@@ -11680,6 +12030,9 @@ const strongestEngineer =
             box-shadow:
               0 18px 45px
               rgba(35, 20, 50, 0.12);
+
+            transform: scale(0.8);
+            transform-origin: top center;
           }
 
           .report-header {
@@ -11965,6 +12318,85 @@ const strongestEngineer =
             border-bottom: 0;
           }
 
+                    .external-performance-grid {
+            display: grid;
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
+            gap: 18px;
+          }
+
+          .external-performance-panel {
+            min-width: 0;
+            padding: 18px;
+            border: 1px solid #ddd7e4;
+            border-radius: 16px;
+            background: #ffffff;
+          }
+
+          .external-performance-panel h3 {
+            margin: 0 0 5px;
+            font-size: 19px;
+          }
+
+          .external-performance-note {
+            margin: 0 0 15px;
+            color: #675d70;
+            font-size: 12px;
+          }
+
+          .external-kpi-grid {
+            display: grid;
+            grid-template-columns:
+              repeat(4, minmax(0, 1fr));
+            gap: 9px;
+            margin-bottom: 18px;
+          }
+
+          .external-kpi-grid-five {
+            grid-template-columns:
+              repeat(5, minmax(0, 1fr));
+          }
+
+          .external-kpi-card {
+            min-width: 0;
+            padding: 12px 7px;
+            border: 1px solid #ddd7e4;
+            border-radius: 13px;
+            background: #faf8fc;
+            text-align: center;
+          }
+
+          .external-kpi-card span {
+            display: block;
+            color: #675d70;
+            font-size: 10px;
+          }
+
+          .external-kpi-card strong {
+            display: block;
+            margin-top: 5px;
+            font-size: 21px;
+          }
+
+          .external-kpi-card .kpi-comparison {
+            margin-top: 5px;
+          }
+
+          .external-subheading {
+            margin: 17px 0 12px;
+            font-size: 15px;
+          }
+
+          .report-pass-text {
+            color: #15803d;
+            font-weight: 800;
+          }
+
+          .report-fail-text {
+            color: #b91c1c;
+            font-weight: 800;
+          }
+
           .management-summary {
             padding: 20px;
             border: 1px solid #d8c9f5;
@@ -12015,8 +12447,15 @@ const strongestEngineer =
                 repeat(2, minmax(0, 1fr));
             }
 
-            .two-column-grid {
+                        .two-column-grid,
+            .external-performance-grid {
               grid-template-columns: 1fr;
+            }
+
+            .external-kpi-grid,
+            .external-kpi-grid-five {
+              grid-template-columns:
+                repeat(2, minmax(0, 1fr));
             }
           }
 
@@ -12055,6 +12494,8 @@ const strongestEngineer =
     border: 0;
     border-radius: 0;
     box-shadow: none;
+    transform: none;
+transform-origin: initial;
   }
 
   /*
@@ -12488,6 +12929,164 @@ const strongestEngineer =
             </div>
           </section>
 
+                    <section class="report-section">
+            <h2>External performance metrics</h2>
+
+            <div class="report-section-note">
+              TCW and Morgan &amp; Lambert results use
+              the selected date range and engineer filter.
+            </div>
+
+            <div class="external-performance-grid">
+              <div class="external-performance-panel">
+                <h3>TCW Errors</h3>
+
+                <p class="external-performance-note">
+                  Current period compared with the
+                  selected comparison period
+                </p>
+
+                <div class="external-kpi-grid">
+                  <div class="external-kpi-card">
+                    <span>Current</span>
+
+                    <strong>
+                      ${currentTcwRecords.length}
+                    </strong>
+
+                    <div class="kpi-comparison">
+                      ${tcwComparisonHtml}
+                    </div>
+                  </div>
+
+                  <div class="external-kpi-card">
+                    <span>Comparison</span>
+
+                    <strong>
+                      ${previousTcwRecords.length}
+                    </strong>
+                  </div>
+
+                  <div class="external-kpi-card">
+                    <span>Change</span>
+
+                    <strong>
+                      ${tcwChange > 0 ? "+" : ""}${tcwChange}
+                    </strong>
+                  </div>
+
+                  <div class="external-kpi-card">
+                    <span>Engineers affected</span>
+
+                    <strong>
+                      ${tcwEngineerData.length}
+                    </strong>
+                  </div>
+                </div>
+
+                                <h4 class="external-subheading">
+                  TCW errors by engineer
+                </h4>
+
+                <div class="report-bars">
+                  ${tcwEngineerHtml}
+                </div>
+              </div>
+
+              <div class="external-performance-panel">
+                <h3>Morgan &amp; Lambert</h3>
+
+                <p class="external-performance-note">
+                  Audit performance for the current period
+                </p>
+
+                <div
+                  class="
+                    external-kpi-grid
+                    external-kpi-grid-five
+                  "
+                >
+                  <div class="external-kpi-card">
+                    <span>Audits</span>
+
+                    <strong>
+                      ${currentMorganMetrics.total}
+                    </strong>
+
+                    <div class="kpi-comparison">
+                      ${morganAuditComparisonHtml}
+                    </div>
+                  </div>
+
+                  <div class="external-kpi-card">
+                    <span>PASS</span>
+
+                    <strong class="report-pass-text">
+                      ${currentMorganMetrics.passes}
+                    </strong>
+                  </div>
+
+                  <div class="external-kpi-card">
+                    <span>FAIL</span>
+
+                    <strong class="report-fail-text">
+                      ${currentMorganMetrics.fails}
+                    </strong>
+                  </div>
+
+                  <div class="external-kpi-card">
+                    <span>PASS rate</span>
+
+                    <strong>
+                      ${currentMorganMetrics.passRate}%
+                    </strong>
+
+                    <div class="kpi-comparison">
+                      ${morganPassRateComparisonHtml}
+                    </div>
+                  </div>
+
+                  <div class="external-kpi-card">
+                    <span>Average score</span>
+
+                    <strong>
+                      ${currentMorganMetrics.averageScore.toFixed(
+                        1
+                      )}%
+                    </strong>
+
+                    <div class="kpi-comparison">
+                      ${morganScoreComparisonHtml}
+                    </div>
+                  </div>
+                </div>
+
+                <h4 class="external-subheading">
+                  Morgan &amp; Lambert performance by engineer
+                </h4>
+
+                <div class="report-table-wrap">
+                  <table class="report-table">
+                    <thead>
+                      <tr>
+                        <th>Engineer</th>
+                        <th>Audits</th>
+                        <th>Average</th>
+                        <th>PASS</th>
+                        <th>FAIL</th>
+                        <th>PASS rate</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      ${morganEngineerRowsHtml}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <section class="report-section">
             <div class="management-summary">
               <h2>Management summary</h2>
@@ -12883,19 +13482,42 @@ function importTcwRecords(
           "date",
           "audit date",
           "error date"
+        ],
+
+        engineer: [
+          "engineer",
+          "engineer name",
+          "operative",
+          "operative name"
+        ],
+
+        address: [
+          "address",
+          "property address",
+          "site address",
+          "property"
+        ],
+
+        reason: [
+          "reason",
+          "error",
+          "error reason",
+          "failure reason",
+          "tcw error",
+          "description"
         ]
       }
     );
 
   if (!header) {
     throw new Error(
-      `A Date heading could not be found on the "TCW Fails" sheet in ${sourceFile.fileName}.`
+      `Date, Engineer, Address and Reason headings could not all be found on the "TCW Fails" sheet in ${sourceFile.fileName}.`
     );
   }
 
   const imported = [];
 
-  const occurrencesByDate =
+  const occurrencesByRecord =
     new Map();
 
   for (
@@ -12914,25 +13536,62 @@ function importTcwRecords(
         ]
       );
 
+    const engineer =
+      String(
+        row[
+          header.indexes.engineer
+        ] ?? ""
+      ).trim();
+
+    const address =
+      String(
+        row[
+          header.indexes.address
+        ] ?? ""
+      ).trim();
+
+    const reason =
+      String(
+        row[
+          header.indexes.reason
+        ] ?? ""
+      ).trim();
+
     if (!date) continue;
+
+    const occurrenceKey = [
+      date,
+      normalizeEngineer(
+        engineer
+      ),
+      normalizeWorkbookText(
+        address
+      ),
+      normalizeWorkbookText(
+        reason
+      )
+    ].join("|");
 
     const occurrence =
       (
-        occurrencesByDate.get(
-          date
+        occurrencesByRecord.get(
+          occurrenceKey
         ) || 0
       ) + 1;
 
-    occurrencesByDate.set(
-      date,
+    occurrencesByRecord.set(
+      occurrenceKey,
       occurrence
     );
 
     imported.push({
       id:
-        `tcw-${sourceFile.fileKey}-${date}-${occurrence}`,
+        `tcw-${sourceFile.fileKey}-${date}-${rowIndex}`,
 
       date,
+      engineer,
+      address,
+      reason,
 
       sourceFile:
         sourceFile.fileName,
@@ -12944,6 +13603,7 @@ function importTcwRecords(
 
   return imported;
 }
+
 
 
 function normalizeMorganOutcome(value) {
@@ -13018,10 +13678,24 @@ function importMorganLambertRecords(
   const header =
     findWorkbookHeader(
       rows,
-      {
+            {
         date: [
           "date",
           "audit date"
+        ],
+
+                engineer: [
+          "engineer",
+          "engineer name",
+          "engineers name",
+          "engineer/operative",
+          "gas engineer",
+          "operative",
+          "operative name",
+          "name",
+          "full name",
+          "auditee",
+          "auditee name"
         ],
 
         score: [
@@ -13039,9 +13713,9 @@ function importMorganLambertRecords(
       }
     );
 
-  if (!header) {
+    if (!header) {
     throw new Error(
-      `Date, Score and PASS/FAIL headings could not all be found on the "Morgan & Lambert" sheet in ${sourceFile.fileName}.`
+      `Date, Engineer, Score and PASS/FAIL headings could not all be found on the "Morgan & Lambert" sheet in ${sourceFile.fileName}.`
     );
   }
 
@@ -13063,6 +13737,13 @@ function importMorganLambertRecords(
         ]
       );
 
+        const engineer =
+      String(
+        row[
+          header.indexes.engineer
+        ] ?? ""
+      ).trim();
+
     const outcome =
       normalizeMorganOutcome(
         row[
@@ -13077,18 +13758,25 @@ function importMorganLambertRecords(
         ]
       );
 
-    if (
+       if (
       !date ||
       !outcome
     ) {
       continue;
     }
 
+    if (!engineer) {
+      console.warn(
+        `Morgan & Lambert row ${rowIndex + 1} in ${sourceFile.fileName} has no engineer name.`
+      );
+    }
+
     imported.push({
       id:
         `morgan-${sourceFile.fileKey}-${rowIndex}`,
 
-      date,
+            date,
+      engineer,
       outcome,
 
       score:
@@ -13111,26 +13799,94 @@ function importMorganLambertRecords(
 function performanceWorkbookFileKey(
   file
 ) {
-  const safeName =
-    String(file.name || "")
-      .toLowerCase()
-      .replace(
-        /[^a-z0-9]+/g,
-        "-"
-      )
-      .replace(
-        /^-+|-+$/g,
-        ""
-      );
+  return String(file.name || "")
+    .toLowerCase()
+    .replace(
+      /\.[^.]+$/,
+      ""
+    )
+    .replace(
+      /[^a-z0-9]+/g,
+      "-"
+    )
+    .replace(
+      /^-+|-+$/g,
+      ""
+    );
+}
 
-  return [
-    safeName,
-    file.size || 0,
-    file.lastModified || 0
-  ].join("-");
+function normalizePerformanceSourceName(
+  value
+) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(
+      /\.[^.]+$/,
+      ""
+    )
+    .replace(
+      /[^a-z0-9]+/g,
+      "-"
+    )
+    .replace(
+      /^-+|-+$/g,
+      ""
+    );
 }
 
 
+function replacePerformanceSourceRecords(
+  existingRecords,
+  importedRecords,
+  replacedSourceKeys,
+  replacedSourceNames
+) {
+  const keys =
+    new Set(
+      replacedSourceKeys || []
+    );
+
+  const names =
+    new Set(
+      replacedSourceNames || []
+    );
+
+  const retainedRecords =
+    (existingRecords || [])
+      .filter(record => {
+        const sourceKey =
+          String(
+            record.sourceFileKey ||
+            ""
+          );
+
+        const sourceName =
+          normalizePerformanceSourceName(
+            record.sourceFile
+          );
+
+        if (
+          sourceKey &&
+          keys.has(sourceKey)
+        ) {
+          return false;
+        }
+
+        if (
+          sourceName &&
+          names.has(sourceName)
+        ) {
+          return false;
+        }
+
+        return true;
+      });
+
+  return mergePerformanceRecords(
+    retainedRecords,
+    importedRecords
+  );
+}
 function mergePerformanceRecords(
   existingRecords,
   importedRecords
@@ -13222,8 +13978,20 @@ async function importPerformanceWorkbooks(
     }
   }
 
-  const importedTcw = [];
+    const importedTcw = [];
   const importedMorgan = [];
+
+    const replacedTcwSourceKeys =
+    new Set();
+
+  const replacedMorganSourceKeys =
+    new Set();
+
+  const replacedTcwSourceNames =
+    new Set();
+
+  const replacedMorganSourceNames =
+    new Set();
 
   const importedFileNames = [];
 
@@ -13275,7 +14043,17 @@ async function importPerformanceWorkbooks(
         )
     };
 
-    if (hasTcwSheet) {
+          if (hasTcwSheet) {
+      replacedTcwSourceKeys.add(
+        sourceFile.fileKey
+      );
+
+      replacedTcwSourceNames.add(
+        normalizePerformanceSourceName(
+          sourceFile.fileName
+        )
+      );
+
       importedTcw.push(
         ...importTcwRecords(
           workbook,
@@ -13285,6 +14063,16 @@ async function importPerformanceWorkbooks(
     }
 
     if (hasMorganSheet) {
+      replacedMorganSourceKeys.add(
+        sourceFile.fileKey
+      );
+
+      replacedMorganSourceNames.add(
+        normalizePerformanceSourceName(
+          sourceFile.fileName
+        )
+      );
+
       importedMorgan.push(
         ...importMorganLambertRecords(
           workbook,
@@ -13315,19 +14103,23 @@ async function importPerformanceWorkbooks(
       .morganLambertAudits
       .length;
 
-  performanceState.tcwErrors =
-    mergePerformanceRecords(
+     performanceState.tcwErrors =
+    replacePerformanceSourceRecords(
       performanceState.tcwErrors,
-      importedTcw
+      importedTcw,
+      replacedTcwSourceKeys,
+      replacedTcwSourceNames
     );
 
   performanceState
     .morganLambertAudits =
-      mergePerformanceRecords(
+      replacePerformanceSourceRecords(
         performanceState
           .morganLambertAudits,
 
-        importedMorgan
+        importedMorgan,
+        replacedMorganSourceKeys,
+        replacedMorganSourceNames
       );
 
   const tcwAdded =
@@ -13517,15 +14309,36 @@ function initPerformanceWorkbookImport() {
 function performanceRecordsInRange(
   records,
   from,
-  to
+  to,
+  selectedEngineer = ""
 ) {
+  const engineerKey =
+    normalizeEngineer(
+      selectedEngineer
+    );
+
   return (records || []).filter(
-    record =>
-      analyticsDateInRange(
-        record.date,
-        from,
-        to
-      )
+    record => {
+      if (
+        !analyticsDateInRange(
+          record.date,
+          from,
+          to
+        )
+      ) {
+        return false;
+      }
+
+      if (!engineerKey) {
+        return true;
+      }
+
+      return (
+        normalizeEngineer(
+          record.engineer
+        ) === engineerKey
+      );
+    }
   );
 }
 
@@ -13582,7 +14395,987 @@ function getMorganMetrics(records) {
   };
 }
 
+function closePerformanceDrilldown() {
+  el(
+    "performanceDrilldownBackdrop"
+  )?.remove();
+}
 
+
+function openPerformanceDrilldown(
+  type,
+  records,
+  title,
+  periodLabel
+) {
+  closePerformanceDrilldown();
+
+  const sortedRecords =
+    [...(records || [])].sort(
+      (a, b) =>
+        String(b.date || "")
+          .localeCompare(
+            String(a.date || "")
+          )
+    );
+
+  const backdrop =
+    document.createElement("div");
+
+  backdrop.id =
+    "performanceDrilldownBackdrop";
+
+  backdrop.className =
+    "performance-drilldown-backdrop";
+
+  const isMorgan =
+    type === "morgan";
+
+  const rows =
+    sortedRecords.length
+      ? sortedRecords
+          .map(record => `
+            <tr>
+              <td>
+                ${escapeHtml(
+                  formatDate(
+                    record.date
+                  )
+                )}
+              </td>
+
+                            <td>
+                ${escapeHtml(
+                  record.engineer ||
+                  "Not recorded"
+                )}
+              </td>
+
+              ${
+                !isMorgan
+                  ? `
+                    <td>
+                      ${escapeHtml(
+                        record.address ||
+                        "Not recorded"
+                      )}
+                    </td>
+
+                    <td>
+                      ${escapeHtml(
+                        record.reason ||
+                        "Not recorded"
+                      )}
+                    </td>
+                  `
+                  : ""
+              }
+
+              ${
+                isMorgan
+                  ? `
+                    <td
+                      class="${
+                        record.outcome ===
+                        "PASS"
+                          ? "performance-outcome-pass"
+                          : "performance-outcome-fail"
+                      }"
+                    >
+                      ${escapeHtml(
+                        record.outcome ||
+                        "—"
+                      )}
+                    </td>
+
+                    <td>
+                      ${
+                        Number.isFinite(
+                          Number(
+                            record.score
+                          )
+                        )
+                          ? `${Number(
+                              record.score
+                            ).toFixed(1)}%`
+                          : "—"
+                      }
+                    </td>
+                  `
+                  : ""
+              }
+
+              <td>
+                ${escapeHtml(
+                  record.sourceFile ||
+                  "Imported workbook"
+                )}
+              </td>
+            </tr>
+          `)
+          .join("")
+      : `
+          <tr>
+            <td
+              colspan="${isMorgan ? 5 : 5}"
+              class="dashboard-empty"
+            >
+              No matching records.
+            </td>
+          </tr>
+        `;
+
+  backdrop.innerHTML = `
+    <section
+      class="performance-drilldown"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="performanceDrilldownTitle"
+    >
+      <div class="performance-drilldown-head">
+        <div>
+          <h3 id="performanceDrilldownTitle">
+            ${escapeHtml(title)}
+          </h3>
+
+          <span class="muted">
+            ${escapeHtml(periodLabel)}
+            •
+            ${sortedRecords.length}
+            record${
+              sortedRecords.length === 1
+                ? ""
+                : "s"
+            }
+          </span>
+        </div>
+
+                      <div class="performance-drilldown-actions">
+          ${
+            !isMorgan
+              ? `
+                <button
+                  id="showTcwReasonChartBtn"
+                  class="btn small"
+                  type="button"
+                >
+                  Most Common Reasons
+                </button>
+
+                <button
+                  id="showTcwEngineerChartBtn"
+                  class="btn small"
+                  type="button"
+                >
+                  Fails by Engineer
+                </button>
+              `
+              : `
+                <button
+                  id="showMorganEngineerChartBtn"
+                  class="btn small"
+                  type="button"
+                >
+                  Engineer Performance
+                </button>
+              `
+          }
+
+          <button
+            id="closePerformanceDrilldownBtn"
+            class="btn ghost small"
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+
+            <div
+        id="performanceDrilldownBody"
+        class="performance-drilldown-body"
+      >
+        <table class="performance-drilldown-table">
+          <thead>
+            <tr>
+                            <th>Date</th>
+              <th>Engineer</th>
+
+              ${
+                !isMorgan
+                  ? `
+                    <th>Address</th>
+                    <th>Reason</th>
+                  `
+                  : ""
+              }
+
+              ${
+                isMorgan
+                  ? `
+                    <th>Result</th>
+                    <th>Score</th>
+                  `
+                  : ""
+              }
+
+              <th>Source workbook</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+
+    document.body.appendChild(
+    backdrop
+  );
+
+  const drilldownBody =
+    el("performanceDrilldownBody");
+
+  const originalTableHtml =
+    drilldownBody
+      ?.innerHTML || "";
+
+   el(
+    "showTcwReasonChartBtn"
+  )?.addEventListener(
+    "click",
+    () => {
+      const reasonButton =
+        el(
+          "showTcwReasonChartBtn"
+        );
+
+      const engineerButton =
+        el(
+          "showTcwEngineerChartBtn"
+        );
+
+      const body =
+        el(
+          "performanceDrilldownBody"
+        );
+
+      if (
+        !reasonButton ||
+        !body
+      ) {
+        return;
+      }
+
+      if (
+        reasonButton.dataset.view ===
+        "chart"
+      ) {
+        body.innerHTML =
+          originalTableHtml;
+
+        reasonButton.textContent =
+          "Most Common Reasons";
+
+        reasonButton.dataset.view =
+          "records";
+
+        if (engineerButton) {
+          engineerButton.textContent =
+            "Fails by Engineer";
+
+          engineerButton.dataset.view =
+            "records";
+        }
+
+        return;
+      }
+
+      renderTcwReasonChart(
+        sortedRecords
+      );
+    }
+  );
+
+
+  el(
+    "showTcwEngineerChartBtn"
+  )?.addEventListener(
+    "click",
+    () => {
+      const engineerButton =
+        el(
+          "showTcwEngineerChartBtn"
+        );
+
+      const reasonButton =
+        el(
+          "showTcwReasonChartBtn"
+        );
+
+      const body =
+        el(
+          "performanceDrilldownBody"
+        );
+
+      if (
+        !engineerButton ||
+        !body
+      ) {
+        return;
+      }
+
+      if (
+        engineerButton.dataset.view ===
+        "chart"
+      ) {
+        body.innerHTML =
+          originalTableHtml;
+
+        engineerButton.textContent =
+          "Fails by Engineer";
+
+        engineerButton.dataset.view =
+          "records";
+
+        if (reasonButton) {
+          reasonButton.textContent =
+            "Most Common Reasons";
+
+          reasonButton.dataset.view =
+            "records";
+        }
+
+        return;
+      }
+
+           renderTcwEngineerChart(
+        sortedRecords
+      );
+    }
+  );
+
+
+  el(
+    "showMorganEngineerChartBtn"
+  )?.addEventListener(
+    "click",
+    () => {
+      const button =
+        el(
+          "showMorganEngineerChartBtn"
+        );
+
+      const body =
+        el(
+          "performanceDrilldownBody"
+        );
+
+      if (
+        !button ||
+        !body
+      ) {
+        return;
+      }
+
+      if (
+        button.dataset.view ===
+        "chart"
+      ) {
+        body.innerHTML =
+          originalTableHtml;
+
+        button.textContent =
+          "Engineer Performance";
+
+        button.dataset.view =
+          "records";
+
+        return;
+      }
+
+      renderMorganEngineerChart(
+        sortedRecords
+      );
+    }
+  );
+
+
+  el(
+    "closePerformanceDrilldownBtn"
+  )?.addEventListener(
+    "click",
+    closePerformanceDrilldown
+  );
+
+  backdrop.addEventListener(
+    "click",
+    event => {
+      if (event.target === backdrop) {
+        closePerformanceDrilldown();
+      }
+    }
+  );
+
+  document.addEventListener(
+    "keydown",
+    function closeOnEscape(event) {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      closePerformanceDrilldown();
+
+      document.removeEventListener(
+        "keydown",
+        closeOnEscape
+      );
+    }
+  );
+}
+function renderMorganEngineerChart(
+  records
+) {
+  const body =
+    el("performanceDrilldownBody");
+
+  const button =
+    el(
+      "showMorganEngineerChartBtn"
+    );
+
+  if (
+    !body ||
+    !button
+  ) {
+    return;
+  }
+
+  const engineerMap =
+    new Map();
+
+  (records || []).forEach(record => {
+    const engineer =
+      String(
+        record.engineer ||
+        "Not recorded"
+      ).trim() ||
+      "Not recorded";
+
+    if (
+      !engineerMap.has(engineer)
+    ) {
+      engineerMap.set(
+        engineer,
+        {
+          engineer,
+          audits: 0,
+          passes: 0,
+          fails: 0,
+          scoreTotal: 0,
+          scoredAudits: 0
+        }
+      );
+    }
+
+    const item =
+      engineerMap.get(engineer);
+
+    item.audits++;
+
+    if (
+      String(
+        record.outcome || ""
+      ).toUpperCase() === "PASS"
+    ) {
+      item.passes++;
+    } else {
+      item.fails++;
+    }
+
+    const score =
+      Number(record.score);
+
+    if (
+      Number.isFinite(score)
+    ) {
+      item.scoreTotal += score;
+      item.scoredAudits++;
+    }
+  });
+
+  const engineers =
+    Array.from(
+      engineerMap.values()
+    )
+      .map(item => ({
+        ...item,
+
+        passRate:
+          item.audits
+            ? Math.round(
+                item.passes /
+                item.audits *
+                100
+              )
+            : 0,
+
+        averageScore:
+          item.scoredAudits
+            ? item.scoreTotal /
+              item.scoredAudits
+            : 0
+      }))
+      .sort(
+        (a, b) =>
+          b.audits - a.audits ||
+          b.averageScore -
+            a.averageScore ||
+          a.engineer.localeCompare(
+            b.engineer
+          )
+      );
+
+  if (!engineers.length) {
+    body.innerHTML = `
+      <div class="dashboard-empty">
+        No Morgan & Lambert audits were found.
+      </div>
+    `;
+
+    return;
+  }
+
+  const maximumAudits =
+    Math.max(
+      ...engineers.map(
+        item => item.audits
+      ),
+      1
+    );
+
+  body.innerHTML = `
+    <div class="morgan-engineer-chart">
+      <div class="tcw-reason-chart-summary">
+        <strong>
+          Morgan & Lambert performance by engineer
+        </strong>
+
+        <span class="muted">
+          ${records.length} audit${
+            records.length === 1
+              ? ""
+              : "s"
+          }
+          •
+          ${engineers.length} engineer${
+            engineers.length === 1
+              ? ""
+              : "s"
+          }
+        </span>
+      </div>
+
+      <div class="morgan-engineer-chart-head">
+        <span>Engineer</span>
+        <span>Audit volume</span>
+        <span>Audits</span>
+        <span>Average</span>
+        <span>PASS</span>
+        <span>FAIL</span>
+        <span>PASS rate</span>
+      </div>
+
+      <div class="morgan-engineer-chart-rows">
+        ${engineers
+          .map(item => `
+            <div class="morgan-engineer-chart-row">
+              <strong class="morgan-engineer-name">
+                ${escapeHtml(
+                  item.engineer
+                )}
+              </strong>
+
+              <div class="tcw-reason-track">
+                <div
+                  class="tcw-reason-fill"
+                  style="
+                    width:${
+                      Math.max(
+                        3,
+                        item.audits /
+                        maximumAudits *
+                        100
+                      )
+                    }%;
+                  "
+                ></div>
+              </div>
+
+              <strong>
+                ${item.audits}
+              </strong>
+
+              <strong>
+                ${item.averageScore.toFixed(
+                  1
+                )}%
+              </strong>
+
+              <strong class="performance-outcome-pass">
+                ${item.passes}
+              </strong>
+
+              <strong class="performance-outcome-fail">
+                ${item.fails}
+              </strong>
+
+              <strong>
+                ${item.passRate}%
+              </strong>
+            </div>
+          `)
+          .join("")}
+      </div>
+    </div>
+  `;
+
+  button.textContent =
+    "Show Records";
+
+  button.dataset.view =
+    "chart";
+}
+function renderTcwEngineerChart(
+  records
+) {
+  const body =
+    el("performanceDrilldownBody");
+
+  const engineerButton =
+    el("showTcwEngineerChartBtn");
+
+  const reasonButton =
+    el("showTcwReasonChartBtn");
+
+  if (
+    !body ||
+    !engineerButton
+  ) {
+    return;
+  }
+
+  const engineerCounts =
+    new Map();
+
+  (records || []).forEach(record => {
+    const engineer =
+      String(
+        record.engineer ||
+        "Not recorded"
+      ).trim() ||
+      "Not recorded";
+
+    engineerCounts.set(
+      engineer,
+      (
+        engineerCounts.get(
+          engineer
+        ) || 0
+      ) + 1
+    );
+  });
+
+  const entries =
+    Array.from(
+      engineerCounts.entries()
+    ).sort(
+      (a, b) =>
+        b[1] - a[1] ||
+        a[0].localeCompare(b[0])
+    );
+
+  if (!entries.length) {
+    body.innerHTML = `
+      <div class="dashboard-empty">
+        No TCW engineer records were found.
+      </div>
+    `;
+
+    return;
+  }
+
+  const maximum =
+    Math.max(
+      ...entries.map(
+        item => item[1]
+      ),
+      1
+    );
+
+  body.innerHTML = `
+    <div class="tcw-reason-chart">
+      <div class="tcw-reason-chart-summary">
+        <strong>
+          TCW fails by engineer
+        </strong>
+
+        <span class="muted">
+          ${records.length} TCW error${
+            records.length === 1
+              ? ""
+              : "s"
+          }
+          •
+          ${entries.length} engineer${
+            entries.length === 1
+              ? ""
+              : "s"
+          }
+        </span>
+      </div>
+
+      <div class="tcw-reason-bars">
+        ${entries
+          .map(
+            ([engineer, count]) => `
+              <div class="tcw-reason-row">
+                <div class="tcw-reason-label">
+                  ${escapeHtml(engineer)}
+                </div>
+
+                <div class="tcw-reason-track">
+                  <div
+                    class="tcw-reason-fill"
+                    style="
+                      width:${
+                        Math.max(
+                          3,
+                          count /
+                          maximum *
+                          100
+                        )
+                      }%;
+                    "
+                  ></div>
+                </div>
+
+                <strong>${count}</strong>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
+    </div>
+  `;
+
+  engineerButton.textContent =
+    "Show Records";
+
+  engineerButton.dataset.view =
+    "chart";
+
+  if (reasonButton) {
+    reasonButton.textContent =
+      "Most Common Reasons";
+
+    reasonButton.dataset.view =
+      "records";
+  }
+}
+function renderTcwReasonChart(
+  records
+) {
+  const body =
+    el("performanceDrilldownBody");
+
+    const button =
+    el("showTcwReasonChartBtn");
+
+  const engineerButton =
+    el("showTcwEngineerChartBtn");
+
+  if (!body || !button) {
+    return;
+  }
+
+  const reasonCounts =
+    new Map();
+
+  (records || []).forEach(record => {
+    const reason =
+      String(
+        record.reason ||
+        "Not recorded"
+      ).trim() ||
+      "Not recorded";
+
+    reasonCounts.set(
+      reason,
+      (
+        reasonCounts.get(reason) ||
+        0
+      ) + 1
+    );
+  });
+
+  const entries =
+    Array.from(
+      reasonCounts.entries()
+    ).sort(
+      (a, b) =>
+        b[1] - a[1] ||
+        a[0].localeCompare(b[0])
+    );
+
+  if (!entries.length) {
+    body.innerHTML = `
+      <div class="dashboard-empty">
+        No TCW reasons were found.
+      </div>
+    `;
+
+    return;
+  }
+
+  const maximum =
+    Math.max(
+      ...entries.map(
+        item => item[1]
+      ),
+      1
+    );
+
+  body.innerHTML = `
+    <div class="tcw-reason-chart">
+      <div class="tcw-reason-chart-summary">
+        <strong>
+          Most common TCW error reasons
+        </strong>
+
+        <span class="muted">
+          ${records.length} record${
+            records.length === 1
+              ? ""
+              : "s"
+          }
+          •
+          ${entries.length} unique reason${
+            entries.length === 1
+              ? ""
+              : "s"
+          }
+        </span>
+      </div>
+
+      <div class="tcw-reason-bars">
+        ${entries
+          .map(
+            ([reason, count]) => `
+              <div class="tcw-reason-row">
+                <div class="tcw-reason-label">
+                  ${escapeHtml(reason)}
+                </div>
+
+                <div class="tcw-reason-track">
+                  <div
+                    class="tcw-reason-fill"
+                    style="
+                      width:${
+                        Math.max(
+                          3,
+                          count /
+                          maximum *
+                          100
+                        )
+                      }%;
+                    "
+                  ></div>
+                </div>
+
+                <strong>${count}</strong>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
+    </div>
+  `;
+
+  button.textContent =
+    "Show Records";
+
+  button.dataset.view =
+    "chart";
+}
+function addPerformanceDrilldownHandlers(
+  container,
+  type,
+  currentRecords,
+  previousRecords,
+  periods
+) {
+  if (!container) return;
+
+  container
+    .querySelectorAll(
+      "[data-performance-period]"
+    )
+    .forEach(item => {
+      const open = () => {
+        const period =
+          item.dataset
+            .performancePeriod;
+
+        const records =
+          period === "previous"
+            ? previousRecords
+            : currentRecords;
+
+        const label =
+          period === "previous"
+            ? `${formatDate(
+                periods.previousFrom
+              )}–${formatDate(
+                periods.previousTo
+              )}`
+            : `${formatDate(
+                periods.currentFrom
+              )}–${formatDate(
+                periods.currentTo
+              )}`;
+
+        openPerformanceDrilldown(
+          type,
+          records,
+          type === "tcw"
+            ? "TCW Error Records"
+            : "Morgan & Lambert Audits",
+          label
+        );
+      };
+
+      item.addEventListener(
+        "click",
+        open
+      );
+
+      item.addEventListener(
+        "keydown",
+        event => {
+          if (
+            event.key === "Enter" ||
+            event.key === " "
+          ) {
+            event.preventDefault();
+            open();
+          }
+        }
+      );
+    });
+}
 function renderExternalMetricCard(
   label,
   value,
@@ -13602,33 +15395,29 @@ function renderExternalMetricCard(
 }
 
 
-function renderExternalPerformanceMetrics(
-  periods
+function renderPerformancePanels(
+  periods,
+  options
 ) {
-  const status =
-    el(
-      "performanceWorkbookStatus"
-    );
+  const {
+    tcwMetricsId,
+    tcwChartId,
+    morganMetricsId,
+    morganComparisonId,
+    showStatus = false
+  } = options;
 
   const tcwContainer =
-    el(
-      "dashboardTcwMetrics"
-    );
+    el(tcwMetricsId);
 
   const tcwChart =
-    el(
-      "dashboardTcwChart"
-    );
+    el(tcwChartId);
 
   const morganContainer =
-    el(
-      "dashboardMorganMetrics"
-    );
+    el(morganMetricsId);
 
   const morganComparison =
-    el(
-      "dashboardMorganComparison"
-    );
+    el(morganComparisonId);
 
   if (
     !tcwContainer ||
@@ -13639,28 +15428,38 @@ function renderExternalPerformanceMetrics(
     return;
   }
 
-  if (
-    performanceState.importMeta
-  ) {
-    const imported =
-      new Date(
-        performanceState
-          .importMeta
-          .importedAt
-      );
-
-    status.textContent =
-      `${performanceState.importMeta.fileName} • ` +
-      `${performanceState.importMeta.tcwCount} TCW errors • ` +
-      `${performanceState.importMeta.morganCount} Morgan & Lambert audits • ` +
-      `imported ${imported.toLocaleString("en-GB")}`;
-
-    status.classList.remove(
-      "dashboard-import-error"
+  const status =
+    el(
+      "performanceWorkbookStatus"
     );
-  } else {
-    status.textContent =
-      "No workbook imported";
+
+  if (
+    showStatus &&
+    status
+  ) {
+    if (
+      performanceState.importMeta
+    ) {
+      const imported =
+        new Date(
+          performanceState
+            .importMeta
+            .importedAt
+        );
+
+      status.textContent =
+        `${performanceState.importMeta.fileName} • ` +
+        `${performanceState.importMeta.tcwCount} TCW errors • ` +
+        `${performanceState.importMeta.morganCount} Morgan & Lambert audits • ` +
+        `imported ${imported.toLocaleString("en-GB")}`;
+
+      status.classList.remove(
+        "dashboard-import-error"
+      );
+    } else {
+      status.textContent =
+        "No workbook imported";
+    }
   }
 
   if (!periods) {
@@ -13684,18 +15483,24 @@ function renderExternalPerformanceMetrics(
     return;
   }
 
+  const selectedEngineer =
+    el("analyticsEngineer")
+      ?.value || "";
+
   const currentTcw =
     performanceRecordsInRange(
       performanceState.tcwErrors,
       periods.currentFrom,
-      periods.currentTo
+      periods.currentTo,
+      selectedEngineer
     );
 
   const previousTcw =
     performanceRecordsInRange(
       performanceState.tcwErrors,
       periods.previousFrom,
-      periods.previousTo
+      periods.previousTo,
+      selectedEngineer
     );
 
   const tcwChange =
@@ -13743,23 +15548,26 @@ function renderExternalPerformanceMetrics(
 
   tcwChart.innerHTML = [
     {
-      label:
-        "Comparison period",
-      value:
-        previousTcw.length
+      key: "previous",
+      label: "Comparison period",
+      value: previousTcw.length
     },
     {
-      label:
-        "Current period",
-      value:
-        currentTcw.length
+      key: "current",
+      label: "Current period",
+      value: currentTcw.length
     }
   ].map(item => `
-    <div class="dashboard-mini-column">
+    <button
+      type="button"
+      class="dashboard-mini-column"
+      data-performance-period="${item.key}"
+      aria-label="View ${item.label} TCW records"
+    >
       <strong>${item.value}</strong>
 
-      <div class="dashboard-mini-bar-wrap">
-        <div
+      <span class="dashboard-mini-bar-wrap">
+        <span
           class="dashboard-mini-bar"
           style="
             height:${
@@ -13771,11 +15579,11 @@ function renderExternalPerformanceMetrics(
               )
             }%;
           "
-        ></div>
-      </div>
+        ></span>
+      </span>
 
       <span>${item.label}</span>
-    </div>
+    </button>
   `).join("");
 
   const currentMorganRecords =
@@ -13784,7 +15592,8 @@ function renderExternalPerformanceMetrics(
         .morganLambertAudits,
 
       periods.currentFrom,
-      periods.currentTo
+      periods.currentTo,
+      selectedEngineer
     );
 
   const previousMorganRecords =
@@ -13793,7 +15602,8 @@ function renderExternalPerformanceMetrics(
         .morganLambertAudits,
 
       periods.previousFrom,
-      periods.previousTo
+      periods.previousTo,
+      selectedEngineer
     );
 
   const currentMorgan =
@@ -13830,8 +15640,14 @@ function renderExternalPerformanceMetrics(
 
   morganComparison.innerHTML = `
     <div class="dashboard-morgan-summary">
-      <div class="dashboard-morgan-period">
+      <div
+        class="dashboard-morgan-period"
+        role="button"
+        tabindex="0"
+        data-performance-period="current"
+      >
         <strong>Current period</strong>
+
         <span>
           ${currentMorgan.total} audits •
           ${currentMorgan.passRate}% PASS •
@@ -13839,8 +15655,14 @@ function renderExternalPerformanceMetrics(
         </span>
       </div>
 
-      <div class="dashboard-morgan-period">
+      <div
+        class="dashboard-morgan-period"
+        role="button"
+        tabindex="0"
+        data-performance-period="previous"
+      >
         <strong>Comparison period</strong>
+
         <span>
           ${previousMorgan.total} audits •
           ${previousMorgan.passRate}% PASS •
@@ -13849,6 +15671,68 @@ function renderExternalPerformanceMetrics(
       </div>
     </div>
   `;
+
+  addPerformanceDrilldownHandlers(
+    tcwChart,
+    "tcw",
+    currentTcw,
+    previousTcw,
+    periods
+  );
+
+  addPerformanceDrilldownHandlers(
+    morganComparison,
+    "morgan",
+    currentMorganRecords,
+    previousMorganRecords,
+    periods
+  );
+}
+
+
+function renderExternalPerformanceMetrics(
+  periods
+) {
+  renderPerformancePanels(
+    periods,
+    {
+      tcwMetricsId:
+        "dashboardTcwMetrics",
+
+      tcwChartId:
+        "dashboardTcwChart",
+
+      morganMetricsId:
+        "dashboardMorganMetrics",
+
+      morganComparisonId:
+        "dashboardMorganComparison",
+
+      showStatus: true
+    }
+  );
+}
+
+
+function renderAnalyticsExternalPerformanceMetrics(
+  periods
+) {
+  renderPerformancePanels(
+    periods,
+    {
+      tcwMetricsId:
+        "analyticsTcwMetrics",
+
+      tcwChartId:
+        "analyticsTcwChart",
+
+      morganMetricsId:
+        "analyticsMorganMetrics",
+
+      morganComparisonId:
+        "analyticsMorganComparison"
+    }
+  );
 }
 
 
@@ -17912,7 +19796,39 @@ function getMorganPptMetrics(records) {
   };
 }
 
+function countTcwReasonsForPpt(
+  records,
+  limit = 10
+) {
+  const counts = new Map();
 
+  (records || []).forEach(record => {
+    const reason =
+      String(
+        record.reason ||
+        "Not recorded"
+      ).trim() ||
+      "Not recorded";
+
+    counts.set(
+      reason,
+      (counts.get(reason) || 0) + 1
+    );
+  });
+
+  const entries =
+    Array.from(counts.entries())
+      .sort(
+        (a, b) =>
+          b[1] - a[1] ||
+          a[0].localeCompare(b[0])
+      );
+
+  return {
+    totalUnique: entries.length,
+    top: entries.slice(0, limit)
+  };
+}
 function buildExternalPerformancePptData() {
   const currentFrom =
     el("analyticsFrom")?.value || "";
@@ -17976,12 +19892,18 @@ function buildExternalPerformancePptData() {
         previousTo
       ),
 
-    tcw: {
+        tcw: {
       current: currentTcw.length,
       previous: previousTcw.length,
       total:
         currentTcw.length +
-        previousTcw.length
+        previousTcw.length,
+
+      reasons:
+        countTcwReasonsForPpt(
+          currentTcw,
+          10
+        )
     },
 
     morgan: {
@@ -18284,7 +20206,247 @@ function pptTcwSlide(
   );
 }
 
+function pptTcwReasonsSlide(
+  pptx,
+  externalData
+) {
+  const slide =
+    pptx.addSlide();
 
+  pptBackground(
+    pptx,
+    slide
+  );
+
+  pptTitle(
+    slide,
+    "Most Common TCW Error Reasons",
+    `${externalData.currentLabel} breakdown`
+  );
+
+  const reasons =
+    externalData.tcw.reasons?.top || [];
+
+  const uniqueReasons =
+    externalData.tcw.reasons
+      ?.totalUnique || 0;
+
+  pptMetric(
+    pptx,
+    slide,
+    0.35,
+    0.92,
+    3.0,
+    "Current TCW errors",
+    externalData.tcw.current,
+    "Current period",
+    "",
+    true
+  );
+
+  pptMetric(
+    pptx,
+    slide,
+    3.55,
+    0.92,
+    3.0,
+    "Unique reasons",
+    uniqueReasons,
+    "Current period",
+    "",
+    true
+  );
+
+  pptMetric(
+    pptx,
+    slide,
+    6.75,
+    0.92,
+    3.0,
+    "Most common",
+    reasons[0]?.[0] || "None",
+    reasons[0]
+      ? `${reasons[0][1]} record${
+          reasons[0][1] === 1 ? "" : "s"
+        }`
+      : "No reasons recorded",
+    "",
+    true
+  );
+
+  pptMetric(
+    pptx,
+    slide,
+    9.95,
+    0.92,
+    3.0,
+    "Comparison period",
+    externalData.tcw.previous,
+    "TCW errors",
+    "",
+    true
+  );
+
+  pptCard(
+    pptx,
+    slide,
+    0.35,
+    2.35,
+    12.63,
+    4.55
+  );
+
+  slide.addText(
+    "Most common reasons this period",
+    {
+      x: 0.75,
+      y: 2.65,
+      w: 11.8,
+      h: 0.3,
+      fontFace: PPT_THEME.font,
+      fontSize: 17,
+      bold: true,
+      color: PPT_THEME.navy,
+      margin: 0
+    }
+  );
+
+  if (!reasons.length) {
+    slide.addText(
+      "No TCW error reasons were recorded for the selected period.",
+      {
+        x: 0.75,
+        y: 4.15,
+        w: 11.8,
+        h: 0.35,
+        fontFace: PPT_THEME.font,
+        fontSize: 15,
+        color: PPT_THEME.muted,
+        align: "center",
+        margin: 0
+      }
+    );
+
+    return;
+  }
+
+  const maxCount =
+    Math.max(
+      ...reasons.map(item => item[1]),
+      1
+    );
+
+  reasons.forEach(
+    ([reason, count], index) => {
+      const y =
+        3.2 + index * 0.34;
+
+      slide.addShape(
+        pptx.ShapeType.ellipse,
+        {
+          x: 0.75,
+          y: y + 0.015,
+          w: 0.22,
+          h: 0.22,
+          line: {
+            color: PPT_THEME.navy,
+            transparency: 100
+          },
+          fill: {
+            color: PPT_THEME.navy
+          }
+        }
+      );
+
+      slide.addText(
+        String(index + 1),
+        {
+          x: 0.75,
+          y: y + 0.055,
+          w: 0.22,
+          h: 0.1,
+          fontFace: PPT_THEME.font,
+          fontSize: 6.5,
+          bold: true,
+          color: PPT_THEME.white,
+          align: "center",
+          valign: "mid",
+          margin: 0
+        }
+      );
+
+      slide.addText(
+        reason,
+        {
+          x: 1.08,
+          y,
+          w: 4.8,
+          h: 0.22,
+          fontFace: PPT_THEME.font,
+          fontSize: 9.5,
+          color: PPT_THEME.navy,
+          margin: 0,
+          fit: "shrink"
+        }
+      );
+
+      slide.addShape(
+        pptx.ShapeType.roundRect,
+        {
+          x: 6.15,
+          y: y + 0.06,
+          w: 5.3,
+          h: 0.08,
+          rectRadius: 0.03,
+          line: {
+            color: PPT_THEME.grid,
+            transparency: 100
+          },
+          fill: {
+            color: PPT_THEME.grid
+          }
+        }
+      );
+
+      slide.addShape(
+        pptx.ShapeType.roundRect,
+        {
+          x: 6.15,
+          y: y + 0.06,
+          w: Math.max(
+            0.12,
+            5.3 * count / maxCount
+          ),
+          h: 0.08,
+          rectRadius: 0.03,
+          line: {
+            color: PPT_THEME.navy,
+            transparency: 100
+          },
+          fill: {
+            color: PPT_THEME.navy
+          }
+        }
+      );
+
+      slide.addText(
+        String(count),
+        {
+          x: 11.65,
+          y: y - 0.015,
+          w: 0.45,
+          h: 0.18,
+          fontFace: PPT_THEME.font,
+          fontSize: 9.5,
+          bold: true,
+          color: PPT_THEME.navy,
+          align: "right",
+          margin: 0
+        }
+      );
+    }
+  );
+}
 function pptMorganLambertSlide(
   pptx,
   externalData
@@ -19237,7 +21399,12 @@ const cardHeight = 6.05;
     const externalData =
       buildExternalPerformancePptData();
 
-    pptTcwSlide(
+        pptTcwSlide(
+      pptx,
+      externalData
+    );
+
+    pptTcwReasonsSlide(
       pptx,
       externalData
     );
