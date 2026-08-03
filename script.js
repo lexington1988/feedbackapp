@@ -21,6 +21,9 @@ const MORGAN_LAMBERT_AUDITS_KEY =
 const PERFORMANCE_IMPORT_META_KEY =
   "ppc_performance_import_meta_v1";
 
+const DASHBOARD_DATES_KEY =
+  "ppc_dashboard_dates_v1";
+
 const el = (id) => document.getElementById(id);
 const uid = () => Math.random().toString(16).slice(2) + Date.now().toString(16);
 function closeMobileKeyboard(input = null) {
@@ -46,7 +49,47 @@ const analyticsState = {
   defects: loadAnalyticsArray(ANALYTICS_DEFECTS_KEY),
   audits: loadAnalyticsArray(ANALYTICS_AUDITS_KEY)
 };
+function loadDashboardDateState() {
+  try {
+    const parsed =
+      JSON.parse(
+        localStorage.getItem(
+          DASHBOARD_DATES_KEY
+        ) || "null"
+      );
 
+    return parsed &&
+      typeof parsed === "object"
+      ? parsed
+      : {
+          currentFrom: "",
+          currentTo: "",
+          previousFrom: "",
+          previousTo: ""
+        };
+  } catch {
+    return {
+      currentFrom: "",
+      currentTo: "",
+      previousFrom: "",
+      previousTo: ""
+    };
+  }
+}
+
+
+const dashboardDateState =
+  loadDashboardDateState();
+
+
+function saveDashboardDateState() {
+  localStorage.setItem(
+    DASHBOARD_DATES_KEY,
+    JSON.stringify(
+      dashboardDateState
+    )
+  );
+}
 const performanceState = {
   tcwErrors:
     loadAnalyticsArray(
@@ -10991,9 +11034,43 @@ function runManagementReportPreset(
   openManagementReport();
 }
 
-function openManagementReport() {
-  const { defects, audits } =
-    getAnalyticsSelection();
+function openManagementReport(
+  options = {}
+) {
+  const useDashboardDates =
+    options.dateSource ===
+    "dashboard";
+
+  const dashboardPeriods =
+    useDashboardDates
+      ? getExecutiveDashboardPeriods()
+      : null;
+
+  const fromDate =
+    dashboardPeriods
+      ?.currentFrom ||
+    el("analyticsFrom")
+      ?.value ||
+    "";
+
+  const toDate =
+    dashboardPeriods
+      ?.currentTo ||
+    el("analyticsTo")
+      ?.value ||
+    "";
+
+  const currentSelection =
+    getAnalyticsSelectionForRange(
+      fromDate,
+      toDate
+    );
+
+  const defects =
+    currentSelection.defects || [];
+
+  const audits =
+    currentSelection.audits || [];
 
   if (!audits.length && !defects.length) {
     alert(
@@ -11029,6 +11106,7 @@ function openManagementReport() {
   equivalent reporting period.
 */
 const comparisonPeriods =
+  dashboardPeriods ||
   getAnalyticsComparisonPeriods();
 
 let previousAudits = [];
@@ -11254,16 +11332,10 @@ const severityCounts = {
     10
   );
 
-  const engineerData =
+    const engineerData =
     getEngineerPerformanceData(audits);
 
-  const fromDate =
-    el("analyticsFrom")?.value || "";
-
-  const toDate =
-    el("analyticsTo")?.value || "";
-
-   const selectedEngineerValue =
+  const selectedEngineerValue =
     el("analyticsEngineer")?.value ||
     "";
 
@@ -11580,8 +11652,14 @@ const severityCounts = {
           </tr>
         `;
 
-  const periodLabel =
-    getAnalyticsPeriodLabel();
+    const periodLabel =
+    fromDate && toDate
+      ? `${formatDate(
+          fromDate
+        )} to ${formatDate(
+          toDate
+        )}`
+      : getAnalyticsPeriodLabel();
 
   const generatedDate = new Date()
     .toLocaleDateString(
@@ -14234,18 +14312,31 @@ function initPerformanceWorkbookImport() {
 
       if (!files.length) return;
 
-      const originalText =
-        button.textContent;
+           const originalHtml =
+        button.innerHTML;
 
       try {
         button.disabled = true;
 
-        button.textContent =
-          `Importing ${files.length} workbook${
-            files.length === 1
-              ? ""
-              : "s"
-          }…`;
+        button.innerHTML = `
+          <span class="dashboard-dropdown-icon">
+            ⇧
+          </span>
+
+          <span>
+            <strong>
+              Importing ${files.length} workbook${
+                files.length === 1
+                  ? ""
+                  : "s"
+              }…
+            </strong>
+
+            <small>
+              Please wait while the files are processed
+            </small>
+          </span>
+        `;
 
         const result =
           await importPerformanceWorkbooks(
@@ -14296,8 +14387,8 @@ function initPerformanceWorkbookImport() {
       } finally {
         button.disabled = false;
 
-        button.textContent =
-          originalText;
+              button.innerHTML =
+        originalHtml;
 
         input.value = "";
       }
@@ -15394,7 +15485,32 @@ function renderExternalMetricCard(
   `;
 }
 
+function formatPerformanceDateShort(
+  value
+) {
+  const formatted =
+    formatDate(value);
 
+  return String(formatted)
+    .replace(
+      /^(\d{2}\/\d{2}\/)\d{2}(\d{2})$/,
+      "$1$2"
+    );
+}
+
+
+function formatPerformancePeriodLabel(
+  from,
+  to,
+  shortYear = false
+) {
+  const formatter =
+    shortYear
+      ? formatPerformanceDateShort
+      : formatDate;
+
+  return `${formatter(from)}–${formatter(to)}`;
+}
 function renderPerformancePanels(
   periods,
   options
@@ -15483,9 +15599,35 @@ function renderPerformancePanels(
     return;
   }
 
-  const selectedEngineer =
+    const selectedEngineer =
     el("analyticsEngineer")
       ?.value || "";
+
+  const currentPeriodLabel =
+    formatPerformancePeriodLabel(
+      periods.currentFrom,
+      periods.currentTo
+    );
+
+  const previousPeriodLabel =
+    formatPerformancePeriodLabel(
+      periods.previousFrom,
+      periods.previousTo
+    );
+
+  const currentPeriodShortLabel =
+    formatPerformancePeriodLabel(
+      periods.currentFrom,
+      periods.currentTo,
+      true
+    );
+
+  const previousPeriodShortLabel =
+    formatPerformancePeriodLabel(
+      periods.previousFrom,
+      periods.previousTo,
+      true
+    );
 
   const currentTcw =
     performanceRecordsInRange(
@@ -15516,22 +15658,22 @@ function renderPerformancePanels(
         )
       : null;
 
-  tcwContainer.innerHTML =
+   tcwContainer.innerHTML =
     renderExternalMetricCard(
-      "Both periods",
+      "Both date ranges",
       currentTcw.length +
         previousTcw.length
     ) +
     renderExternalMetricCard(
-      "Comparison",
+      previousPeriodShortLabel,
       previousTcw.length
     ) +
     renderExternalMetricCard(
-      "Current",
+      currentPeriodShortLabel,
       currentTcw.length
     ) +
     renderExternalMetricCard(
-      "Change",
+      "Difference",
       `${tcwChange >= 0 ? "+" : ""}${tcwChange}`,
 
       tcwPercentChange === null
@@ -15546,23 +15688,35 @@ function renderPerformancePanels(
       previousTcw.length
     );
 
-  tcwChart.innerHTML = [
+   tcwChart.innerHTML = [
     {
       key: "previous",
-      label: "Comparison period",
-      value: previousTcw.length
+      label:
+        previousPeriodShortLabel,
+
+      fullLabel:
+        previousPeriodLabel,
+
+      value:
+        previousTcw.length
     },
     {
       key: "current",
-      label: "Current period",
-      value: currentTcw.length
+      label:
+        currentPeriodShortLabel,
+
+      fullLabel:
+        currentPeriodLabel,
+
+      value:
+        currentTcw.length
     }
   ].map(item => `
     <button
       type="button"
       class="dashboard-mini-column"
       data-performance-period="${item.key}"
-      aria-label="View ${item.label} TCW records"
+            aria-label="View TCW records for ${item.fullLabel}"
     >
       <strong>${item.value}</strong>
 
@@ -15638,15 +15792,22 @@ function renderPerformancePanels(
       `${currentMorgan.averageScore.toFixed(1)}%`
     );
 
-  morganComparison.innerHTML = `
+   morganComparison.innerHTML = `
     <div class="dashboard-morgan-summary">
       <div
         class="dashboard-morgan-period"
         role="button"
         tabindex="0"
         data-performance-period="current"
+        aria-label="View Morgan and Lambert audits for ${escapeHtml(
+          currentPeriodLabel
+        )}"
       >
-        <strong>Current period</strong>
+        <strong>
+          ${escapeHtml(
+            currentPeriodLabel
+          )}
+        </strong>
 
         <span>
           ${currentMorgan.total} audits •
@@ -15660,8 +15821,15 @@ function renderPerformancePanels(
         role="button"
         tabindex="0"
         data-performance-period="previous"
+        aria-label="View Morgan and Lambert audits for ${escapeHtml(
+          previousPeriodLabel
+        )}"
       >
-        <strong>Comparison period</strong>
+        <strong>
+          ${escapeHtml(
+            previousPeriodLabel
+          )}
+        </strong>
 
         <span>
           ${previousMorgan.total} audits •
@@ -15735,7 +15903,142 @@ function renderAnalyticsExternalPerformanceMetrics(
   );
 }
 
+function openDashboardDateModal() {
+  const periods =
+    getExecutiveDashboardPeriods();
 
+  if (!periods) {
+    alert(
+      "A valid dashboard date range could not be found."
+    );
+
+    return;
+  }
+
+  el("dashboardCurrentFrom").value =
+    periods.currentFrom;
+
+  el("dashboardCurrentTo").value =
+    periods.currentTo;
+
+  el("dashboardPreviousFrom").value =
+    periods.previousFrom;
+
+  el("dashboardPreviousTo").value =
+    periods.previousTo;
+
+  el("dashboardDateError")
+    ?.classList.add("hidden");
+
+  el("dashboardDateModal")
+    ?.classList.remove("hidden");
+}
+
+
+function closeDashboardDateModal() {
+  el("dashboardDateModal")
+    ?.classList.add("hidden");
+
+  el("dashboardDateError")
+    ?.classList.add("hidden");
+}
+
+
+function showDashboardDateError(
+  message
+) {
+  const error =
+    el("dashboardDateError");
+
+  if (!error) return;
+
+  error.textContent =
+    message;
+
+  error.classList.remove(
+    "hidden"
+  );
+}
+
+
+function applyDashboardCustomDates() {
+  const currentFrom =
+    el("dashboardCurrentFrom")
+      ?.value || "";
+
+  const currentTo =
+    el("dashboardCurrentTo")
+      ?.value || "";
+
+  const previousFrom =
+    el("dashboardPreviousFrom")
+      ?.value || "";
+
+  const previousTo =
+    el("dashboardPreviousTo")
+      ?.value || "";
+
+  if (
+    !currentFrom ||
+    !currentTo ||
+    !previousFrom ||
+    !previousTo
+  ) {
+    showDashboardDateError(
+      "Complete all four date fields."
+    );
+
+    return;
+  }
+
+  if (
+    currentFrom > currentTo
+  ) {
+    showDashboardDateError(
+      "The current-period From date must be before its To date."
+    );
+
+    return;
+  }
+
+  if (
+    previousFrom > previousTo
+  ) {
+    showDashboardDateError(
+      "The comparison-period From date must be before its To date."
+    );
+
+    return;
+  }
+
+  dashboardDateState.currentFrom =
+    currentFrom;
+
+  dashboardDateState.currentTo =
+    currentTo;
+
+  dashboardDateState.previousFrom =
+    previousFrom;
+
+  dashboardDateState.previousTo =
+    previousTo;
+
+  saveDashboardDateState();
+
+  document
+    .querySelectorAll(
+      "[data-dashboard-period]"
+    )
+    .forEach(button =>
+      button.classList.remove(
+        "dashboard-period-active"
+      )
+    );
+
+  closeDashboardDateModal();
+
+  renderExecutiveDashboard();
+}
 function initExecutiveDashboard() {
   document
     .querySelectorAll(
@@ -15753,16 +16056,52 @@ function initExecutiveDashboard() {
       );
     });
 
-  el("dashboardManagementReportBtn")
+    el("dashboardManagementReportBtn")
     ?.addEventListener(
       "click",
-      openManagementReport
+      () => {
+        openManagementReport({
+          dateSource:
+            "dashboard"
+        });
+      }
     );
 
-  el("dashboardOpenAnalyticsBtn")
+  el("dashboardPeriodLabel")
     ?.addEventListener(
       "click",
-      () => setTab("analytics")
+      openDashboardDateModal
+    );
+
+  el("dashboardDateCloseBtn")
+    ?.addEventListener(
+      "click",
+      closeDashboardDateModal
+    );
+
+  el("dashboardDateCancelBtn")
+    ?.addEventListener(
+      "click",
+      closeDashboardDateModal
+    );
+
+  el("dashboardDateApplyBtn")
+    ?.addEventListener(
+      "click",
+      applyDashboardCustomDates
+    );
+
+  el("dashboardDateModal")
+    ?.addEventListener(
+      "click",
+      event => {
+        if (
+          event.target ===
+          el("dashboardDateModal")
+        ) {
+          closeDashboardDateModal();
+        }
+      }
     );
 
   el("dashboardViewAllAlertsBtn")
@@ -15782,6 +16121,125 @@ function initExecutiveDashboard() {
     );
 }
 
+function getExecutiveDashboardPeriods() {
+  const hasDashboardDates =
+    dashboardDateState.currentFrom &&
+    dashboardDateState.currentTo &&
+    dashboardDateState.previousFrom &&
+    dashboardDateState.previousTo;
+
+  if (hasDashboardDates) {
+    return {
+      currentFrom:
+        dashboardDateState.currentFrom,
+
+      currentTo:
+        dashboardDateState.currentTo,
+
+      previousFrom:
+        dashboardDateState.previousFrom,
+
+      previousTo:
+        dashboardDateState.previousTo
+    };
+  }
+
+  /*
+    Use the Analytics dates once as the initial
+    dashboard values. After that, Dashboard dates
+    are stored and managed independently.
+  */
+  const analyticsPeriods =
+    getAnalyticsComparisonPeriods();
+
+  if (!analyticsPeriods) {
+    return null;
+  }
+
+  dashboardDateState.currentFrom =
+    analyticsPeriods.currentFrom;
+
+  dashboardDateState.currentTo =
+    analyticsPeriods.currentTo;
+
+  dashboardDateState.previousFrom =
+    analyticsPeriods.previousFrom;
+
+  dashboardDateState.previousTo =
+    analyticsPeriods.previousTo;
+
+  saveDashboardDateState();
+
+  return {
+    ...dashboardDateState
+  };
+}
+
+
+function getPreviousEquivalentDashboardPeriod(
+  currentFrom,
+  currentTo
+) {
+  const fromDate =
+    parseAnalyticsDate(
+      currentFrom
+    );
+
+  const toDate =
+    parseAnalyticsDate(
+      currentTo
+    );
+
+  if (
+    !fromDate ||
+    !toDate ||
+    fromDate > toDate
+  ) {
+    return null;
+  }
+
+  const millisecondsPerDay =
+    24 * 60 * 60 * 1000;
+
+  const durationDays =
+    Math.round(
+      (
+        toDate.getTime() -
+        fromDate.getTime()
+      ) /
+      millisecondsPerDay
+    ) + 1;
+
+  const previousTo =
+    new Date(fromDate);
+
+  previousTo.setDate(
+    previousTo.getDate() - 1
+  );
+
+  const previousFrom =
+    new Date(previousTo);
+
+  previousFrom.setDate(
+    previousFrom.getDate() -
+    durationDays +
+    1
+  );
+
+  return {
+    previousFrom:
+      formatAnalyticsInputDate(
+        previousFrom
+      ),
+
+    previousTo:
+      formatAnalyticsInputDate(
+        previousTo
+      )
+  };
+}
+
+
 function applyExecutiveDashboardPeriod(
   period
 ) {
@@ -15792,25 +16250,37 @@ function applyExecutiveDashboardPeriod(
 
   if (!dates) return;
 
-  const fromInput =
-    el("analyticsFrom");
-
-  const toInput =
-    el("analyticsTo");
-
-  if (!fromInput || !toInput) {
-    return;
-  }
-
-  fromInput.value =
+  const currentFrom =
     formatAnalyticsInputDate(
       dates.from
     );
 
-  toInput.value =
+  const currentTo =
     formatAnalyticsInputDate(
       dates.to
     );
+
+  const previous =
+    getPreviousEquivalentDashboardPeriod(
+      currentFrom,
+      currentTo
+    );
+
+  if (!previous) return;
+
+  dashboardDateState.currentFrom =
+    currentFrom;
+
+  dashboardDateState.currentTo =
+    currentTo;
+
+  dashboardDateState.previousFrom =
+    previous.previousFrom;
+
+  dashboardDateState.previousTo =
+    previous.previousTo;
+
+  saveDashboardDateState();
 
   document
     .querySelectorAll(
@@ -16087,8 +16557,8 @@ function renderExecutiveDashboard() {
 
   if (!dashboard) return;
 
-  const periods =
-    getAnalyticsComparisonPeriods();
+    const periods =
+    getExecutiveDashboardPeriods();
 
   const periodLabel =
     el("dashboardPeriodLabel");
@@ -16096,7 +16566,7 @@ function renderExecutiveDashboard() {
   if (!periods) {
     if (periodLabel) {
       periodLabel.textContent =
-        "Select a From and To date in Analytics.";
+                "Select the Executive Dashboard date ranges.";
     }
 
         [
@@ -16112,7 +16582,7 @@ function renderExecutiveDashboard() {
       if (container) {
         container.innerHTML = `
           <div class="dashboard-empty">
-            A valid analytics date range is required.
+                        A valid dashboard date range is required.
           </div>
         `;
       }
@@ -16539,8 +17009,9 @@ function renderExecutiveDashboard() {
       );
     });
 
-   renderExecutiveDashboardMonthlyTrend(
-    current.audits
+     renderExecutiveDashboardMonthlyTrend(
+    current.audits,
+    periods.currentTo
   );
 
   renderExternalPerformanceMetrics(
@@ -16549,18 +17020,18 @@ function renderExecutiveDashboard() {
 }
 
 function renderExecutiveDashboardMonthlyTrend(
-  selectedAudits
+  selectedAudits,
+  dashboardTo
 ) {
   const container =
     el("dashboardMonthlyTrend");
 
   if (!container) return;
 
-  const toValue =
-    el("analyticsTo")?.value || "";
-
-  const toDate =
-    parseAnalyticsDate(toValue) ||
+    const toDate =
+    parseAnalyticsDate(
+      dashboardTo
+    ) ||
     new Date();
 
   const months = [];
@@ -17919,8 +18390,20 @@ function getQuarterlyPptComparisonRange() {
 
 
 function buildQuarterlyPptData() {
+  const periods =
+    getExecutiveDashboardPeriods();
+
+  if (!periods) {
+    throw new Error(
+      "Choose valid Executive Dashboard date ranges before generating the PowerPoint."
+    );
+  }
+
   const currentSelection =
-    getAnalyticsSelection();
+    getAnalyticsSelectionForRange(
+      periods.currentFrom,
+      periods.currentTo
+    );
 
   const currentAudits =
     currentSelection.audits || [];
@@ -17928,33 +18411,23 @@ function buildQuarterlyPptData() {
   const currentDefects =
     currentSelection.defects || [];
 
- const comparison =
-  getQuarterlyPptComparisonRange();
-
-let previousAudits = [];
-let previousDefects = [];
-let previousLabel =
-  "No comparison selected";
-
-if (comparison) {
   const previousSelection =
     getAnalyticsSelectionForRange(
-      comparison.from,
-      comparison.to
+      periods.previousFrom,
+      periods.previousTo
     );
 
-  previousAudits =
+  const previousAudits =
     previousSelection.audits || [];
 
-  previousDefects =
+  const previousDefects =
     previousSelection.defects || [];
 
-  previousLabel =
+  const previousLabel =
     formatPptPeriodLabel(
-      comparison.from,
-      comparison.to
+      periods.previousFrom,
+      periods.previousTo
     );
-}
 
 const summarise = (
   audits,
@@ -18083,11 +18556,11 @@ const summarise = (
     previous,
     engineers,
 
-    currentLabel:
-  formatPptPeriodLabel(
-    el("analyticsFrom")?.value || "",
-    el("analyticsTo")?.value || ""
-  ),
+       currentLabel:
+      formatPptPeriodLabel(
+        periods.currentFrom,
+        periods.currentTo
+      ),
 
     previousLabel,
 
@@ -18282,8 +18755,10 @@ function pptMetric(
     1.38
   );
 
-  slide.addText(
-    label,
+    slide.addText(
+    String(
+      label ?? ""
+    ),
     {
       x: x + 0.15,
       y: y + 0.13,
@@ -18327,9 +18802,13 @@ function pptMetric(
     }
   );
 
-  if (change) {
+    if (
+    change !== null &&
+    change !== undefined &&
+    change !== ""
+  ) {
     slide.addText(
-      change,
+      String(change),
       {
         x: x + 0.12,
         y: y + 0.85,
@@ -18353,8 +18832,10 @@ function pptMetric(
     );
   }
 
-  slide.addText(
-    detail || "",
+    slide.addText(
+    String(
+      detail ?? ""
+    ),
     {
       x: x + 0.12,
       y: y + 1.10,
@@ -19830,20 +20311,26 @@ function countTcwReasonsForPpt(
   };
 }
 function buildExternalPerformancePptData() {
+  const periods =
+    getExecutiveDashboardPeriods();
+
+  if (!periods) {
+    throw new Error(
+      "Choose valid Executive Dashboard date ranges before generating the PowerPoint."
+    );
+  }
+
   const currentFrom =
-    el("analyticsFrom")?.value || "";
+    periods.currentFrom;
 
   const currentTo =
-    el("analyticsTo")?.value || "";
-
-  const comparison =
-    getQuarterlyPptComparisonRange();
+    periods.currentTo;
 
   const previousFrom =
-    comparison?.from || "";
+    periods.previousFrom;
 
   const previousTo =
-    comparison?.to || "";
+    periods.previousTo;
 
   const tcwRecords =
     performanceState?.tcwErrors || [];
@@ -19879,7 +20366,7 @@ function buildExternalPerformancePptData() {
       previousTo
     );
 
-  return {
+    return {
     currentLabel:
       formatPptPeriodLabel(
         currentFrom,
@@ -19892,7 +20379,21 @@ function buildExternalPerformancePptData() {
         previousTo
       ),
 
-        tcw: {
+    currentShortLabel:
+      formatPerformancePeriodLabel(
+        currentFrom,
+        currentTo,
+        true
+      ),
+
+    previousShortLabel:
+      formatPerformancePeriodLabel(
+        previousFrom,
+        previousTo,
+        true
+      ),
+
+    tcw: {
       current: currentTcw.length,
       previous: previousTcw.length,
       total:
@@ -19980,8 +20481,8 @@ function pptTcwSlide(
     3.0,
     "Total TCW errors",
     total,
-    "Across both periods",
-    "",
+        "Across both date ranges",
+   
     true
   );
 
@@ -19991,7 +20492,7 @@ function pptTcwSlide(
     3.55,
     0.92,
     3.0,
-    "Comparison period",
+        externalData.previousShortLabel,
     previous,
     `${previousShare}% of total`,
     "",
@@ -20004,7 +20505,7 @@ function pptTcwSlide(
     6.75,
     0.92,
     3.0,
-    "Current period",
+        externalData.currentShortLabel,
     current,
     `${currentShare}% of total`,
     "",
@@ -20017,7 +20518,7 @@ function pptTcwSlide(
     9.95,
     0.92,
     3.0,
-    "Change vs comparison",
+        "Difference between dates",
     `${change >= 0 ? "+" : ""}${change}`,
     percentChange === null
       ? "No comparison baseline"
@@ -20042,7 +20543,7 @@ function pptTcwSlide(
   );
 
   slide.addText(
-    "TCW Errors: Comparison Period vs Current Period",
+        `TCW Errors: ${externalData.previousShortLabel} vs ${externalData.currentShortLabel}`,
     {
       x: 0.75,
       y: 2.83,
@@ -20077,9 +20578,9 @@ function pptTcwSlide(
     [
       {
         name: "TCW errors",
-        labels: [
-          "Comparison period",
-          "Current period"
+                labels: [
+          externalData.previousShortLabel,
+          externalData.currentShortLabel
         ],
         values: [
           previous,
@@ -20184,13 +20685,13 @@ function pptTcwSlide(
   );
 
   slide.addText(
-    percentChange === null
-      ? `TCW errors were ${current} in the current period, with no comparison baseline available.`
+        percentChange === null
+      ? `TCW errors were ${current} between ${externalData.currentLabel}, with no comparison baseline available.`
       : `TCW errors ${
           change >= 0
             ? "increased"
             : "decreased"
-        } from ${previous} in the comparison period to ${current} in the current period — a change of ${Math.abs(change)} errors (${Math.abs(percentChange)}%).`,
+        } from ${previous} during ${externalData.previousLabel} to ${current} during ${externalData.currentLabel} — a difference of ${Math.abs(change)} errors (${Math.abs(percentChange)}%).`,
     {
       x: 1.9,
       y: 6.08,
@@ -20239,7 +20740,7 @@ function pptTcwReasonsSlide(
     3.0,
     "Current TCW errors",
     externalData.tcw.current,
-    "Current period",
+        externalData.currentShortLabel,
     "",
     true
   );
@@ -20252,7 +20753,7 @@ function pptTcwReasonsSlide(
     3.0,
     "Unique reasons",
     uniqueReasons,
-    "Current period",
+        externalData.currentShortLabel,
     "",
     true
   );
@@ -20280,7 +20781,7 @@ function pptTcwReasonsSlide(
     9.95,
     0.92,
     3.0,
-    "Comparison period",
+        externalData.previousShortLabel,
     externalData.tcw.previous,
     "TCW errors",
     "",
@@ -20485,9 +20986,9 @@ function pptMorganLambertSlide(
     0.35,
     0.92,
     2.4,
-    "Total audits",
+        "Total audits",
     current.total,
-    "Current period",
+    externalData.currentShortLabel,
     "",
     true
   );
@@ -20526,7 +21027,7 @@ function pptMorganLambertSlide(
     2.4,
     "PASS rate",
     `${current.passRate}%`,
-    "vs comparison period",
+        `vs ${externalData.previousShortLabel}`,
     previous.total
       ? `${passRateChange >= 0 ? "↑" : "↓"} ${Math.abs(passRateChange)}%`
       : "",
@@ -20541,7 +21042,7 @@ function pptMorganLambertSlide(
     2.25,
     "Average score",
     `${current.averageScore.toFixed(1)}%`,
-    "vs comparison period",
+        `vs ${externalData.previousShortLabel}`,
     previous.total
       ? `${scoreChange >= 0 ? "↑" : "↓"} ${Math.abs(scoreChange).toFixed(1)}%`
       : "",
@@ -20611,7 +21112,7 @@ function pptMorganLambertSlide(
   );
 
     slide.addText(
-    "Current vs Comparison",
+        `${externalData.previousShortLabel} vs ${externalData.currentShortLabel}`,
     {
       x: 7.35,
       y: 2.88,
@@ -20631,9 +21132,9 @@ function pptMorganLambertSlide(
     [
       {
         name: "Audits",
-        labels: [
-          "Comparison",
-          "Current"
+                labels: [
+          externalData.previousShortLabel,
+          externalData.currentShortLabel
         ],
         values: [
           previous.total,
@@ -20642,9 +21143,9 @@ function pptMorganLambertSlide(
       },
       {
         name: "PASS",
-        labels: [
-          "Comparison",
-          "Current"
+                labels: [
+          externalData.previousShortLabel,
+          externalData.currentShortLabel
         ],
         values: [
           previous.passes,
@@ -20653,9 +21154,9 @@ function pptMorganLambertSlide(
       },
       {
         name: "FAIL",
-        labels: [
-          "Comparison",
-          "Current"
+                labels: [
+          externalData.previousShortLabel,
+          externalData.currentShortLabel
         ],
         values: [
           previous.fails,
@@ -20714,7 +21215,7 @@ function pptMorganLambertSlide(
   );
 
    slide.addText(
-    `Morgan & Lambert completed ${current.total} audits in the current period, with ${current.passes} PASS, ${current.fails} FAIL and an average score of ${current.averageScore.toFixed(1)}%.`,
+        `Morgan & Lambert completed ${current.total} audits during ${externalData.currentLabel}, with ${current.passes} PASS, ${current.fails} FAIL and an average score of ${current.averageScore.toFixed(1)}%.`,
     {
       x: 0.75,
       y: 6.96,
@@ -20738,9 +21239,22 @@ async function generateQuarterlyPowerPoint() {
       "generateQuarterlyPptBtn"
     );
 
-  const originalText =
-    button?.textContent ||
-    "Generate Quarterly PowerPoint";
+    const originalHtml =
+    button?.innerHTML || `
+      <span class="dashboard-dropdown-icon">
+        ▣
+      </span>
+
+      <span>
+        <strong>
+          Generate Quarterly PowerPoint
+        </strong>
+
+        <small>
+          Create the management presentation
+        </small>
+      </span>
+    `;
 
   try {
     if (!window.PptxGenJS) {
@@ -20764,8 +21278,21 @@ async function generateQuarterlyPowerPoint() {
     if (button) {
       button.disabled = true;
 
-      button.textContent =
-        "Generating PowerPoint…";
+            button.innerHTML = `
+        <span class="dashboard-dropdown-icon">
+          ▣
+        </span>
+
+        <span>
+          <strong>
+            Generating PowerPoint…
+          </strong>
+
+          <small>
+            Please wait while the presentation is created
+          </small>
+        </span>
+      `;
     }
 
     const pptx =
@@ -21444,8 +21971,8 @@ const cardHeight = 6.05;
     if (button) {
       button.disabled = false;
 
-      button.textContent =
-        originalText;
+              button.innerHTML =
+          originalHtml;
     }
   }
 }
