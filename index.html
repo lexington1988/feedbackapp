@@ -280,57 +280,194 @@
       <div>
         <h2>Executive Dashboard</h2>
 
-        <p
+                <button
           id="dashboardPeriodLabel"
-          class="muted"
+          class="dashboard-period-label-button"
+          type="button"
+          aria-label="Change Executive Dashboard date ranges"
         >
-          Current analytics period
-        </p>
+          Current dashboard period
+        </button>
       </div>
 
-      <div class="dashboard-header-actions">
-       <button
-  id="dashboardManagementReportBtn"
-  class="btn"
-  type="button"
->
-  Management Report
-</button>
+         <div class="dashboard-header-actions">
+        <button
+          id="dashboardManagementReportBtn"
+          class="btn"
+          type="button"
+        >
+          Management Report
+        </button>
 
-<input
-  id="performanceWorkbookInput"
-  class="hidden"
-  type="file"
-  accept=".xlsx,.xlsm,.xlsb,.xls"
-  multiple
-/>
+        <details
+          class="dashboard-actions-menu"
+        >
+          <summary
+            class="dashboard-actions-toggle"
+            aria-label="More dashboard actions"
+            title="More dashboard actions"
+          >
+            <span aria-hidden="true">
+              ▾
+            </span>
+          </summary>
 
-<button
-  id="importPerformanceWorkbookBtn"
-  class="btn ghost"
-  type="button"
->
-  Import Performance Workbook
-</button>
+          <div class="dashboard-actions-dropdown">
+            <input
+              id="performanceWorkbookInput"
+              class="hidden"
+              type="file"
+              accept=".xlsx,.xlsm,.xlsb,.xls"
+              multiple
+            />
 
-<button
-  id="generateQuarterlyPptBtn"
-  class="btn ghost quarterly-ppt-btn"
-  type="button"
->
-  Generate Quarterly PowerPoint
-</button>
+            <button
+              id="importPerformanceWorkbookBtn"
+              class="dashboard-dropdown-action"
+              type="button"
+            >
+              <span class="dashboard-dropdown-icon">
+                ⇧
+              </span>
 
-<button
-  id="dashboardOpenAnalyticsBtn"
-  class="btn ghost"
-  type="button"
->
-  Full Analytics
-</button>
+              <span>
+                <strong>
+                  Import Performance Workbook
+                </strong>
+
+                <small>
+                  Update TCW and Morgan &amp; Lambert data
+                </small>
+              </span>
+            </button>
+
+            <button
+              id="generateQuarterlyPptBtn"
+              class="
+                dashboard-dropdown-action
+                quarterly-ppt-btn
+              "
+              type="button"
+            >
+              <span class="dashboard-dropdown-icon">
+                ▣
+              </span>
+
+              <span>
+                <strong>
+                  Generate Quarterly PowerPoint
+                </strong>
+
+                <small>
+                  Create the management presentation
+                </small>
+              </span>
+            </button>
+          </div>
+        </details>
       </div>
     </div>
 
+        <div
+      id="dashboardDateModal"
+      class="dashboard-date-modal hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="dashboardDateModalTitle"
+    >
+      <div class="dashboard-date-modal-card">
+        <div class="dashboard-date-modal-head">
+          <div>
+            <h3 id="dashboardDateModalTitle">
+              Executive Dashboard dates
+            </h3>
+
+            <p class="muted">
+              These dates are separate from Analytics.
+            </p>
+          </div>
+
+          <button
+            id="dashboardDateCloseBtn"
+            class="btn ghost small"
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+
+        <div class="dashboard-date-period">
+          <h4>Current period</h4>
+
+          <div class="dashboard-date-fields">
+            <label class="field">
+              <span>From</span>
+
+              <input
+                id="dashboardCurrentFrom"
+                type="date"
+              />
+            </label>
+
+            <label class="field">
+              <span>To</span>
+
+              <input
+                id="dashboardCurrentTo"
+                type="date"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div class="dashboard-date-period">
+          <h4>Comparison period</h4>
+
+          <div class="dashboard-date-fields">
+            <label class="field">
+              <span>From</span>
+
+              <input
+                id="dashboardPreviousFrom"
+                type="date"
+              />
+            </label>
+
+            <label class="field">
+              <span>To</span>
+
+              <input
+                id="dashboardPreviousTo"
+                type="date"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div
+          id="dashboardDateError"
+          class="dashboard-date-error hidden"
+        ></div>
+
+        <div class="dashboard-date-modal-actions">
+          <button
+            id="dashboardDateCancelBtn"
+            class="btn ghost"
+            type="button"
+          >
+            Cancel
+          </button>
+
+          <button
+            id="dashboardDateApplyBtn"
+            class="btn"
+            type="button"
+          >
+            Apply dates
+          </button>
+        </div>
+      </div>
+    </div>
     <div class="dashboard-period-controls">
       <button
         class="btn ghost small dashboard-period-btn"
