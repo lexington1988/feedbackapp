@@ -261,12 +261,23 @@ let defectsLibrary = [];
 // Load from localStorage first, then try to fetch from GitHub CSV
 function rebuildAnalyticsFromInspections(inspections) {
   /*
-    Firebase inspections are the source of truth.
+    Preserve audit-only historical workbook records.
 
-    Reset both arrays first so audits deleted from Firebase
-    cannot remain in memory or localStorage.
+    Firebase remains the source of truth for audits created
+    inside the PPC app, while imported historical audits are
+    kept alongside them.
   */
-  analyticsState.audits = [];
+  const historicalAudits =
+    (analyticsState.audits || [])
+      .filter(record =>
+        record?.sourceType ===
+        "historical-workbook"
+      );
+
+  analyticsState.audits = [
+    ...historicalAudits
+  ];
+
   analyticsState.defects = [];
 
   (inspections || []).forEach(inspection => {
@@ -1302,11 +1313,12 @@ initBoilersLibrary().then(() => {
   initBoilerTypeahead();
 
   });
-   initDefectsImportButton();
+      initDefectsImportButton();
    initAnalytics();
-  initExecutiveDashboard();
-  initPerformanceWorkbookImport();
-  initQuarterlyPowerPointGenerator();
+   initExecutiveDashboard();
+   initPerformanceWorkbookImport();
+   initHistoricalAuditImport();
+   initQuarterlyPowerPointGenerator();
 
   if (el("rangeSelect")) {
     el("rangeSelect").value = "qCurrent";
@@ -5390,17 +5402,105 @@ refreshAnalyticsFilters();
 }
 
 function refreshAnalyticsFilters() {
-  const engineer = el("analyticsEngineer");
-  const category = el("analyticsCategory");
-  if (!engineer || !category) return;
-  const keepEngineer = engineer.value;
-  const keepCategory = category.value;
-  const engineers = [...new Set(analyticsState.defects.map(x => x.engineer).filter(Boolean))].sort();
-  const categories = [...new Set(analyticsState.defects.map(x => x.category || "Other"))].sort();
-  engineer.innerHTML = `<option value="">All engineers</option>` + engineers.map(x => `<option>${escapeHtml(x)}</option>`).join("");
-  category.innerHTML = `<option value="">All categories</option>` + categories.map(x => `<option>${escapeHtml(x)}</option>`).join("");
-  engineer.value = keepEngineer;
-  category.value = keepCategory;
+  const engineer =
+    el("analyticsEngineer");
+
+  const category =
+    el("analyticsCategory");
+
+  if (
+    !engineer ||
+    !category
+  ) {
+    return;
+  }
+
+  const keepEngineer =
+    engineer.value;
+
+  const keepCategory =
+    category.value;
+
+  /*
+    Engineer filter must come from ALL audits,
+    not just defect records.
+
+    This ensures engineers with PASS audits and
+    zero defects can still be selected.
+  */
+  const engineers = [
+    ...new Set(
+      (analyticsState.audits || [])
+        .map(record =>
+          String(
+            record.engineer || ""
+          ).trim()
+        )
+        .filter(Boolean)
+    )
+  ].sort(
+    (a, b) =>
+      a.localeCompare(b)
+  );
+
+  /*
+    Categories still come from defects because
+    category is a defect-level field.
+  */
+  const categories = [
+    ...new Set(
+      (analyticsState.defects || [])
+        .map(record =>
+          record.category ||
+          "Other"
+        )
+    )
+  ].sort(
+    (a, b) =>
+      a.localeCompare(b)
+  );
+
+  engineer.innerHTML =
+    `<option value="">All engineers</option>` +
+    engineers
+      .map(name => `
+        <option value="${escapeHtml(name)}">
+          ${escapeHtml(name)}
+        </option>
+      `)
+      .join("");
+
+  category.innerHTML =
+    `<option value="">All categories</option>` +
+    categories
+      .map(name => `
+        <option value="${escapeHtml(name)}">
+          ${escapeHtml(name)}
+        </option>
+      `)
+      .join("");
+
+  if (
+    engineers.includes(
+      keepEngineer
+    )
+  ) {
+    engineer.value =
+      keepEngineer;
+  } else {
+    engineer.value = "";
+  }
+
+  if (
+    categories.includes(
+      keepCategory
+    )
+  ) {
+    category.value =
+      keepCategory;
+  } else {
+    category.value = "";
+  }
 }
 
 function analyticsDateInRange(date, from, to) {
@@ -13534,7 +13634,719 @@ function findWorkbookHeader(
   return null;
 }
 
+function historicalAuditWorkbookYear(
+  fileName
+) {
+  const name =
+    String(fileName || "")
+      .replace(/\.[^.]+$/, "")
+      .trim();
 
+  const matches =
+    name.match(
+      /(?:^|\D)(20\d{2}|\d{2})(?=\D|$)/g
+    ) || [];
+
+  if (!matches.length) {
+    return null;
+  }
+
+  const raw =
+    String(
+      matches[
+        matches.length - 1
+      ]
+    )
+      .replace(/\D/g, "");
+
+  if (raw.length === 4) {
+    return Number(raw);
+  }
+
+  if (raw.length === 2) {
+    return 2000 + Number(raw);
+  }
+
+  return null;
+}
+
+
+function historicalAuditDateToIso(
+  value,
+  fallbackYear
+) {
+  /*
+    A genuine Excel date should already contain
+    the correct year.
+  */
+  if (
+    value instanceof Date &&
+    !Number.isNaN(
+      value.getTime()
+    )
+  ) {
+    return formatAnalyticsInputDate(
+      value
+    );
+  }
+
+  if (
+    typeof value === "number" &&
+    Number.isFinite(value)
+  ) {
+    const parsed =
+      window.XLSX?.SSF
+        ?.parse_date_code(value);
+
+    if (
+      parsed &&
+      parsed.m &&
+      parsed.d
+    ) {
+      const year =
+        parsed.y >= 2000
+          ? parsed.y
+          : fallbackYear;
+
+      if (!year) {
+        return "";
+      }
+
+      return [
+        year,
+        String(parsed.m)
+          .padStart(2, "0"),
+        String(parsed.d)
+          .padStart(2, "0")
+      ].join("-");
+    }
+  }
+
+  const text =
+    String(value || "")
+      .trim();
+
+  if (!text) {
+    return "";
+  }
+
+  /*
+    First allow a normal full date parser.
+  */
+  const normalDate =
+    workbookDateToIso(text);
+
+  if (
+    normalDate &&
+    /^\d{4}-\d{2}-\d{2}$/.test(
+      normalDate
+    )
+  ) {
+    return normalDate;
+  }
+
+  if (!fallbackYear) {
+    return "";
+  }
+
+  const monthNames = {
+    jan: 1,
+    january: 1,
+    feb: 2,
+    february: 2,
+    mar: 3,
+    march: 3,
+    apr: 4,
+    april: 4,
+    may: 5,
+    jun: 6,
+    june: 6,
+    jul: 7,
+    july: 7,
+    aug: 8,
+    august: 8,
+    sep: 9,
+    sept: 9,
+    september: 9,
+    oct: 10,
+    october: 10,
+    nov: 11,
+    november: 11,
+    dec: 12,
+    december: 12
+  };
+
+  /*
+    Handles:
+    03-Aug
+    3 Aug
+    03-August
+  */
+  const namedMatch =
+    text.toLowerCase().match(
+      /^(\d{1,2})[\s\-/.]+([a-z]+)$/
+    );
+
+  if (namedMatch) {
+    const day =
+      Number(namedMatch[1]);
+
+    const month =
+      monthNames[
+        namedMatch[2]
+      ];
+
+    if (
+      day >= 1 &&
+      day <= 31 &&
+      month
+    ) {
+      return [
+        fallbackYear,
+        String(month)
+          .padStart(2, "0"),
+        String(day)
+          .padStart(2, "0")
+      ].join("-");
+    }
+  }
+
+  /*
+    Also handles:
+    03/08
+    03-08
+  */
+  const numericMatch =
+    text.match(
+      /^(\d{1,2})[\/.-](\d{1,2})$/
+    );
+
+  if (numericMatch) {
+    const day =
+      Number(numericMatch[1]);
+
+    const month =
+      Number(numericMatch[2]);
+
+    if (
+      day >= 1 &&
+      day <= 31 &&
+      month >= 1 &&
+      month <= 12
+    ) {
+      return [
+        fallbackYear,
+        String(month)
+          .padStart(2, "0"),
+        String(day)
+          .padStart(2, "0")
+      ].join("-");
+    }
+  }
+
+  return "";
+}
+
+
+function historicalAuditYes(
+  value
+) {
+  const normalized =
+    normalizeWorkbookText(value);
+
+  return (
+    normalized === "yes" ||
+    normalized === "y" ||
+    normalized === "pass" ||
+    normalized === "correct" ||
+    normalized === "true" ||
+    normalized === "1"
+  );
+}
+
+
+function historicalEngineerKey(
+  value
+) {
+  const parts =
+    String(value || "")
+      .toLowerCase()
+      .replace(
+        /[^a-z0-9]+/g,
+        " "
+      )
+      .replace(
+        /\s+/g,
+        " "
+      )
+      .trim()
+      .split(" ")
+      .filter(Boolean);
+
+  if (!parts.length) {
+    return "";
+  }
+
+  if (parts.length === 1) {
+    return parts[0];
+  }
+
+  return (
+    parts[0].charAt(0) +
+    parts[parts.length - 1]
+  );
+}
+
+
+function canonicalHistoricalEngineer(
+  value
+) {
+  const raw =
+    String(value || "")
+      .trim();
+
+  if (!raw) {
+    return "";
+  }
+
+  const targetKey =
+    historicalEngineerKey(raw);
+
+  const candidates = [
+    ...(typeof PRESET_ENGINEERS !==
+    "undefined"
+      ? PRESET_ENGINEERS
+      : []),
+
+    ...(analyticsState.audits || [])
+      .map(record =>
+        record.engineer
+      )
+      .filter(Boolean),
+
+    ...(state.db.inspections || [])
+      .map(record =>
+        record.engineer
+      )
+      .filter(Boolean)
+  ];
+
+  const match =
+    candidates.find(name =>
+      historicalEngineerKey(
+        name
+      ) === targetKey
+    );
+
+  return match || raw;
+}
+
+
+function findHistoricalAuditSheet(
+  workbook
+) {
+  for (
+    const sheetName of
+    workbook.SheetNames || []
+  ) {
+    const sheet =
+      workbook.Sheets[
+        sheetName
+      ];
+
+    if (!sheet) continue;
+
+    const rows =
+      workbookRows(sheet);
+
+    const header =
+      findWorkbookHeader(
+        rows,
+        {
+          address: [
+            "address",
+            "property address"
+          ],
+
+          date: [
+            "date completed",
+            "completed date",
+            "date"
+          ],
+
+          engineer: [
+            "engineer",
+            "engineer name"
+          ],
+
+          workCorrect: [
+            "work correct",
+            "works correct",
+            "work satisfactory"
+          ],
+
+          documentCorrect: [
+            "document correct",
+            "documentation correct",
+            "documents correct",
+            "paperwork correct"
+          ]
+        }
+      );
+
+    if (header) {
+      return {
+        sheet,
+        sheetName,
+        rows,
+        header
+      };
+    }
+  }
+
+  return null;
+}
+
+
+function importHistoricalAuditRecords(
+  workbook,
+  sourceFile
+) {
+  const located =
+    findHistoricalAuditSheet(
+      workbook
+    );
+
+  if (!located) {
+    throw new Error(
+      `Address, Date Completed, Engineer, Work Correct and Document Correct headings could not be found in ${sourceFile.fileName}.`
+    );
+  }
+
+  const {
+    rows,
+    header
+  } = located;
+
+  const fallbackYear =
+    historicalAuditWorkbookYear(
+      sourceFile.fileName
+    );
+
+  const imported = [];
+
+  for (
+    let rowIndex =
+      header.rowIndex + 1;
+
+    rowIndex < rows.length;
+
+    rowIndex++
+  ) {
+    const row =
+      rows[rowIndex] || [];
+
+    const rawDate =
+      row[
+        header.indexes.date
+      ];
+
+    const date =
+      historicalAuditDateToIso(
+        rawDate,
+        fallbackYear
+      );
+
+    const rawEngineer =
+      String(
+        row[
+          header.indexes.engineer
+        ] ?? ""
+      ).trim();
+
+    const engineer =
+      canonicalHistoricalEngineer(
+        rawEngineer
+      );
+
+    const address =
+      String(
+        row[
+          header.indexes.address
+        ] ?? ""
+      ).trim();
+
+    const workValue =
+      row[
+        header.indexes.workCorrect
+      ];
+
+    const documentValue =
+      row[
+        header.indexes
+          .documentCorrect
+      ];
+
+    /*
+      Ignore completely blank rows.
+    */
+    if (
+      !date &&
+      !rawEngineer &&
+      !address &&
+      !String(
+        workValue ?? ""
+      ).trim() &&
+      !String(
+        documentValue ?? ""
+      ).trim()
+    ) {
+      continue;
+    }
+
+    if (!date) {
+      console.warn(
+        `Historical audit row ${
+          rowIndex + 1
+        } in ${
+          sourceFile.fileName
+        } was skipped because its date could not be read.`
+      );
+
+      continue;
+    }
+
+    if (!engineer) {
+      console.warn(
+        `Historical audit row ${
+          rowIndex + 1
+        } in ${
+          sourceFile.fileName
+        } was skipped because no engineer was recorded.`
+      );
+
+      continue;
+    }
+
+    const workCorrect =
+      historicalAuditYes(
+        workValue
+      );
+
+    const documentCorrect =
+      historicalAuditYes(
+        documentValue
+      );
+
+    const passed =
+      workCorrect &&
+      documentCorrect;
+
+    imported.push({
+      id:
+        `historical-${sourceFile.fileKey}-${date}-${rowIndex}`,
+
+      date,
+
+      engineer,
+
+      jobRef: "",
+
+      address,
+
+      outcome:
+        passed
+          ? "Work & Documentation Correct"
+          : "Finding(s) Identified",
+
+      workCorrect,
+      documentCorrect,
+
+      dataCoverage:
+        "audit-only",
+
+      sourceType:
+        "historical-workbook",
+
+      sourceFile:
+        sourceFile.fileName,
+
+      sourceFileKey:
+        sourceFile.fileKey,
+
+      updatedAt:
+        new Date()
+          .toISOString()
+    });
+  }
+
+  return imported;
+}
+
+
+async function importHistoricalAuditWorkbooks(
+  files
+) {
+  if (!window.XLSX) {
+    throw new Error(
+      "The Excel import library has not loaded."
+    );
+  }
+
+  const selectedFiles =
+    Array.from(files || []);
+
+  if (!selectedFiles.length) {
+    throw new Error(
+      "No historical audit workbooks were selected."
+    );
+  }
+
+  let storedAudits = [
+    ...(analyticsState.audits || [])
+  ];
+
+  let rowsRead = 0;
+
+  const processed = [];
+  const skipped = [];
+
+  for (
+    const file of
+    selectedFiles
+  ) {
+    try {
+      const fileKey =
+        performanceWorkbookFileKey(
+          file
+        );
+
+      const sourceFile = {
+        fileName:
+          file.name,
+
+        fileKey
+      };
+
+      const arrayBuffer =
+        await file.arrayBuffer();
+
+      const workbook =
+        window.XLSX.read(
+          arrayBuffer,
+          {
+            type: "array",
+            cellDates: true
+          }
+        );
+
+      const imported =
+        importHistoricalAuditRecords(
+          workbook,
+          sourceFile
+        );
+
+      /*
+        Replace previous rows from this same
+        monthly workbook before adding the
+        newly imported version.
+      */
+      const sourceName =
+        normalizePerformanceSourceName(
+          file.name
+        );
+
+      storedAudits =
+        storedAudits.filter(
+          record => {
+            if (
+              record?.sourceType !==
+              "historical-workbook"
+            ) {
+              return true;
+            }
+
+            const sameKey =
+              record.sourceFileKey ===
+              fileKey;
+
+            const sameName =
+              normalizePerformanceSourceName(
+                record.sourceFile
+              ) === sourceName;
+
+            return !(
+              sameKey ||
+              sameName
+            );
+          }
+        );
+
+      storedAudits.push(
+        ...imported
+      );
+
+      rowsRead +=
+        imported.length;
+
+      processed.push(
+        `${file.name}: ${imported.length} audit${
+          imported.length === 1
+            ? ""
+            : "s"
+        }`
+      );
+    } catch (error) {
+      console.error(
+        `Historical audit import failed for ${file.name}:`,
+        error
+      );
+
+      skipped.push(
+        `${file.name}: ${
+          error?.message ||
+          "Could not import"
+        }`
+      );
+    }
+  }
+
+  if (!processed.length) {
+    throw new Error(
+      skipped.join("\n") ||
+      "No historical audits could be imported."
+    );
+  }
+
+  analyticsState.audits =
+    storedAudits;
+
+  saveAnalyticsArchive();
+
+  refreshAnalyticsFilters();
+
+  renderAnalytics();
+
+  renderExecutiveDashboard();
+
+  return {
+    workbookCount:
+      processed.length,
+
+    rowsRead,
+
+    historicalTotal:
+      analyticsState.audits
+        .filter(record =>
+          record?.sourceType ===
+          "historical-workbook"
+        )
+        .length,
+
+    processed,
+    skipped
+  };
+}
 function importTcwRecords(
   workbook,
   sourceFile
@@ -14272,8 +15084,194 @@ async function importPerformanceWorkbooks(
         .length
   };
 }
+function closeDashboardActionsMenu() {
+  const menu =
+    document.querySelector(
+      ".dashboard-actions-menu"
+    );
 
+  if (menu) {
+    menu.open = false;
+  }
+}
+function clearHistoricalAuditHistory() {
+  const historicalAudits =
+    (analyticsState.audits || [])
+      .filter(record =>
+        record?.sourceType ===
+        "historical-workbook"
+      );
 
+  if (!historicalAudits.length) {
+    alert(
+      "There are no imported historical PPC audits to remove."
+    );
+
+    return;
+  }
+
+  const confirmed =
+    confirm(
+      `Remove ${historicalAudits.length} imported historical PPC audit${
+        historicalAudits.length === 1
+          ? ""
+          : "s"
+      }?\n\n` +
+      "Audits created normally inside the PPC app will NOT be removed."
+    );
+
+  if (!confirmed) {
+    return;
+  }
+
+  analyticsState.audits =
+    (analyticsState.audits || [])
+      .filter(record =>
+        record?.sourceType !==
+        "historical-workbook"
+      );
+
+  saveAnalyticsArchive();
+
+  refreshAnalyticsFilters();
+
+  renderAnalytics();
+
+  renderExecutiveDashboard();
+
+  closeDashboardActionsMenu();
+
+  alert(
+    `${historicalAudits.length} imported historical PPC audit${
+      historicalAudits.length === 1
+        ? ""
+        : "s"
+    } removed.\n\n` +
+    "Audits created normally in the app have been kept."
+  );
+}
+function initHistoricalAuditImport() {
+  const button =
+    el(
+      "importHistoricalAuditsBtn"
+    );
+
+  const input =
+    el(
+      "historicalAuditWorkbookInput"
+    );
+
+  if (
+    !button ||
+    !input ||
+    button.dataset.initialised ===
+      "true"
+  ) {
+    return;
+  }
+
+   button.dataset.initialised =
+    "true";
+
+  button.addEventListener(
+    "click",
+    () => {
+      input.click();
+    }
+  );
+
+  el("clearHistoricalAuditsBtn")
+    ?.addEventListener(
+      "click",
+      clearHistoricalAuditHistory
+    );
+
+  input.addEventListener(
+    "change",
+    async event => {
+      const files =
+        Array.from(
+          event.target.files ||
+          []
+        );
+
+      if (!files.length) {
+        return;
+      }
+
+      const originalHtml =
+        button.innerHTML;
+
+      try {
+        button.disabled = true;
+
+        button.innerHTML = `
+          <span class="dashboard-dropdown-icon">
+            ◷
+          </span>
+
+          <span>
+            <strong>
+              Importing ${files.length} historical workbook${
+                files.length === 1
+                  ? ""
+                  : "s"
+              }…
+            </strong>
+
+            <small>
+              Building the historical audit archive
+            </small>
+          </span>
+        `;
+
+        closeDashboardActionsMenu();
+
+        const result =
+          await importHistoricalAuditWorkbooks(
+            files
+          );
+
+        let message =
+          `${result.workbookCount} historical workbook${
+            result.workbookCount === 1
+              ? ""
+              : "s"
+          } processed.\n\n` +
+          `Historical audit rows read: ${result.rowsRead}\n` +
+          `Stored historical audit history: ${result.historicalTotal}`;
+
+        if (
+          result.skipped.length
+        ) {
+          message +=
+            `\n\nFiles needing attention:\n` +
+            result.skipped.join(
+              "\n"
+            );
+        }
+
+        alert(message);
+      } catch (error) {
+        console.error(error);
+
+        alert(
+          `Historical audits could not be imported: ${
+            error?.message ||
+            "Unknown error"
+          }`
+        );
+      } finally {
+        button.disabled = false;
+
+        button.innerHTML =
+          originalHtml;
+
+        input.value = "";
+      }
+    }
+  );
+}
 function initPerformanceWorkbookImport() {
   const button =
     el(
@@ -14396,7 +15394,74 @@ function initPerformanceWorkbookImport() {
   );
 }
 
+function performanceEngineerKey(
+  value
+) {
+  const text =
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(
+        /[^a-z0-9]+/g,
+        " "
+      )
+      .replace(
+        /\s+/g,
+        " "
+      )
+      .trim();
 
+  if (!text) {
+    return "";
+  }
+
+  const parts =
+    text.split(" ")
+      .filter(Boolean);
+
+  if (!parts.length) {
+    return "";
+  }
+
+  /*
+    Examples:
+
+    Graham Black
+    -> gblack
+
+    G.Black
+    -> gblack
+
+    John Turlington
+    -> jturlington
+
+    J.Turlington
+    -> jturlington
+  */
+
+  if (parts.length === 1) {
+    const single =
+      parts[0];
+
+    /*
+      Handles values which originally looked
+      like G.Black but have become "g black"
+      after punctuation cleanup.
+    */
+    return single;
+  }
+
+  const first =
+    parts[0];
+
+  const surname =
+    parts[parts.length - 1];
+
+  return (
+    first.charAt(0) +
+    surname
+  );
+}
 function performanceRecordsInRange(
   records,
   from,
@@ -14404,7 +15469,7 @@ function performanceRecordsInRange(
   selectedEngineer = ""
 ) {
   const engineerKey =
-    normalizeEngineer(
+    performanceEngineerKey(
       selectedEngineer
     );
 
@@ -14424,10 +15489,14 @@ function performanceRecordsInRange(
         return true;
       }
 
-      return (
-        normalizeEngineer(
+      const recordEngineerKey =
+        performanceEngineerKey(
           record.engineer
-        ) === engineerKey
+        );
+
+      return (
+        recordEngineerKey ===
+        engineerKey
       );
     }
   );
