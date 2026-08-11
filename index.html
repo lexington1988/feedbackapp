@@ -340,7 +340,52 @@
                 </small>
               </span>
             </button>
+<input
+  id="historicalAuditWorkbookInput"
+  class="hidden"
+  type="file"
+  accept=".xlsx,.xlsm,.xlsb,.xls"
+  multiple
+/>
 
+<button
+  id="importHistoricalAuditsBtn"
+  class="dashboard-dropdown-action"
+  type="button"
+>
+  <span class="dashboard-dropdown-icon">
+    ◷
+  </span>
+
+  <span>
+    <strong>
+      Import Historical PPC Audits
+    </strong>
+
+    <small>
+      Import earlier PASS / FAIL audit history
+    </small>
+  </span>
+</button>
+            <button
+  id="clearHistoricalAuditsBtn"
+  class="dashboard-dropdown-action"
+  type="button"
+>
+  <span class="dashboard-dropdown-icon">
+    ×
+  </span>
+
+  <span>
+    <strong>
+      Clear Historical PPC Audits
+    </strong>
+
+    <small>
+      Remove imported historical audits only
+    </small>
+  </span>
+</button>
             <button
               id="generateQuarterlyPptBtn"
               class="
