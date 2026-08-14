@@ -5164,9 +5164,17 @@ function initAnalytics() {
   (state.db.inspections || []).forEach(archiveInspectionForAnalytics);
 
   const today = new Date();
-  const start = new Date(today.getFullYear(), today.getMonth() - 11, 1);
-  el("analyticsFrom").value = start.toISOString().slice(0,10);
-  el("analyticsTo").value = today.toISOString().slice(0,10);
+
+  const todayValue =
+    formatAnalyticsInputDate(
+      today
+    );
+
+  el("analyticsFrom").value =
+    todayValue;
+
+  el("analyticsTo").value =
+    todayValue;
 
   [
   "analyticsFrom",
@@ -8041,19 +8049,32 @@ function parseAnalyticsDate(
 }
 
 function getAnalyticsComparisonPeriods() {
-  const fromValue =
+  const currentFrom =
     el("analyticsFrom")?.value || "";
 
-  const toValue =
+  const currentTo =
     el("analyticsTo")?.value || "";
 
-  const from =
-    parseAnalyticsDate(fromValue);
+  const mode =
+    el("analyticsCompareMode")
+      ?.value ||
+    "previous-equivalent";
 
-  const to =
-    parseAnalyticsDate(toValue);
+  const fromDate =
+    parseAnalyticsDate(
+      currentFrom
+    );
 
-  if (!from || !to || from > to) {
+  const toDate =
+    parseAnalyticsDate(
+      currentTo
+    );
+
+  if (
+    !fromDate ||
+    !toDate ||
+    fromDate > toDate
+  ) {
     return null;
   }
 
@@ -8063,41 +8084,140 @@ function getAnalyticsComparisonPeriods() {
   const periodLength =
     Math.round(
       (
-        to.getTime() -
-        from.getTime()
+        toDate.getTime() -
+        fromDate.getTime()
       ) /
       millisecondsPerDay
     ) + 1;
 
-  const previousTo =
-    new Date(from);
+  let previousFrom = "";
+  let previousTo = "";
 
-  previousTo.setDate(
-    previousTo.getDate() - 1
-  );
+  /*
+    CUSTOM COMPARISON
+  */
+  if (mode === "custom") {
+    previousFrom =
+      el("analyticsCompareFrom")
+        ?.value || "";
 
-  const previousFrom =
-    new Date(previousTo);
+    previousTo =
+      el("analyticsCompareTo")
+        ?.value || "";
 
-  previousFrom.setDate(
-    previousFrom.getDate() -
-    (periodLength - 1)
-  );
+    const customFromDate =
+      parseAnalyticsDate(
+        previousFrom
+      );
+
+    const customToDate =
+      parseAnalyticsDate(
+        previousTo
+      );
+
+    if (
+      !customFromDate ||
+      !customToDate ||
+      customFromDate >
+        customToDate
+    ) {
+      return null;
+    }
+  }
+
+  /*
+    PREVIOUS QUARTER
+  */
+  else if (
+    mode === "previous-quarter"
+  ) {
+    const quarter =
+      getQuarterDatesBefore(
+        currentFrom
+      );
+
+    if (!quarter) {
+      return null;
+    }
+
+    previousFrom =
+      quarter.from;
+
+    previousTo =
+      quarter.to;
+  }
+
+  /*
+    PREVIOUS YEAR
+  */
+  else if (
+    mode === "previous-year"
+  ) {
+    const previousFromDate =
+      new Date(fromDate);
+
+    const previousToDate =
+      new Date(toDate);
+
+    previousFromDate.setFullYear(
+      previousFromDate.getFullYear() -
+      1
+    );
+
+    previousToDate.setFullYear(
+      previousToDate.getFullYear() -
+      1
+    );
+
+    previousFrom =
+      formatAnalyticsInputDate(
+        previousFromDate
+      );
+
+    previousTo =
+      formatAnalyticsInputDate(
+        previousToDate
+      );
+  }
+
+  /*
+    PREVIOUS EQUIVALENT PERIOD
+  */
+  else {
+    const previousToDate =
+      new Date(fromDate);
+
+    previousToDate.setDate(
+      previousToDate.getDate() - 1
+    );
+
+    const previousFromDate =
+      new Date(
+        previousToDate
+      );
+
+    previousFromDate.setDate(
+      previousFromDate.getDate() -
+      periodLength +
+      1
+    );
+
+    previousFrom =
+      formatAnalyticsInputDate(
+        previousFromDate
+      );
+
+    previousTo =
+      formatAnalyticsInputDate(
+        previousToDate
+      );
+  }
 
   return {
-    currentFrom: fromValue,
-    currentTo: toValue,
-
-    previousFrom:
-      formatAnalyticsInputDate(
-        previousFrom
-      ),
-
-    previousTo:
-      formatAnalyticsInputDate(
-        previousTo
-      ),
-
+    currentFrom,
+    currentTo,
+    previousFrom,
+    previousTo,
     periodLength
   };
 }
