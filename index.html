@@ -339,7 +339,48 @@
                   Update TCW and Morgan &amp; Lambert data
                 </small>
               </span>
-            </button>
+     </button>
+
+<button
+  id="manageTcwErrorsBtn"
+  class="dashboard-dropdown-action"
+  type="button"
+>
+  <span class="dashboard-dropdown-icon">
+    ☑
+  </span>
+
+  <span>
+    <strong>
+      Manage TCW Errors
+    </strong>
+
+    <small>
+      View, filter and remove individual TCW errors
+    </small>
+  </span>
+</button>
+
+<button
+  id="manageMorganAuditsBtn"
+  class="dashboard-dropdown-action"
+  type="button"
+>
+  <span class="dashboard-dropdown-icon">
+    ☑
+  </span>
+
+  <span>
+    <strong>
+      Manage Morgan &amp; Lambert Audits
+    </strong>
+
+    <small>
+      View, filter and remove individual audit records
+    </small>
+  </span>
+</button>
+
 <input
   id="historicalAuditWorkbookInput"
   class="hidden"
@@ -528,8 +569,135 @@
             Apply dates
           </button>
         </div>
+            </div>
+    </div>
+
+    <!-- PERFORMANCE RECORD MANAGER -->
+    <div
+      id="performanceRecordManagerModal"
+      class="performance-record-modal hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="performanceRecordManagerTitle"
+    >
+      <div class="performance-record-modal-card">
+        <div class="performance-record-modal-head">
+          <div>
+            <div
+              id="performanceRecordManagerType"
+              class="performance-record-type"
+            >
+              Performance data
+            </div>
+
+            <h3 id="performanceRecordManagerTitle">
+              Manage Performance Data
+            </h3>
+
+            <p
+              id="performanceRecordManagerSubtitle"
+              class="muted"
+            ></p>
+          </div>
+
+          <button
+            id="performanceRecordManagerCloseBtn"
+            class="btn ghost small"
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+
+        <div class="performance-record-filters">
+          <label class="field">
+            <span>Source workbook</span>
+
+            <select id="performanceRecordWorkbookFilter">
+              <option value="">
+                All workbooks
+              </option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Engineer</span>
+
+            <select id="performanceRecordEngineerFilter">
+              <option value="">
+                All engineers
+              </option>
+            </select>
+          </label>
+
+          <label class="field performance-record-search">
+            <span>Search</span>
+
+            <input
+              id="performanceRecordSearch"
+              type="search"
+              placeholder="Search records"
+            />
+          </label>
+        </div>
+
+        <div class="performance-record-actions">
+          <div class="performance-record-selection-actions">
+            <button
+              id="performanceRecordSelectVisibleBtn"
+              class="btn ghost small"
+              type="button"
+            >
+              Select visible
+            </button>
+
+            <button
+              id="performanceRecordClearSelectionBtn"
+              class="btn ghost small"
+              type="button"
+            >
+              Clear selection
+            </button>
+          </div>
+
+          <div class="performance-record-delete-area">
+            <span
+              id="performanceRecordSelectedCount"
+              class="performance-record-selected-count"
+            >
+              0 selected
+            </span>
+
+            <button
+              id="performanceRecordDeleteBtn"
+              class="btn danger small"
+              type="button"
+              disabled
+            >
+              Delete selected
+            </button>
+          </div>
+        </div>
+
+        <div
+          id="performanceRecordStatus"
+          class="performance-record-status"
+        ></div>
+
+        <div class="performance-record-table-wrap">
+          <table class="performance-record-table">
+            <thead
+              id="performanceRecordTableHead"
+            ></thead>
+
+            <tbody
+              id="performanceRecordTableBody"
+            ></tbody>
+          </table>
+        </div>
       </div>
     </div>
+
     <div class="dashboard-period-controls">
       <button
         class="btn ghost small dashboard-period-btn"
