@@ -3976,3 +3976,333 @@ button.dashboard-mini-column:focus-visible {
     min-width: 780px;
   }
 }
+/* =========================================================
+   FULL PERFORMANCE EXPLORER
+   ========================================================= */
+
+.performance-explorer-clickable {
+  cursor: pointer;
+  transition:
+    transform .15s ease,
+    border-color .15s ease,
+    box-shadow .15s ease;
+}
+
+.performance-explorer-clickable:hover {
+  border-color:
+    rgba(168,85,247,.40);
+  box-shadow:
+    0 12px 28px rgba(0,0,0,.10);
+}
+
+.performance-explorer-clickable:focus-visible {
+  outline:
+    3px solid rgba(168,85,247,.26);
+  outline-offset: 3px;
+}
+
+.performance-explorer-backdrop {
+  position: fixed;
+  z-index: 7000;
+  inset: 0;
+  padding: 18px;
+  overflow: auto;
+  background:
+    rgba(15,10,25,.72);
+  backdrop-filter: blur(4px);
+}
+
+.performance-explorer {
+  width: min(1350px, 100%);
+  min-height: calc(100vh - 36px);
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow:
+    0 28px 80px rgba(0,0,0,.36);
+}
+
+.performance-explorer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 22px;
+  border-bottom:
+    1px solid var(--border);
+}
+
+.performance-explorer-head h2 {
+  margin: 3px 0 4px;
+  font-size: 23px;
+}
+
+.performance-explorer-eyebrow {
+  color: var(--brand2);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.performance-explorer-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.performance-explorer-count {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background:
+    rgba(168,85,247,.11);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.performance-explorer-filters {
+  display: grid;
+  grid-template-columns:
+    repeat(4,minmax(130px,1fr))
+    minmax(220px,2fr)
+    auto;
+  gap: 10px;
+  align-items: end;
+  padding: 15px 22px;
+  border-bottom:
+    1px solid var(--border);
+}
+
+.performance-explorer-search {
+  min-width: 0;
+}
+
+.performance-explorer-overview {
+  display: grid;
+  grid-template-columns:
+    repeat(5,minmax(0,1fr));
+  gap: 10px;
+  padding: 16px 22px 0;
+}
+
+.performance-explorer-kpi {
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background:
+    rgba(255,255,255,.025);
+}
+
+.performance-explorer-kpi span {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.performance-explorer-kpi strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 24px;
+}
+
+.performance-explorer-chart-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2,minmax(0,1fr));
+  gap: 12px;
+  padding: 14px 22px 0;
+}
+
+.performance-explorer-chart {
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background:
+    rgba(255,255,255,.02);
+}
+
+.performance-explorer-chart-head {
+  margin-bottom: 13px;
+}
+
+.performance-explorer-chart-head h4 {
+  margin: 0 0 3px;
+  font-size: 14px;
+}
+
+.performance-explorer-chart-head span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.performance-explorer-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.performance-explorer-bar-row {
+  display: grid;
+  grid-template-columns:
+    minmax(130px,1fr)
+    minmax(100px,2fr)
+    45px;
+  gap: 9px;
+  align-items: center;
+}
+
+.performance-explorer-bar-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+
+.performance-explorer-bar-track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background:
+    rgba(128,128,128,.14);
+}
+
+.performance-explorer-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      90deg,
+      var(--brand2),
+      var(--brand)
+    );
+}
+
+.performance-explorer-bar-row strong {
+  font-size: 11px;
+  text-align: right;
+}
+
+.performance-explorer-records {
+  margin: 14px 22px 22px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.performance-explorer-records-head {
+  padding: 14px 15px;
+  border-bottom:
+    1px solid var(--border);
+}
+
+.performance-explorer-records-head h3 {
+  margin: 0 0 3px;
+  font-size: 14px;
+}
+
+.performance-explorer-table-wrap {
+  max-height: 470px;
+  overflow: auto;
+}
+
+.performance-explorer-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.performance-explorer-table th,
+.performance-explorer-table td {
+  padding: 10px 12px;
+  border-bottom:
+    1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.performance-explorer-table th {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.performance-explorer-table tbody tr:hover {
+  background:
+    rgba(168,85,247,.055);
+}
+
+.performance-explorer-empty {
+  padding: 25px !important;
+  color: var(--muted);
+  text-align: center !important;
+  font-size: 11px;
+}
+
+@media (max-width: 1050px) {
+  .performance-explorer-filters {
+    grid-template-columns:
+      repeat(3,minmax(0,1fr));
+  }
+
+  .performance-explorer-overview {
+    grid-template-columns:
+      repeat(3,minmax(0,1fr));
+  }
+}
+
+@media (max-width: 750px) {
+  .performance-explorer-backdrop {
+    padding: 7px;
+  }
+
+  .performance-explorer {
+    min-height:
+      calc(100vh - 14px);
+    border-radius: 14px;
+  }
+
+  .performance-explorer-head {
+    flex-direction: column;
+  }
+
+  .performance-explorer-filters {
+    grid-template-columns:
+      repeat(2,minmax(0,1fr));
+  }
+
+  .performance-explorer-search {
+    grid-column: 1 / -1;
+  }
+
+  .performance-explorer-overview {
+    grid-template-columns:
+      repeat(2,minmax(0,1fr));
+  }
+
+  .performance-explorer-chart-grid {
+    grid-template-columns:
+      minmax(0,1fr);
+  }
+
+  .performance-explorer-bar-row {
+    grid-template-columns:
+      minmax(100px,1fr)
+      minmax(80px,1.5fr)
+      40px;
+  }
+
+  .performance-explorer-table {
+    min-width: 780px;
+  }
+}
