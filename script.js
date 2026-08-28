@@ -1327,8 +1327,9 @@ initBoilersLibrary().then(() => {
       initDefectsImportButton();
    initAnalytics();
    initExecutiveDashboard();
-   initPerformanceWorkbookImport();
-   initHistoricalAuditImport();
+initPerformanceWorkbookImport();
+initPerformanceRecordManager();
+initHistoricalAuditImport();
    initQuarterlyPowerPointGenerator();
 
   if (el("rangeSelect")) {
@@ -15437,6 +15438,882 @@ function initHistoricalAuditImport() {
     }
   );
 }
+const performanceRecordManagerState = {
+  type: "tcw",
+  selectedIds: new Set()
+};
+
+
+function ensurePerformanceRecordIds(
+  type
+) {
+  const records =
+    type === "morgan"
+      ? performanceState
+          .morganLambertAudits
+      : performanceState
+          .tcwErrors;
+
+  let changed = false;
+
+  records.forEach(
+    (record, index) => {
+      if (record.id) return;
+
+      const prefix =
+        type === "morgan"
+          ? "morgan-manager"
+          : "tcw-manager";
+
+      record.id =
+        `${prefix}-` +
+        `${Date.now()}-` +
+        `${index}-` +
+        `${Math.random()
+          .toString(16)
+          .slice(2)}`;
+
+      changed = true;
+    }
+  );
+
+  if (changed) {
+    savePerformanceState();
+  }
+}
+
+
+function getPerformanceManagerRecords() {
+  return performanceRecordManagerState
+    .type === "morgan"
+      ? performanceState
+          .morganLambertAudits || []
+      : performanceState
+          .tcwErrors || [];
+}
+
+
+function getFilteredPerformanceManagerRecords() {
+  const records =
+    getPerformanceManagerRecords();
+
+  const workbook =
+    el(
+      "performanceRecordWorkbookFilter"
+    )?.value || "";
+
+  const engineer =
+    el(
+      "performanceRecordEngineerFilter"
+    )?.value || "";
+
+  const search =
+    (
+      el(
+        "performanceRecordSearch"
+      )?.value || ""
+    )
+      .trim()
+      .toLowerCase();
+
+  return records
+    .filter(record => {
+      if (
+        workbook &&
+        String(
+          record.sourceFile || ""
+        ) !== workbook
+      ) {
+        return false;
+      }
+
+      if (
+        engineer &&
+        String(
+          record.engineer || ""
+        ) !== engineer
+      ) {
+        return false;
+      }
+
+      if (search) {
+        const haystack =
+          performanceRecordManagerState
+            .type === "morgan"
+            ? `
+                ${record.date || ""}
+                ${record.engineer || ""}
+                ${record.outcome || ""}
+                ${record.score ?? ""}
+                ${record.sourceFile || ""}
+              `
+            : `
+                ${record.date || ""}
+                ${record.engineer || ""}
+                ${record.address || ""}
+                ${record.reason || ""}
+                ${record.sourceFile || ""}
+              `;
+
+        if (
+          !haystack
+            .toLowerCase()
+            .includes(search)
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    })
+    .sort((a, b) =>
+      String(b.date || "")
+        .localeCompare(
+          String(a.date || "")
+        )
+    );
+}
+
+
+function populatePerformanceManagerFilters() {
+  const records =
+    getPerformanceManagerRecords();
+
+  const workbookSelect =
+    el(
+      "performanceRecordWorkbookFilter"
+    );
+
+  const engineerSelect =
+    el(
+      "performanceRecordEngineerFilter"
+    );
+
+  if (
+    !workbookSelect ||
+    !engineerSelect
+  ) {
+    return;
+  }
+
+  const currentWorkbook =
+    workbookSelect.value;
+
+  const currentEngineer =
+    engineerSelect.value;
+
+  const workbooks = [
+    ...new Set(
+      records
+        .map(record =>
+          String(
+            record.sourceFile || ""
+          ).trim()
+        )
+        .filter(Boolean)
+    )
+  ].sort((a, b) =>
+    a.localeCompare(b)
+  );
+
+  const engineers = [
+    ...new Set(
+      records
+        .map(record =>
+          String(
+            record.engineer || ""
+          ).trim()
+        )
+        .filter(Boolean)
+    )
+  ].sort((a, b) =>
+    a.localeCompare(b)
+  );
+
+  workbookSelect.innerHTML =
+    `
+      <option value="">
+        All workbooks
+      </option>
+    ` +
+    workbooks
+      .map(name => `
+        <option
+          value="${escapeHtml(name)}"
+        >
+          ${escapeHtml(name)}
+        </option>
+      `)
+      .join("");
+
+  engineerSelect.innerHTML =
+    `
+      <option value="">
+        All engineers
+      </option>
+    ` +
+    engineers
+      .map(name => `
+        <option
+          value="${escapeHtml(name)}"
+        >
+          ${escapeHtml(name)}
+        </option>
+      `)
+      .join("");
+
+  if (
+    workbooks.includes(
+      currentWorkbook
+    )
+  ) {
+    workbookSelect.value =
+      currentWorkbook;
+  }
+
+  if (
+    engineers.includes(
+      currentEngineer
+    )
+  ) {
+    engineerSelect.value =
+      currentEngineer;
+  }
+}
+
+
+function updatePerformanceRecordSelectionUi() {
+  const selectedCount =
+    performanceRecordManagerState
+      .selectedIds.size;
+
+  const countElement =
+    el(
+      "performanceRecordSelectedCount"
+    );
+
+  const deleteButton =
+    el(
+      "performanceRecordDeleteBtn"
+    );
+
+  if (countElement) {
+    countElement.textContent =
+      `${selectedCount} selected`;
+  }
+
+  if (deleteButton) {
+    deleteButton.disabled =
+      selectedCount === 0;
+  }
+}
+
+
+function renderPerformanceRecordManager() {
+  const type =
+    performanceRecordManagerState.type;
+
+  const allRecords =
+    getPerformanceManagerRecords();
+
+  const filteredRecords =
+    getFilteredPerformanceManagerRecords();
+
+  const title =
+    el(
+      "performanceRecordManagerTitle"
+    );
+
+  const typeLabel =
+    el(
+      "performanceRecordManagerType"
+    );
+
+  const subtitle =
+    el(
+      "performanceRecordManagerSubtitle"
+    );
+
+  const status =
+    el(
+      "performanceRecordStatus"
+    );
+
+  const tableHead =
+    el(
+      "performanceRecordTableHead"
+    );
+
+  const tableBody =
+    el(
+      "performanceRecordTableBody"
+    );
+
+  if (
+    !tableHead ||
+    !tableBody
+  ) {
+    return;
+  }
+
+  if (type === "morgan") {
+    if (title) {
+      title.textContent =
+        "Manage Morgan & Lambert Audits";
+    }
+
+    if (typeLabel) {
+      typeLabel.textContent =
+        "Morgan & Lambert";
+    }
+
+    if (subtitle) {
+      subtitle.textContent =
+        "Select individual imported audit records to remove.";
+    }
+
+    tableHead.innerHTML = `
+      <tr>
+        <th class="performance-record-check-col">
+          Select
+        </th>
+
+        <th>Date</th>
+        <th>Engineer</th>
+        <th>Outcome</th>
+        <th>Score</th>
+        <th>Source workbook</th>
+      </tr>
+    `;
+  } else {
+    if (title) {
+      title.textContent =
+        "Manage TCW Errors";
+    }
+
+    if (typeLabel) {
+      typeLabel.textContent =
+        "TCW Errors";
+    }
+
+    if (subtitle) {
+      subtitle.textContent =
+        "Select individual imported TCW error records to remove.";
+    }
+
+    tableHead.innerHTML = `
+      <tr>
+        <th class="performance-record-check-col">
+          Select
+        </th>
+
+        <th>Date</th>
+        <th>Engineer</th>
+        <th>Address</th>
+        <th>Reason</th>
+        <th>Source workbook</th>
+      </tr>
+    `;
+  }
+
+  if (status) {
+    status.textContent =
+      `${filteredRecords.length} of ` +
+      `${allRecords.length} record${
+        allRecords.length === 1
+          ? ""
+          : "s"
+      } shown`;
+  }
+
+  if (!filteredRecords.length) {
+    tableBody.innerHTML = `
+      <tr>
+        <td
+          colspan="6"
+          class="performance-record-empty"
+        >
+          No records match the current filters.
+        </td>
+      </tr>
+    `;
+
+    updatePerformanceRecordSelectionUi();
+    return;
+  }
+
+  tableBody.innerHTML =
+    filteredRecords
+      .map(record => {
+        const checked =
+          performanceRecordManagerState
+            .selectedIds
+            .has(
+              String(record.id)
+            );
+
+        if (type === "morgan") {
+          const numericScore =
+            Number(record.score);
+
+          const score =
+            Number.isFinite(
+              numericScore
+            )
+              ? `${numericScore.toFixed(
+                  1
+                )}%`
+              : "—";
+
+          return `
+            <tr>
+              <td
+                class="performance-record-check-col"
+              >
+                <input
+                  type="checkbox"
+                  class="performance-record-checkbox"
+                  data-performance-record-id="${escapeHtml(
+                    String(record.id)
+                  )}"
+                  ${
+                    checked
+                      ? "checked"
+                      : ""
+                  }
+                  aria-label="Select Morgan and Lambert audit"
+                />
+              </td>
+
+              <td>
+                ${escapeHtml(
+                  formatDate(
+                    record.date
+                  )
+                )}
+              </td>
+
+              <td>
+                ${escapeHtml(
+                  record.engineer || "—"
+                )}
+              </td>
+
+              <td>
+                <span
+                  class="
+                    performance-record-outcome
+                    ${
+                      record.outcome ===
+                      "PASS"
+                        ? "performance-record-pass"
+                        : "performance-record-fail"
+                    }
+                  "
+                >
+                  ${escapeHtml(
+                    record.outcome || "—"
+                  )}
+                </span>
+              </td>
+
+              <td>
+                ${escapeHtml(score)}
+              </td>
+
+              <td>
+                ${escapeHtml(
+                  record.sourceFile ||
+                  "Unknown"
+                )}
+              </td>
+            </tr>
+          `;
+        }
+
+        return `
+          <tr>
+            <td
+              class="performance-record-check-col"
+            >
+              <input
+                type="checkbox"
+                class="performance-record-checkbox"
+                data-performance-record-id="${escapeHtml(
+                  String(record.id)
+                )}"
+                ${
+                  checked
+                    ? "checked"
+                    : ""
+                }
+                aria-label="Select TCW error"
+              />
+            </td>
+
+            <td>
+              ${escapeHtml(
+                formatDate(
+                  record.date
+                )
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                record.engineer || "—"
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                record.address || "—"
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                record.reason || "—"
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                record.sourceFile ||
+                "Unknown"
+              )}
+            </td>
+          </tr>
+        `;
+      })
+      .join("");
+
+  tableBody
+    .querySelectorAll(
+      ".performance-record-checkbox"
+    )
+    .forEach(checkbox => {
+      checkbox.addEventListener(
+        "change",
+        () => {
+          const id =
+            checkbox.dataset
+              .performanceRecordId;
+
+          if (!id) return;
+
+          if (checkbox.checked) {
+            performanceRecordManagerState
+              .selectedIds
+              .add(id);
+          } else {
+            performanceRecordManagerState
+              .selectedIds
+              .delete(id);
+          }
+
+          updatePerformanceRecordSelectionUi();
+        }
+      );
+    });
+
+  updatePerformanceRecordSelectionUi();
+}
+
+
+function openPerformanceRecordManager(
+  type
+) {
+  performanceRecordManagerState.type =
+    type === "morgan"
+      ? "morgan"
+      : "tcw";
+
+  performanceRecordManagerState
+    .selectedIds
+    .clear();
+
+  ensurePerformanceRecordIds(
+    performanceRecordManagerState.type
+  );
+
+  const workbookFilter =
+    el(
+      "performanceRecordWorkbookFilter"
+    );
+
+  const engineerFilter =
+    el(
+      "performanceRecordEngineerFilter"
+    );
+
+  const search =
+    el(
+      "performanceRecordSearch"
+    );
+
+  if (workbookFilter) {
+    workbookFilter.value = "";
+  }
+
+  if (engineerFilter) {
+    engineerFilter.value = "";
+  }
+
+  if (search) {
+    search.value = "";
+  }
+
+  populatePerformanceManagerFilters();
+  renderPerformanceRecordManager();
+
+  closeDashboardActionsMenu();
+
+  el(
+    "performanceRecordManagerModal"
+  )?.classList.remove(
+    "hidden"
+  );
+}
+
+
+function closePerformanceRecordManager() {
+  el(
+    "performanceRecordManagerModal"
+  )?.classList.add(
+    "hidden"
+  );
+
+  performanceRecordManagerState
+    .selectedIds
+    .clear();
+}
+
+
+function selectVisiblePerformanceRecords() {
+  const records =
+    getFilteredPerformanceManagerRecords();
+
+  records.forEach(record => {
+    performanceRecordManagerState
+      .selectedIds
+      .add(
+        String(record.id)
+      );
+  });
+
+  renderPerformanceRecordManager();
+}
+
+
+function clearPerformanceRecordSelection() {
+  performanceRecordManagerState
+    .selectedIds
+    .clear();
+
+  renderPerformanceRecordManager();
+}
+
+
+function deleteSelectedPerformanceRecords() {
+  const selectedIds =
+    performanceRecordManagerState
+      .selectedIds;
+
+  if (!selectedIds.size) {
+    return;
+  }
+
+  const type =
+    performanceRecordManagerState.type;
+
+  const label =
+    type === "morgan"
+      ? "Morgan & Lambert audit"
+      : "TCW error";
+
+  const confirmed =
+    window.confirm(
+      `Delete ${selectedIds.size} selected ${label}${
+        selectedIds.size === 1
+          ? ""
+          : "s"
+      }?\n\n` +
+      "Only the selected records will be removed. Other imported records will be kept."
+    );
+
+  if (!confirmed) return;
+
+  if (type === "morgan") {
+    performanceState
+      .morganLambertAudits =
+        (
+          performanceState
+            .morganLambertAudits ||
+          []
+        ).filter(
+          record =>
+            !selectedIds.has(
+              String(record.id)
+            )
+        );
+  } else {
+    performanceState.tcwErrors =
+      (
+        performanceState
+          .tcwErrors || []
+      ).filter(
+        record =>
+          !selectedIds.has(
+            String(record.id)
+          )
+      );
+  }
+
+  /*
+    Keep the import-status counts accurate
+    after individual records are removed.
+  */
+  if (performanceState.importMeta) {
+    performanceState
+      .importMeta
+      .tcwCount =
+        performanceState
+          .tcwErrors.length;
+
+    performanceState
+      .importMeta
+      .morganCount =
+        performanceState
+          .morganLambertAudits
+          .length;
+  }
+
+  const deletedCount =
+    selectedIds.size;
+
+  selectedIds.clear();
+
+  savePerformanceState();
+
+  renderExecutiveDashboard();
+  renderAnalytics();
+
+  populatePerformanceManagerFilters();
+  renderPerformanceRecordManager();
+
+  alert(
+    `${deletedCount} selected ${label}${
+      deletedCount === 1
+        ? ""
+        : "s"
+    } removed.`
+  );
+}
+
+
+function initPerformanceRecordManager() {
+  el("manageTcwErrorsBtn")
+    ?.addEventListener(
+      "click",
+      () =>
+        openPerformanceRecordManager(
+          "tcw"
+        )
+    );
+
+  el("manageMorganAuditsBtn")
+    ?.addEventListener(
+      "click",
+      () =>
+        openPerformanceRecordManager(
+          "morgan"
+        )
+    );
+
+  el(
+    "performanceRecordManagerCloseBtn"
+  )?.addEventListener(
+    "click",
+    closePerformanceRecordManager
+  );
+
+  el(
+    "performanceRecordWorkbookFilter"
+  )?.addEventListener(
+    "change",
+    renderPerformanceRecordManager
+  );
+
+  el(
+    "performanceRecordEngineerFilter"
+  )?.addEventListener(
+    "change",
+    renderPerformanceRecordManager
+  );
+
+  el(
+    "performanceRecordSearch"
+  )?.addEventListener(
+    "input",
+    renderPerformanceRecordManager
+  );
+
+  el(
+    "performanceRecordSelectVisibleBtn"
+  )?.addEventListener(
+    "click",
+    selectVisiblePerformanceRecords
+  );
+
+  el(
+    "performanceRecordClearSelectionBtn"
+  )?.addEventListener(
+    "click",
+    clearPerformanceRecordSelection
+  );
+
+  el(
+    "performanceRecordDeleteBtn"
+  )?.addEventListener(
+    "click",
+    deleteSelectedPerformanceRecords
+  );
+
+  el(
+    "performanceRecordManagerModal"
+  )?.addEventListener(
+    "click",
+    event => {
+      if (
+        event.target ===
+        el(
+          "performanceRecordManagerModal"
+        )
+      ) {
+        closePerformanceRecordManager();
+      }
+    }
+  );
+
+  document.addEventListener(
+    "keydown",
+    event => {
+      if (
+        event.key === "Escape" &&
+        !el(
+          "performanceRecordManagerModal"
+        )?.classList.contains(
+          "hidden"
+        )
+      ) {
+        closePerformanceRecordManager();
+      }
+    }
+  );
+}
+
+
 function initPerformanceWorkbookImport() {
   const button =
     el(
