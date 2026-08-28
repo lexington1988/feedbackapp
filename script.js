@@ -24,6 +24,18 @@ const PERFORMANCE_IMPORT_META_KEY =
 const DASHBOARD_DATES_KEY =
   "ppc_dashboard_dates_v1";
 
+const HS_CALIBRATION_KEY =
+  "ppc_hs_calibration_v1";
+
+const HS_CALIBRATION_META_KEY =
+  "ppc_hs_calibration_meta_v1";
+
+const HS_CALIBRATION_ALERT_SETTINGS_KEY =
+  "ppc_hs_calibration_alert_settings_v1";
+
+const HS_CALIBRATION_POPUP_HISTORY_KEY =
+  "ppc_hs_calibration_popup_history_v1";
+
 const el = (id) => document.getElementById(id);
 const uid = () => Math.random().toString(16).slice(2) + Date.now().toString(16);
 function closeMobileKeyboard(input = null) {
@@ -101,6 +113,123 @@ function saveDashboardDateState() {
     )
   );
 }
+function loadHsCalibrationMeta() {
+  try {
+    const parsed =
+      JSON.parse(
+        localStorage.getItem(
+          HS_CALIBRATION_META_KEY
+        ) || "null"
+      );
+
+    return parsed &&
+      typeof parsed === "object"
+      ? parsed
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+
+function getDefaultHsCalibrationAlertSettings() {
+  return {
+    enabled: false,
+    recipient: "",
+    cc: "",
+    ccAssignedEngineer: false,
+
+    thresholds: [
+      30,
+      14,
+      7,
+      0
+    ],
+
+    dailyCheckTime:
+      "08:00"
+  };
+}
+
+
+function loadLocalHsCalibrationAlertSettings() {
+  try {
+    const parsed =
+      JSON.parse(
+        localStorage.getItem(
+          HS_CALIBRATION_ALERT_SETTINGS_KEY
+        ) || "null"
+      );
+
+    if (
+      !parsed ||
+      typeof parsed !== "object"
+    ) {
+      return getDefaultHsCalibrationAlertSettings();
+    }
+
+    return {
+      ...getDefaultHsCalibrationAlertSettings(),
+      ...parsed,
+
+      /*
+        Keep the threshold schedule fixed.
+      */
+      thresholds: [
+        30,
+        14,
+        7,
+        0
+      ]
+    };
+  } catch {
+    return getDefaultHsCalibrationAlertSettings();
+  }
+}
+
+
+const hsCalibrationAlertSettings =
+  loadLocalHsCalibrationAlertSettings();
+
+
+function saveLocalHsCalibrationAlertSettings() {
+  localStorage.setItem(
+    HS_CALIBRATION_ALERT_SETTINGS_KEY,
+    JSON.stringify(
+      hsCalibrationAlertSettings
+    )
+  );
+}
+
+
+const hsCalibrationState = {
+  records:
+    loadAnalyticsArray(
+      HS_CALIBRATION_KEY
+    ),
+
+  importMeta:
+    loadHsCalibrationMeta()
+};
+
+
+function saveHsCalibrationState() {
+  localStorage.setItem(
+    HS_CALIBRATION_KEY,
+    JSON.stringify(
+      hsCalibrationState.records
+    )
+  );
+
+  localStorage.setItem(
+    HS_CALIBRATION_META_KEY,
+    JSON.stringify(
+      hsCalibrationState.importMeta
+    )
+  );
+}
+
+
 const performanceState = {
   tcwErrors:
     loadAnalyticsArray(
@@ -961,7 +1090,27 @@ function inspectionsCol(uid) {
     .doc(uid)
     .collection("inspections");
 }
+function hsCalibrationCloudCol(uid) {
+  return cloudDb
+    .collection("users")
+    .doc(uid)
+    .collection(
+      "hsCalibration"
+    );
+}
 
+
+function hsCalibrationMetaRef(uid) {
+  return cloudDb
+    .collection("users")
+    .doc(uid)
+    .collection(
+      "hsSettings"
+    )
+    .doc(
+      "calibration"
+    );
+}
 function analyticsAuditsCol(uid) {
   return cloudDb
     .collection("users")
@@ -1326,7 +1475,9 @@ initBoilersLibrary().then(() => {
   });
       initDefectsImportButton();
    initAnalytics();
-   initExecutiveDashboard();
+initExecutiveDashboard();
+initHealthSafety();
+initHsCalibration();
 initPerformanceWorkbookImport();
 initPerformanceRecordManager();
 initPerformanceExplorer();
@@ -1417,9 +1568,29 @@ auth.onAuthStateChanged(async user => {
       );
     }
 
-   try {
+  try {
   await initialiseCloudAnalyticsArchive();
   startCloudSync();
+
+  /*
+    If a calibration register already
+    exists locally, sync it after login.
+  */
+  if (
+  typeof hsCalibrationState !==
+    "undefined" &&
+  hsCalibrationState.records
+    ?.length
+) {
+  await syncHsCalibrationToCloud();
+}
+
+if (
+  typeof loadHsCalibrationAlertSettingsFromCloud ===
+    "function"
+) {
+  await loadHsCalibrationAlertSettingsFromCloud();
+}
 } catch (err) {
   console.error(
     "Analytics cloud sync failed:",
@@ -1436,8 +1607,18 @@ auth.onAuthStateChanged(async user => {
     "Logged in, but the Firebase audit data could not be loaded. Check the browser console and Firebase permissions."
   );
 }
-  } else {
-    stopCloudSync();
+ } else {
+  stopCloudSync();
+
+  if (
+    typeof setHsCalibrationCloudStatus ===
+    "function"
+  ) {
+    setHsCalibrationCloudStatus(
+      "Local only • Log in to sync calibration data to Firebase.",
+      "warning"
+    );
+  }
 
     if (el("loginBtn")) {
       el("loginBtn").classList.remove(
@@ -20689,6 +20870,2989 @@ function renderExecutiveDashboardMonthlyTrend(
   `;
 }
 
+function setHealthSafetyTab(
+  name
+) {
+  const validTabs = [
+    "overview",
+    "audits",
+    "calibration",
+    "warnings",
+    "actions"
+  ];
+
+  const selected =
+    validTabs.includes(name)
+      ? name
+      : "overview";
+
+  document
+    .querySelectorAll(
+      ".hs-subtab"
+    )
+    .forEach(button => {
+      button.classList.toggle(
+        "active",
+        button.dataset.hsTab ===
+          selected
+      );
+    });
+
+  const panelMap = {
+    overview:
+      "hsPanelOverview",
+
+    audits:
+      "hsPanelAudits",
+
+    calibration:
+      "hsPanelCalibration",
+
+    warnings:
+      "hsPanelWarnings",
+
+    actions:
+      "hsPanelActions"
+  };
+
+   Object.entries(
+    panelMap
+  ).forEach(
+    ([key, id]) => {
+      el(id)?.classList.toggle(
+        "active",
+        key === selected
+      );
+    }
+  );
+
+  if (
+    selected === "overview" ||
+    selected === "calibration"
+  ) {
+    renderHsCalibration();
+  }
+}
+
+async function loadHsCalibrationAlertSettingsFromCloud() {
+  if (!cloudSignedIn()) {
+    return false;
+  }
+
+  try {
+    const user =
+      getUser();
+
+    const snapshot =
+      await hsCalibrationMetaRef(
+        user.uid
+      ).get();
+
+    if (!snapshot.exists) {
+      return false;
+    }
+
+    const data =
+      snapshot.data() || {};
+
+    const cloudSettings =
+      data.alertSettings;
+
+    if (
+      !cloudSettings ||
+      typeof cloudSettings !==
+        "object"
+    ) {
+      return false;
+    }
+
+    hsCalibrationAlertSettings.enabled =
+      cloudSettings.enabled === true;
+
+    hsCalibrationAlertSettings.recipient =
+      String(
+        cloudSettings.recipient ||
+        ""
+      );
+
+    hsCalibrationAlertSettings.cc =
+      String(
+        cloudSettings.cc ||
+        ""
+      );
+
+    hsCalibrationAlertSettings
+      .ccAssignedEngineer =
+        cloudSettings
+          .ccAssignedEngineer ===
+        true;
+
+    hsCalibrationAlertSettings
+      .dailyCheckTime =
+        String(
+          cloudSettings
+            .dailyCheckTime ||
+          "08:00"
+        );
+
+    /*
+      These remain fixed regardless of
+      what may be stored in Firestore.
+    */
+    hsCalibrationAlertSettings.thresholds =
+      [
+        30,
+        14,
+        7,
+        0
+      ];
+
+    saveLocalHsCalibrationAlertSettings();
+
+    return true;
+  } catch (error) {
+    console.error(
+      "Calibration alert settings could not be loaded:",
+      error
+    );
+
+    return false;
+  }
+}
+
+
+async function saveHsCalibrationAlertSettingsToCloud() {
+  saveLocalHsCalibrationAlertSettings();
+
+  if (!cloudSignedIn()) {
+    return {
+      saved: false,
+      reason: "not-signed-in"
+    };
+  }
+
+  try {
+    const user =
+      getUser();
+
+    await hsCalibrationMetaRef(
+      user.uid
+    ).set(
+      {
+        alertThresholds: [
+          30,
+          14,
+          7,
+          0
+        ],
+
+        alertSettings: {
+          enabled:
+            hsCalibrationAlertSettings
+              .enabled,
+
+          recipient:
+            hsCalibrationAlertSettings
+              .recipient,
+
+          cc:
+            hsCalibrationAlertSettings
+              .cc,
+
+          ccAssignedEngineer:
+            hsCalibrationAlertSettings
+              .ccAssignedEngineer,
+
+          dailyCheckTime:
+            hsCalibrationAlertSettings
+              .dailyCheckTime,
+
+          thresholds: [
+            30,
+            14,
+            7,
+            0
+          ],
+
+          updatedAt:
+            firebase
+              .firestore
+              .FieldValue
+              .serverTimestamp()
+        }
+      },
+      {
+        merge: true
+      }
+    );
+
+    return {
+      saved: true
+    };
+  } catch (error) {
+    console.error(
+      "Calibration alert settings could not be saved:",
+      error
+    );
+
+    return {
+      saved: false,
+      reason: "error",
+      error
+    };
+  }
+}
+function setHsCalibrationCloudStatus(
+  message,
+  state = ""
+) {
+  const element =
+    el(
+      "hsCalibrationCloudStatus"
+    );
+
+  if (!element) return;
+
+  element.textContent =
+    message;
+
+  element.classList.remove(
+    "hs-cloud-good",
+    "hs-cloud-warning",
+    "hs-cloud-error"
+  );
+
+  if (state === "good") {
+    element.classList.add(
+      "hs-cloud-good"
+    );
+  }
+
+  if (state === "warning") {
+    element.classList.add(
+      "hs-cloud-warning"
+    );
+  }
+
+  if (state === "error") {
+    element.classList.add(
+      "hs-cloud-error"
+    );
+  }
+}
+
+
+async function syncHsCalibrationToCloud() {
+  if (!cloudSignedIn()) {
+    setHsCalibrationCloudStatus(
+      "Local only • Log in to sync calibration data to Firebase.",
+      "warning"
+    );
+
+    return {
+      synced: false,
+      reason: "not-signed-in"
+    };
+  }
+
+  const user =
+    getUser();
+
+  const records =
+    hsCalibrationState.records ||
+    [];
+
+  setHsCalibrationCloudStatus(
+    "Syncing calibration register to Firebase…"
+  );
+
+  try {
+    const collection =
+      hsCalibrationCloudCol(
+        user.uid
+      );
+
+    /*
+      Calibration is a CURRENT register,
+      not a historical archive.
+
+      Therefore Firestore should mirror
+      exactly what is currently stored
+      in the app.
+    */
+    const existingSnapshot =
+      await collection.get();
+
+    const existingIds =
+      new Set(
+        existingSnapshot.docs.map(
+          doc => doc.id
+        )
+      );
+
+    const currentIds =
+      new Set(
+        records.map(record =>
+          String(
+            record.id ||
+            record.analyserCode
+          )
+        )
+      );
+
+    const operations = [];
+
+    /*
+      Remove cloud records which are no
+      longer present in the latest workbook.
+    */
+    existingSnapshot.docs.forEach(
+      doc => {
+        if (
+          !currentIds.has(
+            doc.id
+          )
+        ) {
+          operations.push({
+            type: "delete",
+            ref: doc.ref
+          });
+        }
+      }
+    );
+
+    /*
+      Add/update every current analyser.
+    */
+    records.forEach(record => {
+      const documentId =
+        String(
+          record.id ||
+          `hs-calibration-${normalizePerformanceSourceName(
+            record.analyserCode
+          )}`
+        );
+
+      const ref =
+        collection.doc(
+          documentId
+        );
+
+      operations.push({
+        type: "set",
+        ref,
+        data: {
+          id:
+            documentId,
+
+          analyserCode:
+            record.analyserCode ||
+            "",
+
+          engineer:
+            record.engineer ||
+            "",
+
+          model:
+            record.model ||
+            "",
+
+          email:
+            record.email ||
+            "",
+
+          dueDate:
+            record.dueDate ||
+            "",
+
+          sourceFile:
+            record.sourceFile ||
+            "",
+
+          sourceSheet:
+            record.sourceSheet ||
+            "",
+
+          updatedAt:
+            firebase
+              .firestore
+              .FieldValue
+              .serverTimestamp()
+        }
+      });
+    });
+
+    /*
+      Firestore batches allow hundreds of
+      operations, but split into smaller
+      groups so this stays safe even if
+      the register grows substantially.
+    */
+    const batchSize = 400;
+
+    for (
+      let index = 0;
+      index < operations.length;
+      index += batchSize
+    ) {
+      const group =
+        operations.slice(
+          index,
+          index + batchSize
+        );
+
+      const batch =
+        cloudDb.batch();
+
+      group.forEach(operation => {
+        if (
+          operation.type ===
+          "delete"
+        ) {
+          batch.delete(
+            operation.ref
+          );
+        } else {
+          batch.set(
+            operation.ref,
+            operation.data,
+            {
+              merge: true
+            }
+          );
+        }
+      });
+
+      await batch.commit();
+    }
+
+    /*
+      Store information about the latest
+      calibration register separately.
+    */
+    await hsCalibrationMetaRef(
+      user.uid
+    ).set(
+      {
+        recordCount:
+          records.length,
+
+        sourceFile:
+          hsCalibrationState
+            .importMeta
+            ?.fileName ||
+          "",
+
+        sourceSheet:
+          hsCalibrationState
+            .importMeta
+            ?.sheetName ||
+          "",
+
+        importedAt:
+          hsCalibrationState
+            .importMeta
+            ?.importedAt ||
+          null,
+
+        syncedAt:
+          firebase
+            .firestore
+            .FieldValue
+            .serverTimestamp(),
+
+        alertThresholds: [
+          30,
+          14,
+          7,
+          0
+        ]
+      },
+      {
+        merge: true
+      }
+    );
+
+    setHsCalibrationCloudStatus(
+      `Cloud synced • ${records.length} analyser${
+        records.length === 1
+          ? ""
+          : "s"
+      } stored in Firebase.`,
+      "good"
+    );
+
+    return {
+      synced: true,
+      count:
+        records.length
+    };
+  } catch (error) {
+    console.error(
+      "Calibration Firebase sync failed:",
+      error
+    );
+
+    setHsCalibrationCloudStatus(
+      "Firebase sync failed • Local calibration data is still safe.",
+      "error"
+    );
+
+    return {
+      synced: false,
+      reason: "error",
+      error
+    };
+  }
+}
+
+
+function loadHsCalibrationPopupHistory() {
+  try {
+    const parsed =
+      JSON.parse(
+        localStorage.getItem(
+          HS_CALIBRATION_POPUP_HISTORY_KEY
+        ) || "{}"
+      );
+
+    return parsed &&
+      typeof parsed === "object"
+      ? parsed
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+
+function saveHsCalibrationPopupHistory(
+  history
+) {
+  localStorage.setItem(
+    HS_CALIBRATION_POPUP_HISTORY_KEY,
+    JSON.stringify(
+      history || {}
+    )
+  );
+}
+
+
+function getHsCalibrationPopupStage(
+  days
+) {
+  if (
+    days === null ||
+    !Number.isFinite(days)
+  ) {
+    return null;
+  }
+
+  if (days < 0) {
+    return {
+      key: "expired",
+      label: "Calibration expired",
+      priority: 4
+    };
+  }
+
+  if (days <= 7) {
+    return {
+      key: "7",
+      label: "Due within 7 days",
+      priority: 3
+    };
+  }
+
+  if (days <= 14) {
+    return {
+      key: "14",
+      label: "Due within 14 days",
+      priority: 2
+    };
+  }
+
+  if (days <= 30) {
+    return {
+      key: "30",
+      label: "Due within 30 days",
+      priority: 1
+    };
+  }
+
+  return null;
+}
+
+
+function hsCalibrationPopupAlertKey(
+  record,
+  stage
+) {
+  return [
+    record.analyserCode || record.id || "unknown",
+    record.dueDate || "unknown-date",
+    stage.key
+  ].join("|");
+}
+
+
+function getPendingHsCalibrationPopupAlerts() {
+  const history =
+    loadHsCalibrationPopupHistory();
+
+  return (
+    hsCalibrationState.records ||
+    []
+  )
+    .map(record => {
+      const days =
+        hsCalibrationDaysLeft(
+          record.dueDate
+        );
+
+      const stage =
+        getHsCalibrationPopupStage(
+          days
+        );
+
+      if (!stage) {
+        return null;
+      }
+
+      const alertKey =
+        hsCalibrationPopupAlertKey(
+          record,
+          stage
+        );
+
+      if (history[alertKey]) {
+        return null;
+      }
+
+      return {
+        record,
+        days,
+        stage,
+        alertKey
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => {
+      if (
+        b.stage.priority !==
+        a.stage.priority
+      ) {
+        return (
+          b.stage.priority -
+          a.stage.priority
+        );
+      }
+
+      return a.days - b.days;
+    });
+}
+
+
+function closeHsCalibrationStartupAlert() {
+  el(
+    "hsCalibrationStartupAlertBackdrop"
+  )?.remove();
+}
+
+
+function acknowledgeHsCalibrationStartupAlerts(
+  alerts
+) {
+  const history =
+    loadHsCalibrationPopupHistory();
+
+  const acknowledgedAt =
+    new Date().toISOString();
+
+  (alerts || []).forEach(
+    alertItem => {
+      history[
+        alertItem.alertKey
+      ] = {
+        acknowledgedAt,
+
+        analyserCode:
+          alertItem.record
+            .analyserCode ||
+          "",
+
+        dueDate:
+          alertItem.record
+            .dueDate ||
+          "",
+
+        stage:
+          alertItem.stage.key
+      };
+    }
+  );
+
+  saveHsCalibrationPopupHistory(
+    history
+  );
+
+  closeHsCalibrationStartupAlert();
+}
+
+async function shareHsCalibrationAlertEmail(
+  alerts
+) {
+  if (!alerts?.length) {
+    return;
+  }
+
+  const settings =
+    typeof hsCalibrationAlertSettings !==
+      "undefined"
+      ? hsCalibrationAlertSettings
+      : {
+          recipient: "",
+          cc: "",
+          ccAssignedEngineer: false
+        };
+
+
+  /*
+    PRIMARY RECIPIENT
+  */
+  const recipient =
+    String(
+      settings.recipient || ""
+    ).trim();
+
+
+  /*
+    SAVED CC RECIPIENTS
+  */
+  const ccRecipients =
+    String(
+      settings.cc || ""
+    )
+      .split(",")
+      .map(value =>
+        value.trim()
+      )
+      .filter(Boolean);
+
+
+  /*
+    If enabled in Alert Settings,
+    automatically add the assigned
+    engineer email address for each
+    analyser shown in this warning.
+  */
+  if (
+    settings.ccAssignedEngineer
+  ) {
+    alerts.forEach(
+      item => {
+        const engineerEmail =
+          String(
+            item.record?.email ||
+            ""
+          ).trim();
+
+        if (
+          engineerEmail &&
+          isValidHsAlertEmail(
+            engineerEmail
+          )
+        ) {
+          ccRecipients.push(
+            engineerEmail
+          );
+        }
+      }
+    );
+  }
+
+
+  /*
+    Remove duplicate CC addresses.
+
+    Also avoid putting the primary
+    recipient into CC as well.
+  */
+  const uniqueCcRecipients =
+    Array.from(
+      new Set(
+        ccRecipients
+          .map(email =>
+            email.toLowerCase()
+          )
+          .filter(email =>
+            email !==
+            recipient.toLowerCase()
+          )
+      )
+    );
+
+
+  const expiredCount =
+    alerts.filter(
+      item =>
+        item.stage.key ===
+        "expired"
+    ).length;
+
+
+  /*
+    EMAIL SUBJECT
+  */
+  let subject = "";
+
+  if (expiredCount) {
+    subject =
+      "H&S Alert - Analyser Calibration Attention Required";
+  } else if (
+    alerts.length === 1
+  ) {
+    const alertItem =
+      alerts[0];
+
+    const analyser =
+      alertItem.record
+        ?.analyserCode ||
+      "Analyser";
+
+    if (
+      alertItem.stage.key ===
+      "30"
+    ) {
+      subject =
+        `H&S Alert - ${analyser} Calibration Due Within 30 Days`;
+    } else if (
+      alertItem.stage.key ===
+      "14"
+    ) {
+      subject =
+        `H&S Alert - ${analyser} Calibration Due Within 14 Days`;
+    } else if (
+      alertItem.stage.key ===
+      "7"
+    ) {
+      subject =
+        `H&S Alert - ${analyser} Calibration Due Within 7 Days`;
+    } else {
+      subject =
+        `H&S Alert - ${analyser} Calibration Reminder`;
+    }
+  } else {
+    subject =
+      `H&S Alert - ${alerts.length} Analyser Calibration Reminders`;
+  }
+
+
+  /*
+    EMAIL BODY
+  */
+  const lines = [
+    "Analyser Calibration Reminder",
+    "",
+    "The following analyser calibration item(s) require attention:",
+    ""
+  ];
+
+
+  alerts.forEach(
+    (item, index) => {
+      const record =
+        item.record;
+
+      const days =
+        item.days;
+
+      let timing = "";
+
+      if (days < 0) {
+        const overdueDays =
+          Math.abs(days);
+
+        timing =
+          `${overdueDays} day${
+            overdueDays === 1
+              ? ""
+              : "s"
+          } overdue`;
+      } else if (
+        days === 0
+      ) {
+        timing =
+          "Calibration due today";
+      } else {
+        timing =
+          `${days} day${
+            days === 1
+              ? ""
+              : "s"
+          } remaining`;
+      }
+
+
+      lines.push(
+        `${index + 1}. ${record.analyserCode || "Unknown analyser"}`,
+        `Model: ${record.model || "Not recorded"}`,
+        `Assigned engineer: ${record.engineer || "Not assigned"}`,
+        `Calibration due: ${formatDate(
+          record.dueDate
+        )}`,
+        `Status: ${timing}`,
+        ""
+      );
+    }
+  );
+
+
+  lines.push(
+    "Please arrange calibration as required.",
+    "",
+    "Regards,"
+  );
+
+
+  const body =
+    lines.join("\n");
+
+
+  /*
+    Build a genuine email draft.
+
+    Unlike navigator.share(), mailto:
+    populates the actual Outlook
+    To / CC / Subject / Body fields.
+  */
+  const parameters = [];
+
+
+  if (
+    uniqueCcRecipients.length
+  ) {
+    parameters.push(
+      `cc=${encodeURIComponent(
+        uniqueCcRecipients.join(
+          ","
+        )
+      )}`
+    );
+  }
+
+
+  parameters.push(
+    `subject=${encodeURIComponent(
+      subject
+    )}`
+  );
+
+
+  parameters.push(
+    `body=${encodeURIComponent(
+      body
+    )}`
+  );
+
+
+  const mailto =
+    `mailto:${encodeURIComponent(
+      recipient
+    )}?${parameters.join("&")}`;
+
+
+  /*
+    Open the user's normal email client.
+  */
+  window.location.href =
+    mailto;
+}
+function openHsCalibrationStartupAlert(
+  alerts
+) {
+  closeHsCalibrationStartupAlert();
+
+  if (!alerts?.length) {
+    return;
+  }
+
+  const expiredCount =
+    alerts.filter(
+      item =>
+        item.stage.key ===
+        "expired"
+    ).length;
+
+  const urgentCount =
+    alerts.filter(
+      item =>
+        item.stage.key ===
+        "7"
+    ).length;
+
+  const backdrop =
+    document.createElement(
+      "div"
+    );
+
+  backdrop.id =
+    "hsCalibrationStartupAlertBackdrop";
+
+  backdrop.className =
+    "hs-startup-alert-backdrop";
+
+  const alertRows =
+    alerts
+      .map(item => {
+        const {
+          record,
+          days,
+          stage
+        } = item;
+
+        let timingText = "";
+
+        if (days < 0) {
+          const overdueDays =
+            Math.abs(days);
+
+          timingText =
+            `${overdueDays} day${
+              overdueDays === 1
+                ? ""
+                : "s"
+            } overdue`;
+        } else if (days === 0) {
+          timingText =
+            "Calibration due today";
+        } else {
+          timingText =
+            `${days} day${
+              days === 1
+                ? ""
+                : "s"
+            } remaining`;
+        }
+
+        const tone =
+          stage.key ===
+            "expired" ||
+          stage.key === "7"
+            ? "danger"
+            : stage.key === "14"
+              ? "warning"
+              : "notice";
+
+        return `
+          <div
+            class="
+              hs-startup-alert-item
+              hs-startup-alert-${tone}
+            "
+          >
+            <div
+              class="hs-startup-alert-marker"
+            >
+              ${
+                stage.key ===
+                  "expired"
+                  ? "!"
+                  : stage.key
+              }
+            </div>
+
+            <div
+              class="hs-startup-alert-content"
+            >
+              <div
+                class="hs-startup-alert-item-head"
+              >
+                <strong>
+                  ${escapeHtml(
+                    record.analyserCode ||
+                    "Unknown analyser"
+                  )}
+                </strong>
+
+                <span>
+                  ${escapeHtml(
+                    stage.label
+                  )}
+                </span>
+              </div>
+
+              <div
+                class="hs-startup-alert-details"
+              >
+                <span>
+                  <strong>Model:</strong>
+                  ${escapeHtml(
+                    record.model ||
+                    "Not recorded"
+                  )}
+                </span>
+
+                <span>
+                  <strong>Engineer:</strong>
+                  ${escapeHtml(
+                    record.engineer ||
+                    "Not assigned"
+                  )}
+                </span>
+
+                <span>
+                  <strong>Due:</strong>
+                  ${escapeHtml(
+                    formatDate(
+                      record.dueDate
+                    )
+                  )}
+                </span>
+
+                <span>
+                  <strong>Status:</strong>
+                  ${escapeHtml(
+                    timingText
+                  )}
+                </span>
+              </div>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+
+  backdrop.innerHTML = `
+    <section
+      class="hs-startup-alert"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="hsStartupAlertTitle"
+    >
+      <div
+        class="hs-startup-alert-head"
+      >
+        <div>
+          <div class="hs-eyebrow">
+            Health & Safety
+          </div>
+
+          <h2
+            id="hsStartupAlertTitle"
+          >
+            Analyser calibration attention required
+          </h2>
+
+          <p>
+            ${
+              alerts.length === 1
+                ? "1 analyser has reached a calibration reminder point."
+                : `${alerts.length} analysers have reached calibration reminder points.`
+            }
+          </p>
+        </div>
+
+        <div
+          class="hs-startup-alert-summary"
+        >
+          ${
+            expiredCount
+              ? `
+                  <span
+                    class="hs-startup-summary-danger"
+                  >
+                    ${expiredCount}
+                    expired
+                  </span>
+                `
+              : ""
+          }
+
+          ${
+            urgentCount
+              ? `
+                  <span
+                    class="hs-startup-summary-warning"
+                  >
+                    ${urgentCount}
+                    due ≤7 days
+                  </span>
+                `
+              : ""
+          }
+        </div>
+      </div>
+
+      <div
+        class="hs-startup-alert-body"
+      >
+        ${alertRows}
+      </div>
+
+      <div
+        class="hs-startup-alert-note"
+      >
+        These reminders are shown once for each
+        30-day, 14-day, 7-day and expired stage.
+        A new calibration due date starts a new
+        reminder cycle automatically.
+      </div>
+
+     <div
+  class="hs-startup-alert-actions"
+>
+  <button
+    id="hsStartupViewCalibrationBtn"
+    class="btn ghost"
+    type="button"
+  >
+    View Calibration Register
+  </button>
+
+  <button
+    id="hsStartupEmailRecipientsBtn"
+    class="btn ghost"
+    type="button"
+  >
+    Email Recipients
+  </button>
+
+  <button
+    id="hsStartupAcknowledgeBtn"
+    class="btn"
+    type="button"
+  >
+          Acknowledge ${
+            alerts.length === 1
+              ? "Reminder"
+              : "Reminders"
+          }
+        </button>
+      </div>
+    </section>
+  `;
+
+  document.body.appendChild(
+    backdrop
+  );
+
+  el(
+    "hsStartupViewCalibrationBtn"
+  )?.addEventListener(
+    "click",
+    () => {
+      acknowledgeHsCalibrationStartupAlerts(
+        alerts
+      );
+
+      setTab(
+        "healthSafety"
+      );
+
+      setHealthSafetyTab(
+        "calibration"
+      );
+    }
+  );
+el(
+  "hsStartupEmailRecipientsBtn"
+)?.addEventListener(
+  "click",
+  async () => {
+    await shareHsCalibrationAlertEmail(
+      alerts
+    );
+  }
+);
+  el(
+    "hsStartupAcknowledgeBtn"
+  )?.addEventListener(
+    "click",
+    () => {
+      acknowledgeHsCalibrationStartupAlerts(
+        alerts
+      );
+    }
+  );
+}
+
+
+function checkHsCalibrationStartupAlerts() {
+  const records =
+    hsCalibrationState.records ||
+    [];
+
+  if (!records.length) {
+    return;
+  }
+
+  const pendingAlerts =
+    getPendingHsCalibrationPopupAlerts();
+
+  if (!pendingAlerts.length) {
+    return;
+  }
+
+  openHsCalibrationStartupAlert(
+    pendingAlerts
+  );
+}
+
+
+function getHsTodayDate() {
+  const now = new Date();
+
+  return new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  );
+}
+
+
+function hsCalibrationDaysLeft(
+  dueDate
+) {
+  const due =
+    parseAnalyticsDate(
+      dueDate
+    );
+
+  if (!due) return null;
+
+  const today =
+    getHsTodayDate();
+
+  return Math.round(
+    (
+      due.getTime() -
+      today.getTime()
+    ) /
+    (
+      24 *
+      60 *
+      60 *
+      1000
+    )
+  );
+}
+
+
+function getHsCalibrationStatus(
+  dueDate
+) {
+  const days =
+    hsCalibrationDaysLeft(
+      dueDate
+    );
+
+  if (days === null) {
+    return {
+      key: "unknown",
+      label: "Date not available",
+      tone: "neutral"
+    };
+  }
+
+  if (days < 0) {
+    return {
+      key: "expired",
+      label: "Expired",
+      tone: "danger"
+    };
+  }
+
+  if (days === 0) {
+    return {
+      key: "30",
+      label: "Due today",
+      tone: "danger"
+    };
+  }
+
+  if (days <= 30) {
+    return {
+      key: "30",
+      label: "Due within 30 days",
+      tone: "danger"
+    };
+  }
+
+  if (days <= 90) {
+    return {
+      key: "90",
+      label: "Due within 90 days",
+      tone: "warning"
+    };
+  }
+
+  return {
+    key: "current",
+    label: "Current",
+    tone: "success"
+  };
+}
+
+
+function locateHsCalibrationSheet(
+  workbook
+) {
+  if (!workbook) return null;
+
+  const requiredHeaders = {
+    analyserCode: [
+      "analyser code",
+      "analyzer code",
+      "analyser",
+      "analyzer",
+      "serial number"
+    ],
+
+    engineer: [
+      "assigned engineer",
+      "engineer",
+      "assigned to"
+    ],
+
+    dueDate: [
+      "calibration due date",
+      "calibration due",
+      "calibration date",
+      "due date"
+    ]
+  };
+
+  /*
+    Search every worksheet by its headings.
+
+    This means the calibration sheet does not
+    need to have a particular tab name.
+  */
+  for (
+    const sheetName of
+    workbook.SheetNames || []
+  ) {
+    const sheet =
+      workbook.Sheets[
+        sheetName
+      ];
+
+    const rows =
+      workbookRows(sheet);
+
+    const header =
+      findWorkbookHeader(
+        rows,
+        requiredHeaders
+      );
+
+    if (!header) continue;
+
+    return {
+      sheetName,
+      sheet,
+      rows,
+      header
+    };
+  }
+
+  return null;
+}
+
+
+function findOptionalHsCalibrationColumn(
+  headerRow,
+  alternatives
+) {
+  const normalized =
+    (headerRow || [])
+      .map(
+        normalizeWorkbookText
+      );
+
+  return normalized.findIndex(
+    value =>
+      alternatives.some(
+        alternative =>
+          value === alternative ||
+          value.includes(
+            alternative
+          )
+      )
+  );
+}
+
+
+function importHsCalibrationRecords(
+  workbook,
+  sourceFileName
+) {
+  const located =
+    locateHsCalibrationSheet(
+      workbook
+    );
+
+  if (!located) {
+    throw new Error(
+      "A calibration worksheet could not be found.\n\n" +
+      "The app looked for Analyser Code, Assigned Engineer and Calibration Due Date headings."
+    );
+  }
+
+  const {
+    rows,
+    header,
+    sheetName
+  } = located;
+
+  const headerRow =
+    rows[
+      header.rowIndex
+    ] || [];
+
+  const modelIndex =
+    findOptionalHsCalibrationColumn(
+      headerRow,
+      [
+        "model",
+        "analyser model",
+        "analyzer model",
+        "make model"
+      ]
+    );
+
+  const emailIndex =
+    findOptionalHsCalibrationColumn(
+      headerRow,
+      [
+        "email",
+        "email address"
+      ]
+    );
+
+  const imported = [];
+
+  for (
+    let rowIndex =
+      header.rowIndex + 1;
+
+    rowIndex < rows.length;
+
+    rowIndex++
+  ) {
+    const row =
+      rows[rowIndex] || [];
+
+    const analyserCode =
+      String(
+        row[
+          header.indexes
+            .analyserCode
+        ] ?? ""
+      ).trim();
+
+    const engineer =
+      String(
+        row[
+          header.indexes
+            .engineer
+        ] ?? ""
+      ).trim();
+
+    const dueDate =
+      workbookDateToIso(
+        row[
+          header.indexes
+            .dueDate
+        ]
+      );
+
+    const model =
+      modelIndex >= 0
+        ? String(
+            row[
+              modelIndex
+            ] ?? ""
+          ).trim()
+        : "";
+
+    const email =
+      emailIndex >= 0
+        ? String(
+            row[
+              emailIndex
+            ] ?? ""
+          ).trim()
+        : "";
+
+    /*
+      Ignore completely blank rows.
+    */
+    if (
+      !analyserCode &&
+      !engineer &&
+      !dueDate &&
+      !model
+    ) {
+      continue;
+    }
+
+    /*
+      A usable calibration record needs an
+      analyser code and due date.
+    */
+    if (
+      !analyserCode ||
+      !dueDate
+    ) {
+      console.warn(
+        `Calibration row ${
+          rowIndex + 1
+        } on "${sheetName}" was skipped because the analyser code or calibration due date was missing.`
+      );
+
+      continue;
+    }
+
+    imported.push({
+      id:
+        `hs-calibration-` +
+        `${normalizePerformanceSourceName(
+          analyserCode
+        ) || rowIndex}`,
+
+      analyserCode,
+      engineer,
+      model,
+      dueDate,
+      email,
+
+      sourceFile:
+        sourceFileName,
+
+      sourceSheet:
+        sheetName
+    });
+  }
+
+  return {
+    records: imported,
+    sheetName
+  };
+}
+
+
+async function importHsCalibrationWorkbook(
+  file
+) {
+  if (!window.XLSX) {
+    throw new Error(
+      "The Excel import library has not loaded."
+    );
+  }
+
+  if (!file) {
+    throw new Error(
+      "No workbook was selected."
+    );
+  }
+
+  const buffer =
+    await file.arrayBuffer();
+
+  const workbook =
+    window.XLSX.read(
+      buffer,
+      {
+        type: "array",
+        cellDates: true
+      }
+    );
+
+  const result =
+    importHsCalibrationRecords(
+      workbook,
+      file.name
+    );
+
+  if (!result.records.length) {
+    throw new Error(
+      "The calibration worksheet was found, but no valid analyser records could be imported."
+    );
+  }
+
+  /*
+    Calibration is a current register rather
+    than a historical archive.
+
+    Every successful upload replaces the
+    previous register completely.
+  */
+  hsCalibrationState.records =
+    result.records;
+
+  hsCalibrationState.importMeta = {
+    fileName:
+      file.name,
+
+    sheetName:
+      result.sheetName,
+
+    importedAt:
+      new Date()
+        .toISOString(),
+
+    recordCount:
+      result.records.length
+  };
+
+  saveHsCalibrationState();
+
+  renderHsCalibration();
+
+  return result.records.length;
+}
+
+
+function getFilteredHsCalibrationRecords() {
+  const engineer =
+    el("hsCalibrationEngineer")
+      ?.value || "";
+
+  const status =
+    el("hsCalibrationStatus")
+      ?.value || "";
+
+  const model =
+    el("hsCalibrationModel")
+      ?.value || "";
+
+  const search =
+    (
+      el(
+        "hsCalibrationSearch"
+      )?.value || ""
+    )
+      .trim()
+      .toLowerCase();
+
+  return (
+    hsCalibrationState.records ||
+    []
+  )
+    .filter(record => {
+      const currentStatus =
+        getHsCalibrationStatus(
+          record.dueDate
+        );
+
+      if (
+        engineer &&
+        record.engineer !== engineer
+      ) {
+        return false;
+      }
+
+      if (
+        status &&
+        currentStatus.key !== status
+      ) {
+        return false;
+      }
+
+      if (
+        model &&
+        record.model !== model
+      ) {
+        return false;
+      }
+
+      if (search) {
+        const haystack = `
+          ${record.analyserCode || ""}
+          ${record.engineer || ""}
+          ${record.model || ""}
+          ${record.email || ""}
+          ${record.sourceFile || ""}
+        `.toLowerCase();
+
+        if (
+          !haystack.includes(search)
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    })
+    .sort((a, b) =>
+      String(
+        a.dueDate || ""
+      ).localeCompare(
+        String(
+          b.dueDate || ""
+        )
+      )
+    );
+}
+
+
+function populateHsCalibrationFilters() {
+  const records =
+    hsCalibrationState.records ||
+    [];
+
+  const engineerSelect =
+    el("hsCalibrationEngineer");
+
+  const modelSelect =
+    el("hsCalibrationModel");
+
+  if (
+    !engineerSelect ||
+    !modelSelect
+  ) {
+    return;
+  }
+
+  const currentEngineer =
+    engineerSelect.value;
+
+  const currentModel =
+    modelSelect.value;
+
+  const engineers = [
+    ...new Set(
+      records
+        .map(record =>
+          record.engineer
+        )
+        .filter(Boolean)
+    )
+  ].sort((a, b) =>
+    a.localeCompare(b)
+  );
+
+  const models = [
+    ...new Set(
+      records
+        .map(record =>
+          record.model
+        )
+        .filter(Boolean)
+    )
+  ].sort((a, b) =>
+    a.localeCompare(b)
+  );
+
+  engineerSelect.innerHTML =
+    `
+      <option value="">
+        All engineers
+      </option>
+    ` +
+    engineers
+      .map(engineer => `
+        <option
+          value="${escapeHtml(
+            engineer
+          )}"
+        >
+          ${escapeHtml(
+            engineer
+          )}
+        </option>
+      `)
+      .join("");
+
+  modelSelect.innerHTML =
+    `
+      <option value="">
+        All models
+      </option>
+    ` +
+    models
+      .map(model => `
+        <option
+          value="${escapeHtml(
+            model
+          )}"
+        >
+          ${escapeHtml(model)}
+        </option>
+      `)
+      .join("");
+
+  if (
+    engineers.includes(
+      currentEngineer
+    )
+  ) {
+    engineerSelect.value =
+      currentEngineer;
+  }
+
+  if (
+    models.includes(
+      currentModel
+    )
+  ) {
+    modelSelect.value =
+      currentModel;
+  }
+}
+
+
+function getHsCalibrationCounts() {
+  const records =
+    hsCalibrationState.records ||
+    [];
+
+  const counts = {
+    total:
+      records.length,
+
+    expired: 0,
+    due30: 0,
+    due90: 0,
+    current: 0,
+    unknown: 0
+  };
+
+  records.forEach(record => {
+    const status =
+      getHsCalibrationStatus(
+        record.dueDate
+      );
+
+    if (
+      status.key === "expired"
+    ) {
+      counts.expired++;
+    } else if (
+      status.key === "30"
+    ) {
+      counts.due30++;
+    } else if (
+      status.key === "90"
+    ) {
+      counts.due90++;
+    } else if (
+      status.key === "current"
+    ) {
+      counts.current++;
+    } else {
+      counts.unknown++;
+    }
+  });
+
+  return counts;
+}
+
+
+function renderHsCalibrationOverview() {
+  const counts =
+    getHsCalibrationCounts();
+
+  /*
+    Populate the Calibration KPI on the
+    main H&S Overview.
+
+    This card specifically says
+    "Due within 30 days", so expired units
+    are not included in this number.
+  */
+  const overviewDue =
+    el(
+      "hsOverviewCalibrationDue"
+    );
+
+  if (overviewDue) {
+    overviewDue.textContent =
+      counts.due30;
+  }
+
+  const attentionList =
+    el("hsAttentionList");
+
+  if (!attentionList) {
+    return;
+  }
+
+  const urgentRecords =
+    (
+      hsCalibrationState.records ||
+      []
+    )
+      .map(record => ({
+        record,
+        days:
+          hsCalibrationDaysLeft(
+            record.dueDate
+          )
+      }))
+      .filter(item =>
+        item.days !== null &&
+        item.days <= 30
+      )
+      .sort(
+        (a, b) =>
+          a.days - b.days
+      )
+      .slice(0, 6);
+
+  if (!urgentRecords.length) {
+    attentionList.innerHTML = `
+      <div class="hs-good-state">
+        <span class="hs-good-icon">
+          ✓
+        </span>
+
+        <div>
+          <strong>
+            Nothing requiring attention
+          </strong>
+
+          <span>
+            No analyser calibrations are
+            expired or due within 30 days.
+          </span>
+        </div>
+      </div>
+    `;
+
+    return;
+  }
+
+  attentionList.innerHTML =
+    urgentRecords
+      .map(({ record, days }) => {
+        const status =
+          getHsCalibrationStatus(
+            record.dueDate
+          );
+
+        const timing =
+          days < 0
+            ? `${Math.abs(
+                days
+              )} day${
+                Math.abs(days) === 1
+                  ? ""
+                  : "s"
+              } overdue`
+            : days === 0
+              ? "Due today"
+              : `Due in ${days} day${
+                  days === 1
+                    ? ""
+                    : "s"
+                }`;
+
+        return `
+          <button
+            type="button"
+            class="
+              hs-attention-item
+              hs-attention-${status.tone}
+            "
+            data-hs-calibration-code="${escapeHtml(
+              record.analyserCode
+            )}"
+          >
+            <span
+              class="hs-attention-dot"
+            ></span>
+
+            <span>
+              <strong>
+                ${escapeHtml(
+                  record.analyserCode
+                )}
+              </strong>
+
+              <small>
+                ${escapeHtml(
+                  record.model ||
+                  "Analyser"
+                )}
+                •
+                ${escapeHtml(
+                  record.engineer ||
+                  "No engineer assigned"
+                )}
+              </small>
+
+              <small>
+                ${escapeHtml(timing)}
+                •
+                ${escapeHtml(
+                  formatDate(
+                    record.dueDate
+                  )
+                )}
+              </small>
+            </span>
+
+            <span class="hs-arrow">
+              →
+            </span>
+          </button>
+        `;
+      })
+      .join("");
+
+  attentionList
+    .querySelectorAll(
+      "[data-hs-calibration-code]"
+    )
+    .forEach(button => {
+      button.addEventListener(
+        "click",
+        () => {
+          setHealthSafetyTab(
+            "calibration"
+          );
+
+          const search =
+            el(
+              "hsCalibrationSearch"
+            );
+
+          if (search) {
+            search.value =
+              button.dataset
+                .hsCalibrationCode ||
+              "";
+
+            renderHsCalibration();
+          }
+        }
+      );
+    });
+}
+
+
+function renderHsCalibration() {
+  populateHsCalibrationFilters();
+
+  const records =
+    hsCalibrationState.records ||
+    [];
+
+  const filtered =
+    getFilteredHsCalibrationRecords();
+
+  const counts =
+    getHsCalibrationCounts();
+
+  const kpis =
+    el("hsCalibrationKpis");
+
+  if (kpis) {
+    kpis.innerHTML = `
+      <button
+        type="button"
+        class="hs-calibration-kpi"
+        data-calibration-status=""
+      >
+        <span>Analysers</span>
+        <strong>${counts.total}</strong>
+      </button>
+
+      <button
+        type="button"
+        class="
+          hs-calibration-kpi
+          hs-calibration-kpi-danger
+        "
+        data-calibration-status="expired"
+      >
+        <span>Expired</span>
+        <strong>${counts.expired}</strong>
+      </button>
+
+      <button
+        type="button"
+        class="
+          hs-calibration-kpi
+          hs-calibration-kpi-danger
+        "
+        data-calibration-status="30"
+      >
+        <span>Due within 30 days</span>
+        <strong>${counts.due30}</strong>
+      </button>
+
+      <button
+        type="button"
+        class="
+          hs-calibration-kpi
+          hs-calibration-kpi-warning
+        "
+        data-calibration-status="90"
+      >
+        <span>Due within 90 days</span>
+        <strong>${counts.due90}</strong>
+      </button>
+
+      <button
+        type="button"
+        class="
+          hs-calibration-kpi
+          hs-calibration-kpi-good
+        "
+        data-calibration-status="current"
+      >
+        <span>Current</span>
+        <strong>${counts.current}</strong>
+      </button>
+    `;
+
+    kpis
+      .querySelectorAll(
+        "[data-calibration-status]"
+      )
+      .forEach(card => {
+        card.addEventListener(
+          "click",
+          () => {
+            const select =
+              el(
+                "hsCalibrationStatus"
+              );
+
+            if (!select) return;
+
+            select.value =
+              card.dataset
+                .calibrationStatus ||
+              "";
+
+            renderHsCalibration();
+          }
+        );
+      });
+  }
+
+  const countElement =
+    el(
+      "hsCalibrationRecordCount"
+    );
+
+  if (countElement) {
+    countElement.textContent =
+      `${filtered.length} of ` +
+      `${records.length} analyser${
+        records.length === 1
+          ? ""
+          : "s"
+      } shown`;
+  }
+
+  const statusElement =
+    el(
+      "hsCalibrationImportStatus"
+    );
+
+  if (statusElement) {
+    const meta =
+      hsCalibrationState.importMeta;
+
+    if (!meta) {
+      statusElement.textContent =
+        "No calibration workbook imported.";
+    } else {
+      const importedDate =
+        new Date(
+          meta.importedAt
+        );
+
+      statusElement.textContent =
+        `Last refreshed: ${
+          Number.isNaN(
+            importedDate.getTime()
+          )
+            ? "Unknown"
+            : importedDate
+                .toLocaleString(
+                  "en-GB"
+                )
+        } • ` +
+        `${meta.recordCount} analysers • ` +
+        `${meta.fileName} • ` +
+        `Sheet: ${meta.sheetName}`;
+    }
+  }
+
+  const tableBody =
+    el(
+      "hsCalibrationTableBody"
+    );
+
+  if (tableBody) {
+    if (!filtered.length) {
+      tableBody.innerHTML = `
+        <tr>
+          <td
+            colspan="7"
+            class="hs-calibration-empty"
+          >
+            ${
+              records.length
+                ? "No analysers match the selected filters."
+                : "Import your calibration workbook to build the register."
+            }
+          </td>
+        </tr>
+      `;
+    } else {
+      tableBody.innerHTML =
+        filtered
+          .map(record => {
+            const days =
+              hsCalibrationDaysLeft(
+                record.dueDate
+              );
+
+            const status =
+              getHsCalibrationStatus(
+                record.dueDate
+              );
+
+            return `
+              <tr>
+                <td>
+                  <strong>
+                    ${escapeHtml(
+                      record.analyserCode
+                    )}
+                  </strong>
+                </td>
+
+                <td>
+                  ${escapeHtml(
+                    record.engineer ||
+                    "—"
+                  )}
+                </td>
+
+                <td>
+                  ${escapeHtml(
+                    record.model ||
+                    "—"
+                  )}
+                </td>
+
+                <td>
+                  ${escapeHtml(
+                    formatDate(
+                      record.dueDate
+                    )
+                  )}
+                </td>
+
+                <td>
+                  ${
+                    days === null
+                      ? "—"
+                      : days
+                  }
+                </td>
+
+                <td>
+                  <span
+                    class="
+                      hs-calibration-status
+                      hs-calibration-status-${status.tone}
+                    "
+                  >
+                    ${escapeHtml(
+                      status.label
+                    )}
+                  </span>
+                </td>
+
+                <td>
+                  ${
+                    record.email
+                      ? `
+                          <a
+                            href="mailto:${escapeHtml(
+                              record.email
+                            )}"
+                            class="hs-calibration-email"
+                          >
+                            ${escapeHtml(
+                              record.email
+                            )}
+                          </a>
+                        `
+                      : "—"
+                  }
+                </td>
+              </tr>
+            `;
+          })
+          .join("");
+    }
+  }
+
+  renderHsCalibrationOverview();
+}
+
+
+function clearHsCalibrationFilters() {
+  if (
+    el("hsCalibrationEngineer")
+  ) {
+    el(
+      "hsCalibrationEngineer"
+    ).value = "";
+  }
+
+  if (
+    el("hsCalibrationStatus")
+  ) {
+    el(
+      "hsCalibrationStatus"
+    ).value = "";
+  }
+
+  if (
+    el("hsCalibrationModel")
+  ) {
+    el(
+      "hsCalibrationModel"
+    ).value = "";
+  }
+
+  if (
+    el("hsCalibrationSearch")
+  ) {
+    el(
+      "hsCalibrationSearch"
+    ).value = "";
+  }
+
+  renderHsCalibration();
+}
+
+
+function populateHsCalibrationAlertForm() {
+  const enabled =
+    el(
+      "hsCalibrationAlertsEnabled"
+    );
+
+  const recipient =
+    el(
+      "hsCalibrationAlertRecipient"
+    );
+
+  const cc =
+    el(
+      "hsCalibrationAlertCc"
+    );
+
+  const ccEngineer =
+    el(
+      "hsCalibrationCcEngineer"
+    );
+
+  const time =
+    el(
+      "hsCalibrationAlertTime"
+    );
+
+  if (enabled) {
+    enabled.checked =
+      hsCalibrationAlertSettings
+        .enabled;
+  }
+
+  if (recipient) {
+    recipient.value =
+      hsCalibrationAlertSettings
+        .recipient;
+  }
+
+  if (cc) {
+    cc.value =
+      hsCalibrationAlertSettings
+        .cc;
+  }
+
+  if (ccEngineer) {
+    ccEngineer.checked =
+      hsCalibrationAlertSettings
+        .ccAssignedEngineer;
+  }
+
+  if (time) {
+    time.value =
+      hsCalibrationAlertSettings
+        .dailyCheckTime ||
+      "08:00";
+  }
+
+  const status =
+    el(
+      "hsCalibrationAlertSaveStatus"
+    );
+
+  if (status) {
+    status.textContent = "";
+  }
+}
+
+
+function openHsCalibrationAlertSettings() {
+  populateHsCalibrationAlertForm();
+
+  el(
+    "hsCalibrationAlertModal"
+  )?.classList.remove(
+    "hidden"
+  );
+}
+
+
+function closeHsCalibrationAlertSettings() {
+  el(
+    "hsCalibrationAlertModal"
+  )?.classList.add(
+    "hidden"
+  );
+}
+
+
+function isValidHsAlertEmail(
+  value
+) {
+  const email =
+    String(value || "").trim();
+
+  if (!email) {
+    return false;
+  }
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    .test(email);
+}
+
+
+function validateHsCcEmails(
+  value
+) {
+  const addresses =
+    String(value || "")
+      .split(",")
+      .map(item =>
+        item.trim()
+      )
+      .filter(Boolean);
+
+  return addresses.every(
+    isValidHsAlertEmail
+  );
+}
+
+
+async function saveHsCalibrationAlertSettingsFromForm() {
+  const enabled =
+    el(
+      "hsCalibrationAlertsEnabled"
+    )?.checked === true;
+
+  const recipient =
+    String(
+      el(
+        "hsCalibrationAlertRecipient"
+      )?.value || ""
+    ).trim();
+
+  const cc =
+    String(
+      el(
+        "hsCalibrationAlertCc"
+      )?.value || ""
+    ).trim();
+
+  const ccAssignedEngineer =
+    el(
+      "hsCalibrationCcEngineer"
+    )?.checked === true;
+
+  const dailyCheckTime =
+    el(
+      "hsCalibrationAlertTime"
+    )?.value ||
+    "08:00";
+
+  const status =
+    el(
+      "hsCalibrationAlertSaveStatus"
+    );
+
+  if (
+    enabled &&
+    !isValidHsAlertEmail(
+      recipient
+    )
+  ) {
+    if (status) {
+      status.textContent =
+        "Enter a valid primary recipient email address before enabling alerts.";
+
+      status.className =
+        "hs-alert-save-status hs-alert-save-error";
+    }
+
+    return;
+  }
+
+  if (
+    cc &&
+    !validateHsCcEmails(cc)
+  ) {
+    if (status) {
+      status.textContent =
+        "One or more CC email addresses are not valid. Separate multiple addresses with commas.";
+
+      status.className =
+        "hs-alert-save-status hs-alert-save-error";
+    }
+
+    return;
+  }
+
+  hsCalibrationAlertSettings.enabled =
+    enabled;
+
+  hsCalibrationAlertSettings.recipient =
+    recipient;
+
+  hsCalibrationAlertSettings.cc =
+    cc;
+
+  hsCalibrationAlertSettings
+    .ccAssignedEngineer =
+      ccAssignedEngineer;
+
+  hsCalibrationAlertSettings
+    .dailyCheckTime =
+      dailyCheckTime;
+
+  hsCalibrationAlertSettings.thresholds =
+    [
+      30,
+      14,
+      7,
+      0
+    ];
+
+  if (status) {
+    status.textContent =
+      "Saving alert settings…";
+
+    status.className =
+      "hs-alert-save-status";
+  }
+
+  const result =
+    await saveHsCalibrationAlertSettingsToCloud();
+
+  if (result.saved) {
+    if (status) {
+      status.textContent =
+        enabled
+          ? "Alert settings saved to Firebase. Automatic alerts are configured, but the scheduled sender still needs to be activated."
+          : "Alert settings saved. Automatic calibration emails are currently disabled.";
+
+      status.className =
+        "hs-alert-save-status hs-alert-save-good";
+    }
+
+    setTimeout(
+      closeHsCalibrationAlertSettings,
+      1100
+    );
+
+    return;
+  }
+
+  if (
+    result.reason ===
+    "not-signed-in"
+  ) {
+    if (status) {
+      status.textContent =
+        "Settings saved locally. Log in to sync them to Firebase.";
+
+      status.className =
+        "hs-alert-save-status hs-alert-save-warning";
+    }
+
+    return;
+  }
+
+  if (status) {
+    status.textContent =
+      "Settings were saved locally, but Firebase could not be updated.";
+
+    status.className =
+      "hs-alert-save-status hs-alert-save-error";
+  }
+}
+
+
+function initHsCalibrationAlertSettings() {
+  el(
+    "hsCalibrationAlertSettingsBtn"
+  )?.addEventListener(
+    "click",
+    openHsCalibrationAlertSettings
+  );
+
+  el(
+    "hsCalibrationAlertCloseBtn"
+  )?.addEventListener(
+    "click",
+    closeHsCalibrationAlertSettings
+  );
+
+  el(
+    "hsCalibrationAlertCancelBtn"
+  )?.addEventListener(
+    "click",
+    closeHsCalibrationAlertSettings
+  );
+
+  el(
+    "hsCalibrationAlertSaveBtn"
+  )?.addEventListener(
+    "click",
+    saveHsCalibrationAlertSettingsFromForm
+  );
+
+  el(
+    "hsCalibrationAlertModal"
+  )?.addEventListener(
+    "click",
+    event => {
+      if (
+        event.target ===
+        el(
+          "hsCalibrationAlertModal"
+        )
+      ) {
+        closeHsCalibrationAlertSettings();
+      }
+    }
+  );
+
+  document.addEventListener(
+    "keydown",
+    event => {
+      if (
+        event.key === "Escape" &&
+        !el(
+          "hsCalibrationAlertModal"
+        )?.classList.contains(
+          "hidden"
+        )
+      ) {
+        closeHsCalibrationAlertSettings();
+      }
+    }
+  );
+}
+
+
+function initHsCalibration() {
+  initHsCalibrationAlertSettings();
+
+setTimeout(
+  checkHsCalibrationStartupAlerts,
+  700
+);
+
+const importButton =
+    el(
+      "hsCalibrationImportBtn"
+    );
+
+  const input =
+    el(
+      "hsCalibrationWorkbookInput"
+    );
+
+  importButton?.addEventListener(
+    "click",
+    () => input?.click()
+  );
+
+  input?.addEventListener(
+    "change",
+    async event => {
+      const file =
+        event.target.files?.[0];
+
+      if (!file) return;
+
+      const originalText =
+        importButton?.textContent ||
+        "Import Calibration Workbook";
+
+      try {
+        if (importButton) {
+          importButton.disabled = true;
+
+          importButton.textContent =
+            "Importing…";
+        }
+
+        const existingCount =
+          hsCalibrationState
+            .records.length;
+
+        if (existingCount) {
+          const confirmed =
+            window.confirm(
+              `The app currently holds ${existingCount} analyser record${
+                existingCount === 1
+                  ? ""
+                  : "s"
+              }.\n\n` +
+              "Importing this workbook will replace the current calibration register with the latest spreadsheet data.\n\nContinue?"
+            );
+
+          if (!confirmed) {
+            return;
+          }
+        }
+
+        const importedCount =
+  await importHsCalibrationWorkbook(
+    file
+  );
+
+const cloudResult =
+  await syncHsCalibrationToCloud();
+
+setTimeout(
+  checkHsCalibrationStartupAlerts,
+  300
+);
+
+alert(
+          `${importedCount} analyser record${
+            importedCount === 1
+              ? ""
+              : "s"
+          } imported successfully.\n\n` +
+          "Days left and calibration status have been recalculated by the app.\n\n" +
+(
+  cloudResult.synced
+    ? "Firebase cloud register updated successfully."
+    : cloudResult.reason ===
+        "not-signed-in"
+      ? "Calibration data is saved locally. Log in to sync it to Firebase."
+      : "Calibration data was imported locally, but Firebase sync needs attention."
+)
+        );
+      } catch (error) {
+        console.error(
+          "Calibration import failed",
+          error
+        );
+
+        alert(
+          `The calibration register could not be imported:\n\n${
+            error?.message ||
+            error
+          }`
+        );
+      } finally {
+        if (importButton) {
+          importButton.disabled = false;
+
+          importButton.textContent =
+            originalText;
+        }
+
+        event.target.value = "";
+      }
+    }
+  );
+
+  [
+    "hsCalibrationEngineer",
+    "hsCalibrationStatus",
+    "hsCalibrationModel"
+  ].forEach(id => {
+    el(id)?.addEventListener(
+      "change",
+      renderHsCalibration
+    );
+  });
+
+  el("hsCalibrationSearch")
+    ?.addEventListener(
+      "input",
+      renderHsCalibration
+    );
+
+  el(
+    "hsCalibrationClearFiltersBtn"
+  )?.addEventListener(
+    "click",
+    clearHsCalibrationFilters
+  );
+
+  renderHsCalibration();
+}
+
+
+function initHealthSafety() {
+  document
+    .querySelectorAll(
+      ".hs-subtab"
+    )
+    .forEach(button => {
+      button.addEventListener(
+        "click",
+        () => {
+          setHealthSafetyTab(
+            button.dataset.hsTab
+          );
+        }
+      );
+    });
+
+  document
+    .querySelectorAll(
+      "[data-hs-open]"
+    )
+    .forEach(button => {
+      button.addEventListener(
+        "click",
+        () => {
+          setHealthSafetyTab(
+            button.dataset.hsOpen
+          );
+        }
+      );
+    });
+
+  setHealthSafetyTab(
+    "overview"
+  );
+}
+
+
 function setTab(name) {
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === name));
 
@@ -20720,6 +23884,13 @@ if (el("tabAnalytics")) {
   );
 }
 
+if (el("tabHealthSafety")) {
+  el("tabHealthSafety").classList.toggle(
+    "active",
+    name === "healthSafety"
+  );
+}
+
 if (name === "report") {
   renderReportPreview();
 }
@@ -20734,6 +23905,12 @@ if (name === "dashboard") {
 
 if (name === "analytics") {
   renderAnalytics();
+}
+
+if (name === "healthSafety") {
+  setHealthSafetyTab(
+    "overview"
+  );
 }
   if (name === "engineers") {
   refreshEngineerDropdown(); 
