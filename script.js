@@ -65,14 +65,16 @@ function loadDashboardDateState() {
           currentFrom: "",
           currentTo: "",
           previousFrom: "",
-          previousTo: ""
+          previousTo: "",
+          comparisonEnabled: true
         };
   } catch {
     return {
       currentFrom: "",
       currentTo: "",
       previousFrom: "",
-      previousTo: ""
+      previousTo: "",
+      comparisonEnabled: true
     };
   }
 }
@@ -80,6 +82,15 @@ function loadDashboardDateState() {
 
 const dashboardDateState =
   loadDashboardDateState();
+
+if (
+  typeof dashboardDateState
+    .comparisonEnabled !==
+  "boolean"
+) {
+  dashboardDateState
+    .comparisonEnabled = true;
+}
 
 
 function saveDashboardDateState() {
@@ -8055,12 +8066,27 @@ function getAnalyticsComparisonPeriods() {
   const currentTo =
     el("analyticsTo")?.value || "";
 
-  const mode =
-    el("analyticsCompareMode")
-      ?.value ||
-    "previous-equivalent";
+ const mode =
+  el("analyticsCompareMode")
+    ?.value ||
+  "previous-equivalent";
 
-  const fromDate =
+/*
+  No comparison means the page should use
+  only the currently selected date range.
+*/
+if (mode === "none") {
+  return {
+    currentFrom,
+    currentTo,
+    previousFrom: "",
+    previousTo: "",
+    periodLength: 0,
+    comparisonEnabled: false
+  };
+}
+
+const fromDate =
     parseAnalyticsDate(
       currentFrom
     );
@@ -8214,12 +8240,13 @@ function getAnalyticsComparisonPeriods() {
   }
 
   return {
-    currentFrom,
-    currentTo,
-    previousFrom,
-    previousTo,
-    periodLength
-  };
+  currentFrom,
+  currentTo,
+  previousFrom,
+  previousTo,
+  periodLength,
+  comparisonEnabled: true
+};
 }
 
 function getAnalyticsSelectionForRange(
@@ -8766,9 +8793,27 @@ function renderAnalyticsTrendAlerts() {
   if (!container) return;
 
   const periods =
-    getAnalyticsComparisonPeriods();
+  getAnalyticsComparisonPeriods();
 
-  if (!periods) {
+const alertsCard =
+  el("analyticsAlertsCard");
+
+if (
+  periods &&
+  periods.comparisonEnabled === false
+) {
+  alertsCard?.classList.add(
+    "hidden"
+  );
+
+  return;
+}
+
+alertsCard?.classList.remove(
+  "hidden"
+);
+
+if (!periods) {
     container.innerHTML = `
       <div class="analytics-alerts-message">
         Select both a From and To date to compare this period with the preceding equivalent period.
@@ -16789,22 +16834,27 @@ function renderPerformancePanels(
   }
 
     const selectedEngineer =
-    el("analyticsEngineer")
-      ?.value || "";
+  el("analyticsEngineer")
+    ?.value || "";
 
-  const currentPeriodLabel =
+const comparisonEnabled =
+  periods.comparisonEnabled !== false;
+
+const currentPeriodLabel =
     formatPerformancePeriodLabel(
       periods.currentFrom,
       periods.currentTo
     );
 
   const previousPeriodLabel =
-    formatPerformancePeriodLabel(
-      periods.previousFrom,
-      periods.previousTo
-    );
+  comparisonEnabled
+    ? formatPerformancePeriodLabel(
+        periods.previousFrom,
+        periods.previousTo
+      )
+    : "";
 
-  const currentPeriodShortLabel =
+const currentPeriodShortLabel =
     formatPerformancePeriodLabel(
       periods.currentFrom,
       periods.currentTo,
@@ -16812,11 +16862,13 @@ function renderPerformancePanels(
     );
 
   const previousPeriodShortLabel =
-    formatPerformancePeriodLabel(
-      periods.previousFrom,
-      periods.previousTo,
-      true
-    );
+  comparisonEnabled
+    ? formatPerformancePeriodLabel(
+        periods.previousFrom,
+        periods.previousTo,
+        true
+      )
+    : "";
 
   const currentTcw =
     performanceRecordsInRange(
@@ -16827,12 +16879,14 @@ function renderPerformancePanels(
     );
 
   const previousTcw =
-    performanceRecordsInRange(
-      performanceState.tcwErrors,
-      periods.previousFrom,
-      periods.previousTo,
-      selectedEngineer
-    );
+  comparisonEnabled
+    ? performanceRecordsInRange(
+        performanceState.tcwErrors,
+        periods.previousFrom,
+        periods.previousTo,
+        selectedEngineer
+      )
+    : [];
 
   const tcwChange =
     currentTcw.length -
@@ -16847,7 +16901,14 @@ function renderPerformancePanels(
         )
       : null;
 
-   tcwContainer.innerHTML =
+  if (!comparisonEnabled) {
+  tcwContainer.innerHTML =
+    renderExternalMetricCard(
+      "Selected period",
+      currentTcw.length
+    );
+} else {
+  tcwContainer.innerHTML =
     renderExternalMetricCard(
       "Both date ranges",
       currentTcw.length +
@@ -16869,6 +16930,7 @@ function renderPerformancePanels(
         ? "No comparison baseline"
         : `${tcwPercentChange >= 0 ? "+" : ""}${tcwPercentChange}%`
     );
+}
 
   const largestTcw =
     Math.max(
@@ -16877,30 +16939,48 @@ function renderPerformancePanels(
       previousTcw.length
     );
 
-   tcwChart.innerHTML = [
-    {
-      key: "previous",
-      label:
-        previousPeriodShortLabel,
+  const tcwChartItems =
+  comparisonEnabled
+    ? [
+        {
+          key: "previous",
+          label:
+            previousPeriodShortLabel,
 
-      fullLabel:
-        previousPeriodLabel,
+          fullLabel:
+            previousPeriodLabel,
 
-      value:
-        previousTcw.length
-    },
-    {
-      key: "current",
-      label:
-        currentPeriodShortLabel,
+          value:
+            previousTcw.length
+        },
+        {
+          key: "current",
+          label:
+            currentPeriodShortLabel,
 
-      fullLabel:
-        currentPeriodLabel,
+          fullLabel:
+            currentPeriodLabel,
 
-      value:
-        currentTcw.length
-    }
-  ].map(item => `
+          value:
+            currentTcw.length
+        }
+      ]
+    : [
+        {
+          key: "current",
+          label:
+            currentPeriodShortLabel,
+
+          fullLabel:
+            currentPeriodLabel,
+
+          value:
+            currentTcw.length
+        }
+      ];
+
+tcwChart.innerHTML =
+  tcwChartItems.map(item => `
     <button
       type="button"
       class="dashboard-mini-column"
@@ -16940,14 +17020,16 @@ function renderPerformancePanels(
     );
 
   const previousMorganRecords =
-    performanceRecordsInRange(
-      performanceState
-        .morganLambertAudits,
+  comparisonEnabled
+    ? performanceRecordsInRange(
+        performanceState
+          .morganLambertAudits,
 
-      periods.previousFrom,
-      periods.previousTo,
-      selectedEngineer
-    );
+        periods.previousFrom,
+        periods.previousTo,
+        selectedEngineer
+      )
+    : [];
 
   const currentMorgan =
     getMorganMetrics(
@@ -16981,7 +17063,34 @@ function renderPerformancePanels(
       `${currentMorgan.averageScore.toFixed(1)}%`
     );
 
-   morganComparison.innerHTML = `
+ if (!comparisonEnabled) {
+  morganComparison.innerHTML = `
+    <div class="dashboard-morgan-summary">
+      <div
+        class="dashboard-morgan-period"
+        role="button"
+        tabindex="0"
+        data-performance-period="current"
+        aria-label="View Morgan and Lambert audits for ${escapeHtml(
+          currentPeriodLabel
+        )}"
+      >
+        <strong>
+          ${escapeHtml(
+            currentPeriodLabel
+          )}
+        </strong>
+
+        <span>
+          ${currentMorgan.total} audits •
+          ${currentMorgan.passRate}% PASS •
+          ${currentMorgan.averageScore.toFixed(1)}% average
+        </span>
+      </div>
+    </div>
+  `;
+} else {
+  morganComparison.innerHTML = `
     <div class="dashboard-morgan-summary">
       <div
         class="dashboard-morgan-period"
@@ -17028,6 +17137,7 @@ function renderPerformancePanels(
       </div>
     </div>
   `;
+}
 
   addPerformanceDrilldownHandlers(
     tcwChart,
@@ -17114,15 +17224,38 @@ function openDashboardDateModal() {
     periods.previousFrom;
 
   el("dashboardPreviousTo").value =
-    periods.previousTo;
+  periods.previousTo;
 
-  el("dashboardDateError")
+const comparisonCheckbox =
+  el("dashboardComparisonEnabled");
+
+if (comparisonCheckbox) {
+  comparisonCheckbox.checked =
+    dashboardDateState
+      .comparisonEnabled !== false;
+}
+
+updateDashboardComparisonFields();
+
+el("dashboardDateError")
     ?.classList.add("hidden");
 
   el("dashboardDateModal")
     ?.classList.remove("hidden");
 }
 
+
+function updateDashboardComparisonFields() {
+  const enabled =
+    el("dashboardComparisonEnabled")
+      ?.checked !== false;
+
+  el("dashboardComparisonFields")
+    ?.classList.toggle(
+      "hidden",
+      !enabled
+    );
+}
 
 function closeDashboardDateModal() {
   el("dashboardDateModal")
@@ -17164,21 +17297,37 @@ function applyDashboardCustomDates() {
       ?.value || "";
 
   const previousTo =
-    el("dashboardPreviousTo")
-      ?.value || "";
+  el("dashboardPreviousTo")
+    ?.value || "";
 
-  if (
-    !currentFrom ||
-    !currentTo ||
+const comparisonEnabled =
+  el("dashboardComparisonEnabled")
+    ?.checked !== false;
+
+if (
+  !currentFrom ||
+  !currentTo
+) {
+  showDashboardDateError(
+    "Complete both current-period date fields."
+  );
+
+  return;
+}
+
+if (
+  comparisonEnabled &&
+  (
     !previousFrom ||
     !previousTo
-  ) {
-    showDashboardDateError(
-      "Complete all four date fields."
-    );
+  )
+) {
+  showDashboardDateError(
+    "Complete both comparison-period date fields."
+  );
 
-    return;
-  }
+  return;
+}
 
   if (
     currentFrom > currentTo
@@ -17191,8 +17340,9 @@ function applyDashboardCustomDates() {
   }
 
   if (
-    previousFrom > previousTo
-  ) {
+  comparisonEnabled &&
+  previousFrom > previousTo
+) {
     showDashboardDateError(
       "The comparison-period From date must be before its To date."
     );
@@ -17210,9 +17360,13 @@ function applyDashboardCustomDates() {
     previousFrom;
 
   dashboardDateState.previousTo =
-    previousTo;
+  previousTo;
 
-  saveDashboardDateState();
+dashboardDateState
+  .comparisonEnabled =
+    comparisonEnabled;
+
+saveDashboardDateState();
 
   document
     .querySelectorAll(
@@ -17274,11 +17428,17 @@ function initExecutiveDashboard() {
       closeDashboardDateModal
     );
 
-  el("dashboardDateApplyBtn")
-    ?.addEventListener(
-      "click",
-      applyDashboardCustomDates
-    );
+  el("dashboardComparisonEnabled")
+  ?.addEventListener(
+    "change",
+    updateDashboardComparisonFields
+  );
+
+el("dashboardDateApplyBtn")
+  ?.addEventListener(
+    "click",
+    applyDashboardCustomDates
+  );
 
   el("dashboardDateModal")
     ?.addEventListener(
@@ -17319,18 +17479,22 @@ function getExecutiveDashboardPeriods() {
 
   if (hasDashboardDates) {
     return {
-      currentFrom:
-        dashboardDateState.currentFrom,
+  currentFrom:
+    dashboardDateState.currentFrom,
 
-      currentTo:
-        dashboardDateState.currentTo,
+  currentTo:
+    dashboardDateState.currentTo,
 
-      previousFrom:
-        dashboardDateState.previousFrom,
+  previousFrom:
+    dashboardDateState.previousFrom,
 
-      previousTo:
-        dashboardDateState.previousTo
-    };
+  previousTo:
+    dashboardDateState.previousTo,
+
+  comparisonEnabled:
+    dashboardDateState
+      .comparisonEnabled !== false
+};
   }
 
   /*
@@ -17782,17 +17946,25 @@ function renderExecutiveDashboard() {
     return;
   }
 
-  const currentSelection =
-    getAnalyticsSelectionForRange(
-      periods.currentFrom,
-      periods.currentTo
-    );
+  const comparisonEnabled =
+  periods.comparisonEnabled !== false;
 
-  const previousSelection =
-    getAnalyticsSelectionForRange(
-      periods.previousFrom,
-      periods.previousTo
-    );
+const currentSelection =
+  getAnalyticsSelectionForRange(
+    periods.currentFrom,
+    periods.currentTo
+  );
+
+const previousSelection =
+  comparisonEnabled
+    ? getAnalyticsSelectionForRange(
+        periods.previousFrom,
+        periods.previousTo
+      )
+    : {
+        audits: [],
+        defects: []
+      };
 
   const current =
     getExecutiveDashboardMetrics(
@@ -17805,8 +17977,9 @@ function renderExecutiveDashboard() {
     );
 
   if (periodLabel) {
-    periodLabel.textContent =
-      `${formatDate(
+   periodLabel.textContent =
+  comparisonEnabled
+    ? `${formatDate(
         periods.currentFrom
       )}–${formatDate(
         periods.currentTo
@@ -17814,6 +17987,11 @@ function renderExecutiveDashboard() {
         periods.previousFrom
       )}–${formatDate(
         periods.previousTo
+      )}`
+    : `${formatDate(
+        periods.currentFrom
+      )}–${formatDate(
+        periods.currentTo
       )}`;
   }
 
@@ -17888,19 +18066,26 @@ function renderExecutiveDashboard() {
             ${escapeHtml(item.value)}
           </strong>
 
-          <span
-            class="
-              dashboard-kpi-change
-              ${item.change.className}
-            "
-          >
-            ${escapeHtml(
-              item.change.text
-            )}
-            <small>
-              vs previous period
-            </small>
-          </span>
+         ${
+  comparisonEnabled
+    ? `
+        <span
+          class="
+            dashboard-kpi-change
+            ${item.change.className}
+          "
+        >
+          ${escapeHtml(
+            item.change.text
+          )}
+
+          <small>
+            vs comparison period
+          </small>
+        </span>
+      `
+    : ""
+}
         </div>
       `)
       .join("");
@@ -18021,17 +18206,34 @@ function renderExecutiveDashboard() {
   }
 
   const alerts =
-    buildAnalyticsTrendAlerts(
-      getAnalyticsTrendMetrics(
-        currentSelection
-      ),
-      getAnalyticsTrendMetrics(
-        previousSelection
-      )
-    ).slice(0, 3);
+  comparisonEnabled
+    ? buildAnalyticsTrendAlerts(
+        getAnalyticsTrendMetrics(
+          currentSelection
+        ),
+        getAnalyticsTrendMetrics(
+          previousSelection
+        )
+      ).slice(0, 3)
+    : [];
 
-  const alertsContainer =
-    el("dashboardAlerts");
+const alertsContainer =
+  el("dashboardAlerts");
+
+const alertsPanel =
+  alertsContainer?.closest(
+    ".dashboard-panel"
+  );
+
+if (!comparisonEnabled) {
+  alertsPanel?.classList.add(
+    "hidden"
+  );
+} else {
+  alertsPanel?.classList.remove(
+    "hidden"
+  );
+}
 
   if (alerts.length) {
     alertsContainer.innerHTML =
@@ -18203,9 +18405,9 @@ function renderExecutiveDashboard() {
     periods.currentTo
   );
 
-  renderExternalPerformanceMetrics(
-    periods
-  );
+ renderExternalPerformanceMetrics(
+  periods
+);
 }
 
 function renderExecutiveDashboardMonthlyTrend(
