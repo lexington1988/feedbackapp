@@ -134,6 +134,7 @@
 <button class="tab" data-tab="engineers" type="button">Engineers</button>
 <button class="tab" data-tab="dashboard" type="button">Dashboard</button>
 <button class="tab" data-tab="analytics" type="button">Analytics</button>
+<button class="tab" data-tab="healthSafety" type="button">H&amp;S</button>
 </div>
 
 
@@ -272,6 +273,838 @@
 </div>
 
 
+
+<!-- HEALTH & SAFETY -->
+<div id="tabHealthSafety" class="tab-panel">
+  <section class="hs-shell">
+
+    <div class="hs-header">
+      <div>
+        <div class="hs-eyebrow">
+          Health &amp; Safety
+        </div>
+
+        <h2>
+          H&amp;S Management
+        </h2>
+
+        <p class="muted">
+          Audits, equipment compliance,
+          warning notices and follow-up actions.
+        </p>
+      </div>
+
+      <div class="hs-header-badge">
+        H&amp;S
+      </div>
+    </div>
+
+    <nav
+      class="hs-subnav"
+      aria-label="Health and Safety sections"
+    >
+      <button
+        class="hs-subtab active"
+        data-hs-tab="overview"
+        type="button"
+      >
+        Overview
+      </button>
+
+      <button
+        class="hs-subtab"
+        data-hs-tab="audits"
+        type="button"
+      >
+        H&amp;S Audits
+      </button>
+
+      <button
+        class="hs-subtab"
+        data-hs-tab="calibration"
+        type="button"
+      >
+        Calibration
+      </button>
+
+      <button
+        class="hs-subtab"
+        data-hs-tab="warnings"
+        type="button"
+      >
+        Warning Notices
+      </button>
+
+      <button
+        class="hs-subtab"
+        data-hs-tab="actions"
+        type="button"
+      >
+        Actions
+      </button>
+    </nav>
+
+    <!-- H&S OVERVIEW -->
+    <div
+      id="hsPanelOverview"
+      class="hs-panel active"
+    >
+      <div class="hs-overview-intro">
+        <div>
+          <h3>
+            Health &amp; Safety overview
+          </h3>
+
+          <p class="muted">
+            A quick view of H&amp;S activity and
+            items requiring attention.
+          </p>
+        </div>
+      </div>
+
+      <div class="hs-kpi-grid">
+        <button
+          class="hs-kpi-card"
+          data-hs-open="audits"
+          type="button"
+        >
+          <span>
+            H&amp;S audits
+          </span>
+
+          <strong id="hsOverviewAuditCount">
+            0
+          </strong>
+
+          <small>
+            Recorded audits
+          </small>
+        </button>
+
+        <button
+          class="hs-kpi-card"
+          data-hs-open="actions"
+          type="button"
+        >
+          <span>
+            Open actions
+          </span>
+
+          <strong id="hsOverviewOpenActions">
+            0
+          </strong>
+
+          <small>
+            Awaiting completion
+          </small>
+        </button>
+
+        <button
+          class="hs-kpi-card hs-kpi-warning"
+          data-hs-open="actions"
+          type="button"
+        >
+          <span>
+            Overdue actions
+          </span>
+
+          <strong id="hsOverviewOverdueActions">
+            0
+          </strong>
+
+          <small>
+            Past due date
+          </small>
+        </button>
+
+        <button
+          class="hs-kpi-card"
+          data-hs-open="calibration"
+          type="button"
+        >
+          <span>
+            Calibration due
+          </span>
+
+          <strong id="hsOverviewCalibrationDue">
+            0
+          </strong>
+
+          <small>
+            Due within 30 days
+          </small>
+        </button>
+
+        <button
+          class="hs-kpi-card"
+          data-hs-open="warnings"
+          type="button"
+        >
+          <span>
+            Warning notices
+          </span>
+
+          <strong id="hsOverviewWarningCount">
+            0
+          </strong>
+
+          <small>
+            Recorded notices
+          </small>
+        </button>
+
+        <button
+          class="hs-kpi-card hs-kpi-danger"
+          data-hs-open="audits"
+          type="button"
+        >
+          <span>
+            High-risk findings
+          </span>
+
+          <strong id="hsOverviewHighRisk">
+            0
+          </strong>
+
+          <small>
+            Requiring attention
+          </small>
+        </button>
+      </div>
+
+      <div class="hs-overview-grid">
+
+        <section class="hs-card">
+          <div class="hs-card-head">
+            <div>
+              <h3>
+                Needs attention
+              </h3>
+
+              <span class="muted">
+                Priority H&amp;S items
+              </span>
+            </div>
+          </div>
+
+          <div
+            id="hsAttentionList"
+            class="hs-attention-list"
+          >
+            <div class="hs-good-state">
+              <span class="hs-good-icon">
+                ✓
+              </span>
+
+              <div>
+                <strong>
+                  Nothing requiring attention
+                </strong>
+
+                <span>
+                  H&amp;S alerts will appear here
+                  once records are added.
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="hs-card">
+          <div class="hs-card-head">
+            <div>
+              <h3>
+                Quick access
+              </h3>
+
+              <span class="muted">
+                Jump directly to an H&amp;S area
+              </span>
+            </div>
+          </div>
+
+          <div class="hs-quick-links">
+
+            <button
+              class="hs-quick-link"
+              data-hs-open="audits"
+              type="button"
+            >
+              <span class="hs-quick-icon">
+                ✓
+              </span>
+
+              <span>
+                <strong>
+                  H&amp;S Audits
+                </strong>
+
+                <small>
+                  Record and review audit activity
+                </small>
+              </span>
+
+              <span class="hs-arrow">
+                →
+              </span>
+            </button>
+
+            <button
+              class="hs-quick-link"
+              data-hs-open="calibration"
+              type="button"
+            >
+              <span class="hs-quick-icon">
+                ◷
+              </span>
+
+              <span>
+                <strong>
+                  Analyser Calibration
+                </strong>
+
+                <small>
+                  Track equipment and renewal dates
+                </small>
+              </span>
+
+              <span class="hs-arrow">
+                →
+              </span>
+            </button>
+
+            <button
+              class="hs-quick-link"
+              data-hs-open="warnings"
+              type="button"
+            >
+              <span class="hs-quick-icon">
+                !
+              </span>
+
+              <span>
+                <strong>
+                  Warning Notices
+                </strong>
+
+                <small>
+                  Record and follow up notices
+                </small>
+              </span>
+
+              <span class="hs-arrow">
+                →
+              </span>
+            </button>
+
+            <button
+              class="hs-quick-link"
+              data-hs-open="actions"
+              type="button"
+            >
+              <span class="hs-quick-icon">
+                ↗
+              </span>
+
+              <span>
+                <strong>
+                  Actions
+                </strong>
+
+                <small>
+                  Track open and overdue actions
+                </small>
+              </span>
+
+              <span class="hs-arrow">
+                →
+              </span>
+            </button>
+
+          </div>
+        </section>
+
+      </div>
+    </div>
+
+    <!-- H&S AUDITS -->
+    <div
+      id="hsPanelAudits"
+      class="hs-panel"
+    >
+      <div class="hs-section-placeholder">
+        <div class="hs-placeholder-icon">
+          ✓
+        </div>
+
+        <h3>
+          H&amp;S Audits
+        </h3>
+
+        <p>
+          This will become the dedicated area for
+          recording, reviewing and analysing
+          Health &amp; Safety audits.
+        </p>
+
+        <div class="hs-placeholder-tags">
+          <span>Audit records</span>
+          <span>Findings</span>
+          <span>Risk</span>
+          <span>Engineer</span>
+          <span>Follow-up</span>
+        </div>
+      </div>
+    </div>
+
+  <!-- CALIBRATION -->
+<div
+  id="hsPanelCalibration"
+  class="hs-panel"
+>
+  <section class="hs-calibration">
+
+    <div class="hs-calibration-header">
+      <div>
+        <h3>
+          Analyser Calibration
+        </h3>
+
+        <p class="muted">
+          Current analyser register and calibration status.
+        </p>
+
+        <div
+  id="hsCalibrationImportStatus"
+  class="hs-calibration-import-status"
+>
+  No calibration workbook imported.
+</div>
+
+<div
+  id="hsCalibrationCloudStatus"
+  class="hs-calibration-cloud-status"
+>
+  Cloud sync not checked.
+</div>
+      </div>
+
+     <div class="hs-calibration-header-actions">
+
+  <input
+    id="hsCalibrationWorkbookInput"
+    class="hidden"
+    type="file"
+    accept=".xlsx,.xlsm,.xlsb,.xls"
+  />
+
+  <button
+    id="hsCalibrationAlertSettingsBtn"
+    class="btn ghost"
+    type="button"
+  >
+    Alert Settings
+  </button>
+
+  <button
+    id="hsCalibrationImportBtn"
+    class="btn"
+    type="button"
+  >
+    Import Calibration Workbook
+  </button>
+
+</div>
+    </div>
+
+    <div
+      id="hsCalibrationKpis"
+      class="hs-calibration-kpis"
+    >
+      <div class="hs-calibration-kpi">
+        <span>Analysers</span>
+        <strong>0</strong>
+      </div>
+
+      <div class="hs-calibration-kpi">
+        <span>Expired</span>
+        <strong>0</strong>
+      </div>
+
+      <div class="hs-calibration-kpi">
+        <span>Due within 30 days</span>
+        <strong>0</strong>
+      </div>
+
+      <div class="hs-calibration-kpi">
+        <span>Due within 90 days</span>
+        <strong>0</strong>
+      </div>
+
+      <div class="hs-calibration-kpi">
+        <span>Current</span>
+        <strong>0</strong>
+      </div>
+    </div>
+
+    <div class="hs-calibration-toolbar">
+
+      <label class="field">
+        <span>Engineer</span>
+
+        <select id="hsCalibrationEngineer">
+          <option value="">
+            All engineers
+          </option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Status</span>
+
+        <select id="hsCalibrationStatus">
+          <option value="">
+            All statuses
+          </option>
+
+          <option value="expired">
+            Expired
+          </option>
+
+          <option value="30">
+            Due within 30 days
+          </option>
+
+          <option value="90">
+            Due within 90 days
+          </option>
+
+          <option value="current">
+            Current
+          </option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Model</span>
+
+        <select id="hsCalibrationModel">
+          <option value="">
+            All models
+          </option>
+        </select>
+      </label>
+
+      <label class="field hs-calibration-search">
+        <span>Search</span>
+
+        <input
+          id="hsCalibrationSearch"
+          type="search"
+          placeholder="Analyser, engineer, model..."
+        />
+      </label>
+
+      <button
+        id="hsCalibrationClearFiltersBtn"
+        class="btn ghost"
+        type="button"
+      >
+        Clear filters
+      </button>
+
+    </div>
+
+    <div class="hs-calibration-register">
+
+      <div class="hs-calibration-register-head">
+        <div>
+          <h3>
+            Calibration register
+          </h3>
+
+          <span
+            id="hsCalibrationRecordCount"
+            class="muted"
+          >
+            0 analysers
+          </span>
+        </div>
+
+        <span class="muted">
+          Closest calibration date shown first
+        </span>
+      </div>
+
+      <div class="hs-calibration-table-wrap">
+        <table class="hs-calibration-table">
+
+          <thead>
+            <tr>
+              <th>Analyser code</th>
+              <th>Assigned engineer</th>
+              <th>Model</th>
+              <th>Calibration due</th>
+              <th>Days left</th>
+              <th>Status</th>
+              <th>Email</th>
+            </tr>
+          </thead>
+
+          <tbody id="hsCalibrationTableBody">
+            <tr>
+              <td
+                colspan="7"
+                class="hs-calibration-empty"
+              >
+                Import your calibration workbook to build the register.
+              </td>
+            </tr>
+          </tbody>
+
+        </table>
+      </div>
+    </div>
+
+    </section>
+</div>
+
+<!-- CALIBRATION ALERT SETTINGS -->
+<div
+  id="hsCalibrationAlertModal"
+  class="hs-alert-modal hidden"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="hsCalibrationAlertModalTitle"
+>
+  <div class="hs-alert-modal-card">
+
+    <div class="hs-alert-modal-head">
+      <div>
+        <div class="hs-eyebrow">
+          Automatic notifications
+        </div>
+
+        <h3 id="hsCalibrationAlertModalTitle">
+          Calibration Alert Settings
+        </h3>
+
+        <p class="muted">
+          Configure who should receive analyser calibration reminders.
+        </p>
+      </div>
+
+      <button
+        id="hsCalibrationAlertCloseBtn"
+        class="btn ghost small"
+        type="button"
+      >
+        Close
+      </button>
+    </div>
+
+    <div class="hs-alert-modal-body">
+
+      <label class="hs-alert-toggle-row">
+        <div>
+          <strong>
+            Enable automatic email alerts
+          </strong>
+
+          <span>
+            The scheduled Firebase checker will use these settings.
+          </span>
+        </div>
+
+        <input
+          id="hsCalibrationAlertsEnabled"
+          type="checkbox"
+        />
+      </label>
+
+      <div class="hs-alert-form-grid">
+
+        <label class="field">
+          <span>Primary recipient</span>
+
+          <input
+            id="hsCalibrationAlertRecipient"
+            type="email"
+            placeholder="e.g. healthandsafety@company.co.uk"
+          />
+        </label>
+
+        <label class="field">
+          <span>CC recipients</span>
+
+          <input
+            id="hsCalibrationAlertCc"
+            type="text"
+            placeholder="Optional — separate multiple addresses with commas"
+          />
+        </label>
+
+      </div>
+
+      <label class="hs-alert-toggle-row">
+        <div>
+          <strong>
+            CC assigned engineer
+          </strong>
+
+          <span>
+            Uses the engineer email imported from the calibration spreadsheet when available.
+          </span>
+        </div>
+
+        <input
+          id="hsCalibrationCcEngineer"
+          type="checkbox"
+        />
+      </label>
+
+      <div class="hs-alert-threshold-section">
+        <div>
+          <strong>
+            Reminder schedule
+          </strong>
+
+          <span class="muted">
+            These alert stages are fixed for the current version.
+          </span>
+        </div>
+
+        <div class="hs-alert-threshold-grid">
+
+          <div class="hs-alert-threshold">
+            <strong>30</strong>
+            <span>days before</span>
+          </div>
+
+          <div class="hs-alert-threshold">
+            <strong>14</strong>
+            <span>days before</span>
+          </div>
+
+          <div class="hs-alert-threshold">
+            <strong>7</strong>
+            <span>days before</span>
+          </div>
+
+          <div class="hs-alert-threshold hs-alert-threshold-danger">
+            <strong>!</strong>
+            <span>Expired</span>
+          </div>
+
+        </div>
+      </div>
+
+      <label class="field hs-alert-time-field">
+        <span>Daily check time</span>
+
+        <input
+          id="hsCalibrationAlertTime"
+          type="time"
+          value="08:00"
+        />
+
+        <small class="muted">
+          This will be used when we add the scheduled Firebase function.
+        </small>
+      </label>
+
+      <div
+        id="hsCalibrationAlertSaveStatus"
+        class="hs-alert-save-status"
+      ></div>
+
+    </div>
+
+    <div class="hs-alert-modal-footer">
+
+      <button
+        id="hsCalibrationAlertCancelBtn"
+        class="btn ghost"
+        type="button"
+      >
+        Cancel
+      </button>
+
+      <button
+        id="hsCalibrationAlertSaveBtn"
+        class="btn"
+        type="button"
+      >
+        Save Alert Settings
+      </button>
+
+    </div>
+
+  </div>
+</div>
+
+<!-- WARNING NOTICES -->
+    <div
+      id="hsPanelWarnings"
+      class="hs-panel"
+    >
+      <div class="hs-section-placeholder">
+        <div class="hs-placeholder-icon">
+          !
+        </div>
+
+        <h3>
+          Warning Notices
+        </h3>
+
+        <p>
+          This will become the register for
+          warning notices, reasons, engineers,
+          properties and follow-up status.
+        </p>
+
+        <div class="hs-placeholder-tags">
+          <span>Date</span>
+          <span>Engineer</span>
+          <span>Job / property</span>
+          <span>Notice type</span>
+          <span>Status</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ACTIONS -->
+    <div
+      id="hsPanelActions"
+      class="hs-panel"
+    >
+      <div class="hs-section-placeholder">
+        <div class="hs-placeholder-icon">
+          ↗
+        </div>
+
+        <h3>
+          H&amp;S Actions
+        </h3>
+
+        <p>
+          This will become the central follow-up
+          register for actions created from H&amp;S
+          audits and warning notices.
+        </p>
+
+        <div class="hs-placeholder-tags">
+          <span>Open</span>
+          <span>Due soon</span>
+          <span>Overdue</span>
+          <span>Closed</span>
+          <span>Owner</span>
+        </div>
+      </div>
+    </div>
+
+  </section>
+</div>
 
 <!-- EXECUTIVE DASHBOARD -->
 <div id="tabDashboard" class="tab-panel">
