@@ -1329,6 +1329,7 @@ initBoilersLibrary().then(() => {
    initExecutiveDashboard();
 initPerformanceWorkbookImport();
 initPerformanceRecordManager();
+initPerformanceExplorer();
 initHistoricalAuditImport();
    initQuarterlyPowerPointGenerator();
 
@@ -16310,6 +16311,1278 @@ function initPerformanceRecordManager() {
         closePerformanceRecordManager();
       }
     }
+  );
+}
+
+
+const performanceExplorerState = {
+  type: "tcw",
+  from: "",
+  to: "",
+  engineer: "",
+  workbook: "",
+  search: ""
+};
+
+
+function getPerformanceExplorerRecords() {
+  return performanceExplorerState.type ===
+    "morgan"
+      ? performanceState
+          .morganLambertAudits || []
+      : performanceState
+          .tcwErrors || [];
+}
+
+
+function getPerformanceExplorerFilteredRecords() {
+  const {
+    from,
+    to,
+    engineer,
+    workbook,
+    search,
+    type
+  } = performanceExplorerState;
+
+  const searchText =
+    String(search || "")
+      .trim()
+      .toLowerCase();
+
+  return getPerformanceExplorerRecords()
+    .filter(record => {
+      if (
+        from &&
+        String(record.date || "") < from
+      ) {
+        return false;
+      }
+
+      if (
+        to &&
+        String(record.date || "") > to
+      ) {
+        return false;
+      }
+
+      if (
+        engineer &&
+        record.engineer !== engineer
+      ) {
+        return false;
+      }
+
+      if (
+        workbook &&
+        record.sourceFile !== workbook
+      ) {
+        return false;
+      }
+
+      if (searchText) {
+        const haystack =
+          type === "morgan"
+            ? `
+                ${record.date || ""}
+                ${record.engineer || ""}
+                ${record.outcome || ""}
+                ${record.score ?? ""}
+                ${record.sourceFile || ""}
+              `
+            : `
+                ${record.date || ""}
+                ${record.engineer || ""}
+                ${record.address || ""}
+                ${record.reason || ""}
+                ${record.sourceFile || ""}
+              `;
+
+        if (
+          !haystack
+            .toLowerCase()
+            .includes(searchText)
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    })
+    .sort((a, b) =>
+      String(b.date || "")
+        .localeCompare(
+          String(a.date || "")
+        )
+    );
+}
+
+
+function getPerformanceExplorerInitialDates(
+  source
+) {
+  if (source === "dashboard") {
+    const periods =
+      getExecutiveDashboardPeriods();
+
+    return {
+      from:
+        periods?.currentFrom || "",
+      to:
+        periods?.currentTo || ""
+    };
+  }
+
+  return {
+    from:
+      el("analyticsFrom")?.value || "",
+    to:
+      el("analyticsTo")?.value || ""
+  };
+}
+
+
+function populatePerformanceExplorerFilters() {
+  const records =
+    getPerformanceExplorerRecords();
+
+  const engineers = [
+    ...new Set(
+      records
+        .map(record =>
+          String(
+            record.engineer || ""
+          ).trim()
+        )
+        .filter(Boolean)
+    )
+  ].sort((a, b) =>
+    a.localeCompare(b)
+  );
+
+  const workbooks = [
+    ...new Set(
+      records
+        .map(record =>
+          String(
+            record.sourceFile || ""
+          ).trim()
+        )
+        .filter(Boolean)
+    )
+  ].sort((a, b) =>
+    a.localeCompare(b)
+  );
+
+  const engineerSelect =
+    el(
+      "performanceExplorerEngineer"
+    );
+
+  const workbookSelect =
+    el(
+      "performanceExplorerWorkbook"
+    );
+
+  if (engineerSelect) {
+    engineerSelect.innerHTML =
+      `
+        <option value="">
+          All engineers
+        </option>
+      ` +
+      engineers
+        .map(name => `
+          <option value="${escapeHtml(
+            name
+          )}">
+            ${escapeHtml(name)}
+          </option>
+        `)
+        .join("");
+  }
+
+  if (workbookSelect) {
+    workbookSelect.innerHTML =
+      `
+        <option value="">
+          All workbooks
+        </option>
+      ` +
+      workbooks
+        .map(name => `
+          <option value="${escapeHtml(
+            name
+          )}">
+            ${escapeHtml(name)}
+          </option>
+        `)
+        .join("");
+  }
+}
+
+
+function buildPerformanceExplorerBarRows(
+  entries,
+  valueLabel = ""
+) {
+  if (!entries.length) {
+    return `
+      <div class="performance-explorer-empty">
+        No matching data.
+      </div>
+    `;
+  }
+
+  const maximum =
+    Math.max(
+      1,
+      ...entries.map(
+        entry => entry.value
+      )
+    );
+
+  return entries
+    .map(entry => `
+      <div class="performance-explorer-bar-row">
+        <div class="performance-explorer-bar-label">
+          ${escapeHtml(entry.label)}
+        </div>
+
+        <div class="performance-explorer-bar-track">
+          <div
+            class="performance-explorer-bar-fill"
+            style="
+              width:${
+                Math.max(
+                  2,
+                  entry.value /
+                  maximum *
+                  100
+                )
+              }%
+            "
+          ></div>
+        </div>
+
+        <strong>
+          ${escapeHtml(
+            `${entry.value}${valueLabel}`
+          )}
+        </strong>
+      </div>
+    `)
+    .join("");
+}
+
+
+function renderTcwPerformanceExplorer(
+  records
+) {
+  const overview =
+    el(
+      "performanceExplorerOverview"
+    );
+
+  const chartLeft =
+    el(
+      "performanceExplorerChartLeft"
+    );
+
+  const chartRight =
+    el(
+      "performanceExplorerChartRight"
+    );
+
+  const table =
+    el(
+      "performanceExplorerTable"
+    );
+
+  const engineerCounts =
+    new Map();
+
+  const reasonCounts =
+    new Map();
+
+  records.forEach(record => {
+    const engineer =
+      String(
+        record.engineer ||
+        "Not recorded"
+      ).trim() ||
+      "Not recorded";
+
+    const reason =
+      String(
+        record.reason ||
+        "Not recorded"
+      ).trim() ||
+      "Not recorded";
+
+    engineerCounts.set(
+      engineer,
+      (
+        engineerCounts.get(
+          engineer
+        ) || 0
+      ) + 1
+    );
+
+    reasonCounts.set(
+      reason,
+      (
+        reasonCounts.get(
+          reason
+        ) || 0
+      ) + 1
+    );
+  });
+
+  const engineerEntries =
+    Array.from(
+      engineerCounts.entries()
+    )
+      .map(([label, value]) => ({
+        label,
+        value
+      }))
+      .sort(
+        (a, b) =>
+          b.value - a.value
+      );
+
+  const reasonEntries =
+    Array.from(
+      reasonCounts.entries()
+    )
+      .map(([label, value]) => ({
+        label,
+        value
+      }))
+      .sort(
+        (a, b) =>
+          b.value - a.value
+      );
+
+  const workbookCount =
+    new Set(
+      records
+        .map(record =>
+          record.sourceFile
+        )
+        .filter(Boolean)
+    ).size;
+
+  if (overview) {
+    overview.innerHTML = `
+      <div class="performance-explorer-kpi">
+        <span>TCW errors</span>
+        <strong>${records.length}</strong>
+      </div>
+
+      <div class="performance-explorer-kpi">
+        <span>Engineers</span>
+        <strong>
+          ${engineerCounts.size}
+        </strong>
+      </div>
+
+      <div class="performance-explorer-kpi">
+        <span>Unique reasons</span>
+        <strong>
+          ${reasonCounts.size}
+        </strong>
+      </div>
+
+      <div class="performance-explorer-kpi">
+        <span>Source workbooks</span>
+        <strong>${workbookCount}</strong>
+      </div>
+    `;
+  }
+
+  if (chartLeft) {
+    chartLeft.innerHTML = `
+      <div class="performance-explorer-chart-head">
+        <h4>Most common reasons</h4>
+        <span>
+          Top TCW error causes
+        </span>
+      </div>
+
+      <div class="performance-explorer-bars">
+        ${buildPerformanceExplorerBarRows(
+          reasonEntries.slice(0, 10)
+        )}
+      </div>
+    `;
+  }
+
+  if (chartRight) {
+    chartRight.innerHTML = `
+      <div class="performance-explorer-chart-head">
+        <h4>Errors by engineer</h4>
+        <span>
+          TCW volume by engineer
+        </span>
+      </div>
+
+      <div class="performance-explorer-bars">
+        ${buildPerformanceExplorerBarRows(
+          engineerEntries.slice(0, 10)
+        )}
+      </div>
+    `;
+  }
+
+  if (table) {
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Engineer</th>
+          <th>Address</th>
+          <th>Reason</th>
+          <th>Source workbook</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        ${
+          records.length
+            ? records
+                .map(record => `
+                  <tr>
+                    <td>
+                      ${escapeHtml(
+                        formatDate(
+                          record.date
+                        )
+                      )}
+                    </td>
+
+                    <td>
+                      ${escapeHtml(
+                        record.engineer ||
+                        "—"
+                      )}
+                    </td>
+
+                    <td>
+                      ${escapeHtml(
+                        record.address ||
+                        "—"
+                      )}
+                    </td>
+
+                    <td>
+                      ${escapeHtml(
+                        record.reason ||
+                        "—"
+                      )}
+                    </td>
+
+                    <td>
+                      ${escapeHtml(
+                        record.sourceFile ||
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                `)
+                .join("")
+            : `
+                <tr>
+                  <td
+                    colspan="5"
+                    class="performance-explorer-empty"
+                  >
+                    No records match the selected filters.
+                  </td>
+                </tr>
+              `
+        }
+      </tbody>
+    `;
+  }
+}
+
+
+function renderMorganPerformanceExplorer(
+  records
+) {
+  const overview =
+    el(
+      "performanceExplorerOverview"
+    );
+
+  const chartLeft =
+    el(
+      "performanceExplorerChartLeft"
+    );
+
+  const chartRight =
+    el(
+      "performanceExplorerChartRight"
+    );
+
+  const table =
+    el(
+      "performanceExplorerTable"
+    );
+
+  const metrics =
+    getMorganMetrics(records);
+
+  const engineerMap =
+    new Map();
+
+  records.forEach(record => {
+    const engineer =
+      String(
+        record.engineer ||
+        "Not recorded"
+      ).trim() ||
+      "Not recorded";
+
+    if (!engineerMap.has(engineer)) {
+      engineerMap.set(
+        engineer,
+        {
+          engineer,
+          audits: 0,
+          passes: 0,
+          scoreTotal: 0,
+          scored: 0
+        }
+      );
+    }
+
+    const item =
+      engineerMap.get(engineer);
+
+    item.audits++;
+
+    if (
+      String(
+        record.outcome || ""
+      ).toUpperCase() === "PASS"
+    ) {
+      item.passes++;
+    }
+
+    const score =
+      Number(record.score);
+
+    if (Number.isFinite(score)) {
+      item.scoreTotal += score;
+      item.scored++;
+    }
+  });
+
+  const engineerRows =
+    Array.from(
+      engineerMap.values()
+    )
+      .map(item => ({
+        ...item,
+
+        passRate:
+          item.audits
+            ? Math.round(
+                item.passes /
+                item.audits *
+                100
+              )
+            : 0,
+
+        averageScore:
+          item.scored
+            ? item.scoreTotal /
+              item.scored
+            : 0
+      }))
+      .sort(
+        (a, b) =>
+          b.audits - a.audits ||
+          b.averageScore -
+            a.averageScore
+      );
+
+  if (overview) {
+    overview.innerHTML = `
+      <div class="performance-explorer-kpi">
+        <span>Audits</span>
+        <strong>${metrics.total}</strong>
+      </div>
+
+      <div class="performance-explorer-kpi">
+        <span>PASS</span>
+        <strong>${metrics.passes}</strong>
+      </div>
+
+      <div class="performance-explorer-kpi">
+        <span>FAIL</span>
+        <strong>${metrics.fails}</strong>
+      </div>
+
+      <div class="performance-explorer-kpi">
+        <span>PASS rate</span>
+        <strong>
+          ${metrics.passRate}%
+        </strong>
+      </div>
+
+      <div class="performance-explorer-kpi">
+        <span>Average score</span>
+        <strong>
+          ${metrics.averageScore.toFixed(
+            1
+          )}%
+        </strong>
+      </div>
+    `;
+  }
+
+  if (chartLeft) {
+    chartLeft.innerHTML = `
+      <div class="performance-explorer-chart-head">
+        <h4>Audit volume by engineer</h4>
+        <span>
+          Number of Morgan & Lambert audits
+        </span>
+      </div>
+
+      <div class="performance-explorer-bars">
+        ${buildPerformanceExplorerBarRows(
+          engineerRows
+            .slice(0, 10)
+            .map(item => ({
+              label:
+                item.engineer,
+              value:
+                item.audits
+            }))
+        )}
+      </div>
+    `;
+  }
+
+  if (chartRight) {
+    chartRight.innerHTML = `
+      <div class="performance-explorer-chart-head">
+        <h4>PASS rate by engineer</h4>
+        <span>
+          Based on filtered records
+        </span>
+      </div>
+
+      <div class="performance-explorer-bars">
+        ${buildPerformanceExplorerBarRows(
+          engineerRows
+            .slice(0, 10)
+            .map(item => ({
+              label:
+                item.engineer,
+              value:
+                item.passRate
+            })),
+          "%"
+        )}
+      </div>
+    `;
+  }
+
+  if (table) {
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Engineer</th>
+          <th>Result</th>
+          <th>Score</th>
+          <th>Source workbook</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        ${
+          records.length
+            ? records
+                .map(record => `
+                  <tr>
+                    <td>
+                      ${escapeHtml(
+                        formatDate(
+                          record.date
+                        )
+                      )}
+                    </td>
+
+                    <td>
+                      ${escapeHtml(
+                        record.engineer ||
+                        "—"
+                      )}
+                    </td>
+
+                    <td>
+                      <span
+                        class="
+                          performance-record-outcome
+                          ${
+                            record.outcome ===
+                            "PASS"
+                              ? "performance-record-pass"
+                              : "performance-record-fail"
+                          }
+                        "
+                      >
+                        ${escapeHtml(
+                          record.outcome ||
+                          "—"
+                        )}
+                      </span>
+                    </td>
+
+                    <td>
+                      ${
+                        Number.isFinite(
+                          Number(
+                            record.score
+                          )
+                        )
+                          ? `${Number(
+                              record.score
+                            ).toFixed(1)}%`
+                          : "—"
+                      }
+                    </td>
+
+                    <td>
+                      ${escapeHtml(
+                        record.sourceFile ||
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                `)
+                .join("")
+            : `
+                <tr>
+                  <td
+                    colspan="5"
+                    class="performance-explorer-empty"
+                  >
+                    No records match the selected filters.
+                  </td>
+                </tr>
+              `
+        }
+      </tbody>
+    `;
+  }
+}
+
+
+function renderPerformanceExplorer() {
+  const records =
+    getPerformanceExplorerFilteredRecords();
+
+  const count =
+    el(
+      "performanceExplorerCount"
+    );
+
+  if (count) {
+    count.textContent =
+      `${records.length} record${
+        records.length === 1
+          ? ""
+          : "s"
+      }`;
+  }
+
+  if (
+    performanceExplorerState.type ===
+    "morgan"
+  ) {
+    renderMorganPerformanceExplorer(
+      records
+    );
+  } else {
+    renderTcwPerformanceExplorer(
+      records
+    );
+  }
+}
+
+
+function syncPerformanceExplorerState() {
+  performanceExplorerState.from =
+    el("performanceExplorerFrom")
+      ?.value || "";
+
+  performanceExplorerState.to =
+    el("performanceExplorerTo")
+      ?.value || "";
+
+  performanceExplorerState.engineer =
+    el("performanceExplorerEngineer")
+      ?.value || "";
+
+  performanceExplorerState.workbook =
+    el("performanceExplorerWorkbook")
+      ?.value || "";
+
+  performanceExplorerState.search =
+    el("performanceExplorerSearch")
+      ?.value || "";
+
+  renderPerformanceExplorer();
+}
+
+
+function closePerformanceExplorer() {
+  el("performanceExplorerBackdrop")
+    ?.remove();
+}
+
+
+function openPerformanceExplorer(
+  type,
+  source
+) {
+  closePerformanceExplorer();
+
+  performanceExplorerState.type =
+    type === "morgan"
+      ? "morgan"
+      : "tcw";
+
+  const initialDates =
+    getPerformanceExplorerInitialDates(
+      source
+    );
+
+  performanceExplorerState.from =
+    initialDates.from;
+
+  performanceExplorerState.to =
+    initialDates.to;
+
+  performanceExplorerState.engineer =
+    "";
+
+  performanceExplorerState.workbook =
+    "";
+
+  performanceExplorerState.search =
+    "";
+
+  const isMorgan =
+    performanceExplorerState.type ===
+    "morgan";
+
+  const backdrop =
+    document.createElement("div");
+
+  backdrop.id =
+    "performanceExplorerBackdrop";
+
+  backdrop.className =
+    "performance-explorer-backdrop";
+
+  backdrop.innerHTML = `
+    <section
+      class="performance-explorer"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="performanceExplorerTitle"
+    >
+      <header class="performance-explorer-head">
+        <div>
+          <div class="performance-explorer-eyebrow">
+            External Performance Metrics
+          </div>
+
+          <h2 id="performanceExplorerTitle">
+            ${
+              isMorgan
+                ? "Morgan & Lambert Explorer"
+                : "TCW Error Explorer"
+            }
+          </h2>
+
+          <span class="muted">
+            Inspect, filter and analyse the complete imported dataset.
+          </span>
+        </div>
+
+        <div class="performance-explorer-head-actions">
+          <span
+            id="performanceExplorerCount"
+            class="performance-explorer-count"
+          ></span>
+
+          <button
+            id="performanceExplorerCloseBtn"
+            class="btn ghost"
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+      </header>
+
+      <div class="performance-explorer-filters">
+        <label class="field">
+          <span>From</span>
+
+          <input
+            id="performanceExplorerFrom"
+            type="date"
+            value="${escapeHtml(
+              performanceExplorerState.from
+            )}"
+          />
+        </label>
+
+        <label class="field">
+          <span>To</span>
+
+          <input
+            id="performanceExplorerTo"
+            type="date"
+            value="${escapeHtml(
+              performanceExplorerState.to
+            )}"
+          />
+        </label>
+
+        <label class="field">
+          <span>Engineer</span>
+
+          <select
+            id="performanceExplorerEngineer"
+          >
+            <option value="">
+              All engineers
+            </option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Source workbook</span>
+
+          <select
+            id="performanceExplorerWorkbook"
+          >
+            <option value="">
+              All workbooks
+            </option>
+          </select>
+        </label>
+
+        <label
+          class="
+            field
+            performance-explorer-search
+          "
+        >
+          <span>Search</span>
+
+          <input
+            id="performanceExplorerSearch"
+            type="search"
+            placeholder="${
+              isMorgan
+                ? "Search engineer, result or score"
+                : "Search engineer, address or reason"
+            }"
+          />
+        </label>
+
+        <button
+          id="performanceExplorerClearFiltersBtn"
+          class="btn ghost"
+          type="button"
+        >
+          Clear filters
+        </button>
+      </div>
+
+      <div
+        id="performanceExplorerOverview"
+        class="performance-explorer-overview"
+      ></div>
+
+      <div class="performance-explorer-chart-grid">
+        <section
+          id="performanceExplorerChartLeft"
+          class="performance-explorer-chart"
+        ></section>
+
+        <section
+          id="performanceExplorerChartRight"
+          class="performance-explorer-chart"
+        ></section>
+      </div>
+
+      <section class="performance-explorer-records">
+        <div class="performance-explorer-records-head">
+          <div>
+            <h3>Matching records</h3>
+
+            <span class="muted">
+              Complete row-level data for the selected filters
+            </span>
+          </div>
+        </div>
+
+        <div class="performance-explorer-table-wrap">
+          <table
+            id="performanceExplorerTable"
+            class="performance-explorer-table"
+          ></table>
+        </div>
+      </section>
+    </section>
+  `;
+
+  document.body.appendChild(
+    backdrop
+  );
+
+  populatePerformanceExplorerFilters();
+
+  el("performanceExplorerEngineer").value =
+    "";
+
+  el("performanceExplorerWorkbook").value =
+    "";
+
+  [
+    "performanceExplorerFrom",
+    "performanceExplorerTo",
+    "performanceExplorerEngineer",
+    "performanceExplorerWorkbook"
+  ].forEach(id => {
+    el(id)?.addEventListener(
+      "change",
+      syncPerformanceExplorerState
+    );
+  });
+
+  el("performanceExplorerSearch")
+    ?.addEventListener(
+      "input",
+      syncPerformanceExplorerState
+    );
+
+  el(
+    "performanceExplorerClearFiltersBtn"
+  )?.addEventListener(
+    "click",
+    () => {
+      performanceExplorerState.from =
+        "";
+
+      performanceExplorerState.to =
+        "";
+
+      performanceExplorerState.engineer =
+        "";
+
+      performanceExplorerState.workbook =
+        "";
+
+      performanceExplorerState.search =
+        "";
+
+      el("performanceExplorerFrom").value =
+        "";
+
+      el("performanceExplorerTo").value =
+        "";
+
+      el(
+        "performanceExplorerEngineer"
+      ).value = "";
+
+      el(
+        "performanceExplorerWorkbook"
+      ).value = "";
+
+      el(
+        "performanceExplorerSearch"
+      ).value = "";
+
+      renderPerformanceExplorer();
+    }
+  );
+
+  el("performanceExplorerCloseBtn")
+    ?.addEventListener(
+      "click",
+      closePerformanceExplorer
+    );
+
+  backdrop.addEventListener(
+    "click",
+    event => {
+      if (event.target === backdrop) {
+        closePerformanceExplorer();
+      }
+    }
+  );
+
+  document.addEventListener(
+    "keydown",
+    function closeExplorerOnEscape(
+      event
+    ) {
+      if (
+        event.key !== "Escape" ||
+        !el(
+          "performanceExplorerBackdrop"
+        )
+      ) {
+        return;
+      }
+
+      closePerformanceExplorer();
+
+      document.removeEventListener(
+        "keydown",
+        closeExplorerOnEscape
+      );
+    }
+  );
+
+  renderPerformanceExplorer();
+}
+
+
+function makePerformanceCardExplorable(
+  container,
+  type,
+  source,
+  label
+) {
+  if (!container) return;
+
+  const card =
+    container.closest(
+      source === "dashboard"
+        ? ".dashboard-panel"
+        : ".analytics-card"
+    );
+
+  if (
+    !card ||
+    card.dataset
+      .performanceExplorerReady ===
+      "true"
+  ) {
+    return;
+  }
+
+  card.dataset.performanceExplorerReady =
+    "true";
+
+  card.classList.add(
+    "performance-explorer-clickable"
+  );
+
+  card.setAttribute(
+    "role",
+    "button"
+  );
+
+  card.setAttribute(
+    "tabindex",
+    "0"
+  );
+
+  card.setAttribute(
+    "aria-label",
+    `Open ${label}`
+  );
+
+  const open = event => {
+    /*
+      Existing period bars remain clickable
+      and retain their current drill-down.
+    */
+    if (
+      event?.target?.closest?.(
+        "button, input, select, a, [data-performance-period]"
+      )
+    ) {
+      return;
+    }
+
+    openPerformanceExplorer(
+      type,
+      source
+    );
+  };
+
+  card.addEventListener(
+    "click",
+    open
+  );
+
+  card.addEventListener(
+    "keydown",
+    event => {
+      if (
+        event.key !== "Enter" &&
+        event.key !== " "
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+
+      openPerformanceExplorer(
+        type,
+        source
+      );
+    }
+  );
+}
+
+
+function initPerformanceExplorer() {
+  makePerformanceCardExplorable(
+    el("dashboardTcwMetrics"),
+    "tcw",
+    "dashboard",
+    "TCW Error Explorer"
+  );
+
+  makePerformanceCardExplorable(
+    el("dashboardMorganMetrics"),
+    "morgan",
+    "dashboard",
+    "Morgan & Lambert Explorer"
+  );
+
+  makePerformanceCardExplorable(
+    el("analyticsTcwMetrics"),
+    "tcw",
+    "analytics",
+    "TCW Error Explorer"
+  );
+
+  makePerformanceCardExplorable(
+    el("analyticsMorganMetrics"),
+    "morgan",
+    "analytics",
+    "Morgan & Lambert Explorer"
   );
 }
 
