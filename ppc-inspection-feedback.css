@@ -3771,3 +3771,208 @@ button.dashboard-mini-column:focus-visible {
     width: 100%;
   }
 }
+/* =========================================================
+   PERFORMANCE DATA RECORD MANAGER
+   ========================================================= */
+
+.performance-record-modal {
+  position: fixed;
+  z-index: 5000;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(15, 10, 25, .68);
+  backdrop-filter: blur(3px);
+}
+
+.performance-record-modal.hidden {
+  display: none;
+}
+
+.performance-record-modal-card {
+  display: flex;
+  flex-direction: column;
+  width: min(1180px, 96vw);
+  max-height: 92vh;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow:
+    0 28px 70px rgba(0,0,0,.32);
+}
+
+.performance-record-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.performance-record-modal-head h3 {
+  margin: 3px 0 4px;
+  font-size: 19px;
+}
+
+.performance-record-type {
+  color: var(--brand2);
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.performance-record-filters {
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 1fr)
+    minmax(180px, 1fr)
+    minmax(220px, 2fr);
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.performance-record-search {
+  min-width: 0;
+}
+
+.performance-record-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.performance-record-selection-actions,
+.performance-record-delete-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.performance-record-selected-count {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.performance-record-status {
+  padding: 8px 20px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.performance-record-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 10px 12px;
+}
+
+.performance-record-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.performance-record-table th,
+.performance-record-table td {
+  padding: 10px 11px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.performance-record-table th {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+
+.performance-record-table tbody tr:hover {
+  background: rgba(168,85,247,.06);
+}
+
+.performance-record-check-col {
+  width: 56px;
+  text-align: center !important;
+}
+
+.performance-record-checkbox {
+  width: 17px;
+  height: 17px;
+  cursor: pointer;
+}
+
+.performance-record-outcome {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.performance-record-pass {
+  background: #15803d;
+}
+
+.performance-record-fail {
+  background: #b91c1c;
+}
+
+.performance-record-empty {
+  padding: 35px !important;
+  color: var(--muted);
+  text-align: center !important;
+}
+
+@media (max-width: 760px) {
+  .performance-record-modal {
+    align-items: stretch;
+    padding: 8px;
+  }
+
+  .performance-record-modal-card {
+    width: 100%;
+    max-height: none;
+    height: 100%;
+    border-radius: 14px;
+  }
+
+  .performance-record-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .performance-record-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .performance-record-selection-actions,
+  .performance-record-delete-area {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .performance-record-table {
+    min-width: 780px;
+  }
+}
