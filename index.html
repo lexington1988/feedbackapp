@@ -466,7 +466,24 @@
         </div>
 
         <div class="dashboard-date-period">
-          <h4>Comparison period</h4>
+  <label class="dashboard-comparison-toggle">
+    <input
+      id="dashboardComparisonEnabled"
+      type="checkbox"
+      checked
+    />
+
+    <span>
+      Compare with another period
+    </span>
+  </label>
+</div>
+
+<div
+  id="dashboardComparisonFields"
+  class="dashboard-date-period"
+>
+  <h4>Comparison period</h4>
 
           <div class="dashboard-date-fields">
             <label class="field">
@@ -709,19 +726,26 @@
 <label class="field inline">
   <span>Compare with</span>
   <select id="analyticsCompareMode">
-    <option value="previous-equivalent" selected>
-      Previous equivalent period
-    </option>
-    <option value="previous-quarter">
-      Previous quarter
-    </option>
-    <option value="previous-year">
-      Same period last year
-    </option>
-    <option value="custom">
-      Custom period
-    </option>
-  </select>
+  <option value="none">
+    No comparison
+  </option>
+
+  <option value="previous-equivalent" selected>
+    Previous equivalent period
+  </option>
+
+  <option value="previous-quarter">
+    Previous quarter
+  </option>
+
+  <option value="previous-year">
+    Same period last year
+  </option>
+
+  <option value="custom">
+    Custom period
+  </option>
+</select>
 </label>
 
 <label
