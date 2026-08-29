@@ -628,10 +628,216 @@
     </div>
 
     <!-- H&S AUDITS -->
+    <!-- H&S AUDITS -->
+<div
+  id="hsPanelAudits"
+  class="hs-panel"
+>
+  <section class="hs-audit-register">
+
+    <div class="hs-audit-register-header">
+
+      <div>
+        <h3>
+          Engineer H&amp;S Audits
+        </h3>
+
+        <p class="muted">
+          Engineer equipment register and three-month H&amp;S inspection schedule.
+        </p>
+
+        <div
+          id="hsAuditImportStatus"
+          class="hs-calibration-import-status"
+        >
+          No H&amp;S audit workbook imported.
+        </div>
+
+        <div
+          id="hsAuditCloudStatus"
+          class="hs-calibration-cloud-status"
+        >
+          Local register.
+        </div>
+      </div>
+
+
+      <div class="hs-calibration-header-actions">
+
+        <input
+          id="hsAuditWorkbookInput"
+          class="hidden"
+          type="file"
+          accept=".xlsx,.xlsm,.xlsb,.xls"
+        />
+
+        <button
+  id="hsAuditPendingBtn"
+  class="btn ghost"
+  type="button"
+>
+  Pending Excel Updates
+
+  <span
+    id="hsAuditPendingCount"
+    class="hs-calibration-pending-count hidden"
+  >
+    0
+  </span>
+</button>
+
+<button
+  id="hsAuditImportBtn"
+  class="btn"
+  type="button"
+>
+  Import H&amp;S Register
+</button>
+
+      </div>
+
+    </div>
+
+
     <div
-      id="hsPanelAudits"
-      class="hs-panel"
+      id="hsAuditKpis"
+      class="hs-calibration-kpis"
     >
+      <div class="hs-calibration-kpi">
+        <span>Engineers</span>
+        <strong>0</strong>
+      </div>
+
+      <div class="hs-calibration-kpi">
+        <span>Current</span>
+        <strong>0</strong>
+      </div>
+
+      <div class="hs-calibration-kpi">
+        <span>Due this month</span>
+        <strong>0</strong>
+      </div>
+
+      <div class="hs-calibration-kpi">
+        <span>Overdue</span>
+        <strong>0</strong>
+      </div>
+    </div>
+
+
+    <div class="hs-calibration-toolbar">
+
+      <label class="field">
+        <span>Status</span>
+
+        <select id="hsAuditStatusFilter">
+          <option value="">
+            All statuses
+          </option>
+
+          <option value="current">
+            Current
+          </option>
+
+          <option value="due">
+            Due this month
+          </option>
+
+          <option value="overdue">
+            Overdue
+          </option>
+        </select>
+      </label>
+
+
+      <label class="field hs-calibration-search">
+        <span>Search</span>
+
+        <input
+          id="hsAuditSearch"
+          type="search"
+          placeholder="Engineer, vehicle, asset number..."
+        />
+      </label>
+
+
+      <button
+        id="hsAuditClearFiltersBtn"
+        class="btn ghost"
+        type="button"
+      >
+        Clear filters
+      </button>
+
+    </div>
+
+
+    <div class="hs-calibration-register">
+
+      <div class="hs-calibration-register-head">
+
+        <div>
+          <h3>
+            Engineer H&amp;S Register
+          </h3>
+
+          <span
+            id="hsAuditRecordCount"
+            class="muted"
+          >
+            0 engineers
+          </span>
+        </div>
+
+        <span class="muted">
+          Overdue and upcoming audits shown first
+        </span>
+
+      </div>
+
+
+      <div class="hs-audit-table-wrap">
+
+        <table class="hs-audit-table">
+
+          <thead>
+            <tr>
+              <th>Engineer</th>
+              <th>Clock No.</th>
+              <th>Gas Safe No.</th>
+              <th>Vehicle</th>
+              <th>Last audit</th>
+              <th>Next audit month</th>
+              <th>Status</th>
+              <th>Telescopics</th>
+              <th>Steps</th>
+              <th>Hop Up</th>
+              <th>First Aid</th>
+<th>Extinguisher</th>
+<th>Notes</th>
+<th>Actions</th>
+            </tr>
+          </thead>
+
+          <tbody id="hsAuditTableBody">
+            <tr>
+              <td
+                colspan="14"
+                class="hs-calibration-empty"
+              >
+                Import your H&amp;S register workbook to build the register.
+              </td>
+            </tr>
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+  </section>
+</div>
       <div class="hs-section-placeholder">
         <div class="hs-placeholder-icon">
           ✓
@@ -657,6 +863,431 @@
       </div>
     </div>
 
+  <!-- H&S RECORD AUDIT -->
+<div
+  id="hsAuditRecordModal"
+  class="hs-alert-modal hidden"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="hsAuditRecordTitle"
+>
+  <div class="hs-alert-modal-card">
+
+    <div class="hs-alert-modal-head">
+      <div>
+        <div class="hs-eyebrow">
+          Engineer H&amp;S inspection
+        </div>
+
+        <h3 id="hsAuditRecordTitle">
+          Record H&amp;S Audit
+        </h3>
+
+        <p class="muted">
+          Record the inspection result and any findings.
+        </p>
+      </div>
+
+      <button
+        id="hsAuditRecordCloseBtn"
+        class="btn ghost small"
+        type="button"
+      >
+        Close
+      </button>
+    </div>
+
+
+    <div class="hs-alert-modal-body">
+
+      <input
+        id="hsAuditRecordEngineerId"
+        type="hidden"
+      />
+
+
+      <label class="field">
+        <span>Engineer</span>
+
+        <input
+          id="hsAuditRecordEngineer"
+          type="text"
+          readonly
+        />
+      </label>
+
+
+      <label class="field">
+        <span>Audit Date</span>
+
+        <input
+          id="hsAuditRecordDate"
+          type="date"
+        />
+      </label>
+
+
+      <label class="field">
+        <span>Result</span>
+
+        <select id="hsAuditRecordResult">
+          <option value="">
+            Select result
+          </option>
+
+          <option value="PASS">
+            PASS
+          </option>
+
+          <option value="FAIL">
+            FAIL
+          </option>
+        </select>
+      </label>
+
+
+      <label class="field">
+        <span>Reason / Findings</span>
+
+        <textarea
+          id="hsAuditRecordReason"
+          rows="4"
+          placeholder="Required for a failed audit. Record the reason or findings."
+        ></textarea>
+      </label>
+
+
+      <label class="field">
+        <span>Additional Notes</span>
+
+        <textarea
+          id="hsAuditRecordNotes"
+          rows="3"
+          placeholder="Optional notes"
+        ></textarea>
+      </label>
+
+
+      <label class="hs-alert-toggle-row">
+        <div>
+          <strong>
+            Follow-up required
+          </strong>
+
+          <div class="muted">
+            Keep this audit open for further action.
+          </div>
+        </div>
+
+        <input
+          id="hsAuditRecordFollowUp"
+          type="checkbox"
+        />
+      </label>
+
+
+      <div
+        id="hsAuditRecordSaveStatus"
+        class="hs-alert-save-status"
+      ></div>
+
+    </div>
+
+
+    <div class="hs-alert-modal-footer">
+
+      <button
+        id="hsAuditRecordCancelBtn"
+        class="btn ghost"
+        type="button"
+      >
+        Cancel
+      </button>
+
+      <button
+        id="hsAuditRecordSaveBtn"
+        class="btn"
+        type="button"
+      >
+        Save Audit
+      </button>
+
+    </div>
+
+  </div>
+</div>
+  <!-- H&S AUDIT REGISTER EDITOR -->
+<div
+  id="hsAuditEditModal"
+  class="hs-alert-modal hidden"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="hsAuditEditTitle"
+>
+  <div class="hs-alert-modal-card">
+
+    <div class="hs-alert-modal-head">
+      <div>
+        <div class="hs-eyebrow">
+          Engineer H&amp;S register
+        </div>
+
+        <h3 id="hsAuditEditTitle">
+          Edit Engineer Details
+        </h3>
+
+        <p class="muted">
+          Equipment and engineer-detail changes will be added to Pending Excel Updates.
+        </p>
+      </div>
+
+      <button
+        id="hsAuditEditCloseBtn"
+        class="btn ghost small"
+        type="button"
+      >
+        Close
+      </button>
+    </div>
+
+
+    <div class="hs-alert-modal-body">
+
+      <input
+        id="hsAuditEditRecordId"
+        type="hidden"
+      />
+
+
+      <label class="field">
+        <span>Assigned Engineer</span>
+
+        <input
+          id="hsAuditEditEngineer"
+          type="text"
+          readonly
+        />
+      </label>
+
+
+      <div class="hs-audit-edit-grid">
+
+        <label class="field">
+          <span>Clock Number</span>
+
+          <input
+            id="hsAuditEditClock"
+            type="text"
+          />
+        </label>
+
+
+        <label class="field">
+          <span>Gas Safe Number</span>
+
+          <input
+            id="hsAuditEditGasSafe"
+            type="text"
+          />
+        </label>
+
+
+        <label class="field">
+          <span>Vehicle Reg</span>
+
+          <input
+            id="hsAuditEditVehicle"
+            type="text"
+          />
+        </label>
+
+
+        <label class="field">
+          <span>Telescopics</span>
+
+          <input
+            id="hsAuditEditTelescopics"
+            type="text"
+          />
+        </label>
+
+
+        <label class="field">
+          <span>Steps</span>
+
+          <input
+            id="hsAuditEditSteps"
+            type="text"
+          />
+        </label>
+
+
+        <label class="field">
+          <span>Hop Up</span>
+
+          <input
+            id="hsAuditEditHopUp"
+            type="text"
+          />
+        </label>
+
+
+        <label class="field">
+          <span>First Aid Kit</span>
+
+          <input
+            id="hsAuditEditFirstAid"
+            type="text"
+          />
+        </label>
+
+
+        <label class="field">
+          <span>Fire Extinguisher</span>
+
+          <input
+            id="hsAuditEditExtinguisher"
+            type="text"
+          />
+        </label>
+
+      </div>
+
+
+      <label class="field">
+        <span>Notes</span>
+
+        <textarea
+          id="hsAuditEditNotes"
+          rows="3"
+        ></textarea>
+      </label>
+
+
+      <div
+        id="hsAuditEditStatus"
+        class="hs-alert-save-status"
+      ></div>
+
+    </div>
+
+
+    <div class="hs-alert-modal-footer">
+
+      <button
+        id="hsAuditEditCancelBtn"
+        class="btn ghost"
+        type="button"
+      >
+        Cancel
+      </button>
+
+      <button
+        id="hsAuditEditSaveBtn"
+        class="btn"
+        type="button"
+      >
+        Save Changes
+      </button>
+
+    </div>
+
+  </div>
+</div>
+
+
+<!-- H&S AUDIT PENDING EXCEL UPDATES -->
+<div
+  id="hsAuditPendingModal"
+  class="hs-alert-modal hidden"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="hsAuditPendingTitle"
+>
+  <div class="hs-alert-modal-card hs-calibration-pending-modal-card">
+
+    <div class="hs-alert-modal-head">
+      <div>
+        <div class="hs-eyebrow">
+          Excel reconciliation
+        </div>
+
+        <h3 id="hsAuditPendingTitle">
+          H&amp;S Pending Excel Updates
+        </h3>
+
+        <p class="muted">
+          Register changes made while away from the master spreadsheet.
+        </p>
+      </div>
+
+      <button
+        id="hsAuditPendingCloseBtn"
+        class="btn ghost small"
+        type="button"
+      >
+        Close
+      </button>
+    </div>
+
+
+    <div class="hs-alert-modal-body">
+
+      <div
+        id="hsAuditPendingEmpty"
+        class="hs-calibration-pending-empty"
+      >
+        No H&amp;S Excel updates are currently pending.
+      </div>
+
+
+      <div
+        id="hsAuditPendingTableWrap"
+        class="hs-calibration-pending-table-wrap hidden"
+      >
+        <table class="hs-calibration-pending-table">
+
+          <thead>
+            <tr>
+              <th>Changed</th>
+              <th>Engineer</th>
+              <th>Field</th>
+              <th>Previous</th>
+              <th>New value</th>
+              <th></th>
+            </tr>
+          </thead>
+
+          <tbody id="hsAuditPendingTableBody"></tbody>
+
+        </table>
+      </div>
+
+    </div>
+
+
+    <div class="hs-alert-modal-footer">
+
+      <button
+        id="hsAuditPendingCloseFooterBtn"
+        class="btn ghost"
+        type="button"
+      >
+        Close
+      </button>
+
+      <button
+        id="hsAuditMarkAllCompleteBtn"
+        class="btn"
+        type="button"
+      >
+        Mark All Updated in Excel
+      </button>
+
+    </div>
+
+  </div>
+</div>
   <!-- CALIBRATION -->
 <div
   id="hsPanelCalibration"
@@ -699,20 +1330,34 @@
   />
 
   <button
-    id="hsCalibrationAlertSettingsBtn"
-    class="btn ghost"
-    type="button"
-  >
-    Alert Settings
-  </button>
+  id="hsCalibrationAlertSettingsBtn"
+  class="btn ghost"
+  type="button"
+>
+  Alert Settings
+</button>
 
-  <button
-    id="hsCalibrationImportBtn"
-    class="btn"
-    type="button"
+<button
+  id="hsCalibrationPendingBtn"
+  class="btn ghost"
+  type="button"
+>
+  Pending Excel Updates
+  <span
+    id="hsCalibrationPendingCount"
+    class="hs-calibration-pending-count hidden"
   >
-    Import Calibration Workbook
-  </button>
+    0
+  </span>
+</button>
+
+<button
+  id="hsCalibrationImportBtn"
+  class="btn"
+  type="button"
+>
+  Import Calibration Workbook
+</button>
 
 </div>
     </div>
@@ -841,20 +1486,21 @@
 
           <thead>
             <tr>
-              <th>Analyser code</th>
-              <th>Assigned engineer</th>
-              <th>Model</th>
-              <th>Calibration due</th>
-              <th>Days left</th>
-              <th>Status</th>
-              <th>Email</th>
+             <th>Analyser code</th>
+<th>Assigned engineer</th>
+<th>Model</th>
+<th>Calibration due</th>
+<th>Days left</th>
+<th>Status</th>
+<th>Email</th>
+<th></th>
             </tr>
           </thead>
 
           <tbody id="hsCalibrationTableBody">
             <tr>
               <td
-                colspan="7"
+                colspan="8"
                 class="hs-calibration-empty"
               >
                 Import your calibration workbook to build the register.
@@ -869,6 +1515,227 @@
     </section>
 </div>
 
+    <!-- CALIBRATION RECORD EDITOR -->
+<div
+  id="hsCalibrationEditModal"
+  class="hs-alert-modal hidden"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="hsCalibrationEditTitle"
+>
+  <div class="hs-alert-modal-card">
+
+    <div class="hs-alert-modal-head">
+      <div>
+        <div class="hs-eyebrow">
+          Analyser register
+        </div>
+
+        <h3 id="hsCalibrationEditTitle">
+          Edit Analyser
+        </h3>
+
+        <p class="muted">
+          Changes made here will be recorded as pending Excel updates.
+        </p>
+      </div>
+
+      <button
+        id="hsCalibrationEditCloseBtn"
+        class="btn ghost small"
+        type="button"
+      >
+        Close
+      </button>
+    </div>
+
+
+    <div class="hs-alert-modal-body">
+
+      <input
+        id="hsCalibrationEditRecordId"
+        type="hidden"
+      />
+
+
+      <label class="field">
+        <span>Analyser code</span>
+
+        <input
+          id="hsCalibrationEditCode"
+          type="text"
+          readonly
+        />
+      </label>
+
+
+      <label class="field">
+        <span>Model</span>
+
+        <input
+          id="hsCalibrationEditModel"
+          type="text"
+          readonly
+        />
+      </label>
+
+
+      <label class="field">
+        <span>Assigned engineer</span>
+
+        <input
+          id="hsCalibrationEditEngineer"
+          type="text"
+          placeholder="Enter assigned engineer"
+        />
+      </label>
+
+
+      <label class="field">
+        <span>Calibration due</span>
+
+        <input
+          id="hsCalibrationEditDueDate"
+          type="date"
+        />
+      </label>
+
+
+      <div
+        id="hsCalibrationEditStatus"
+        class="hs-alert-save-status"
+      >
+      </div>
+
+    </div>
+
+
+    <div class="hs-alert-modal-footer">
+
+      <button
+        id="hsCalibrationEditCancelBtn"
+        class="btn ghost"
+        type="button"
+      >
+        Cancel
+      </button>
+
+      <button
+        id="hsCalibrationEditSaveBtn"
+        class="btn"
+        type="button"
+      >
+        Save Changes
+      </button>
+
+    </div>
+
+  </div>
+</div>
+
+
+<!-- PENDING EXCEL UPDATES -->
+<div
+  id="hsCalibrationPendingModal"
+  class="hs-alert-modal hidden"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="hsCalibrationPendingTitle"
+>
+  <div class="hs-alert-modal-card hs-calibration-pending-modal-card">
+
+    <div class="hs-alert-modal-head">
+      <div>
+        <div class="hs-eyebrow">
+          Excel reconciliation
+        </div>
+
+        <h3 id="hsCalibrationPendingTitle">
+          Pending Excel Updates
+        </h3>
+
+        <p class="muted">
+          Changes made in the app that still need transferring to the master Excel workbook.
+        </p>
+      </div>
+
+      <button
+        id="hsCalibrationPendingCloseBtn"
+        class="btn ghost small"
+        type="button"
+      >
+        Close
+      </button>
+    </div>
+
+
+    <div class="hs-alert-modal-body">
+
+      <div
+        id="hsCalibrationPendingEmpty"
+        class="hs-calibration-pending-empty"
+      >
+        No Excel updates are currently pending.
+      </div>
+
+
+      <div
+        id="hsCalibrationPendingTableWrap"
+        class="hs-calibration-pending-table-wrap hidden"
+      >
+        <table class="hs-calibration-pending-table">
+
+          <thead>
+            <tr>
+              <th>Changed</th>
+              <th>Analyser</th>
+              <th>Field</th>
+              <th>Previous</th>
+              <th>New value</th>
+              <th></th>
+            </tr>
+          </thead>
+
+          <tbody
+            id="hsCalibrationPendingTableBody"
+          >
+          </tbody>
+
+        </table>
+      </div>
+
+
+      <div
+        id="hsCalibrationPendingStatus"
+        class="hs-alert-save-status"
+      >
+      </div>
+
+    </div>
+
+
+    <div class="hs-alert-modal-footer">
+
+      <button
+        id="hsCalibrationPendingCloseFooterBtn"
+        class="btn ghost"
+        type="button"
+      >
+        Close
+      </button>
+
+      <button
+        id="hsCalibrationMarkAllCompleteBtn"
+        class="btn"
+        type="button"
+      >
+        Mark All Updated in Excel
+      </button>
+
+    </div>
+
+  </div>
+</div>
 <!-- CALIBRATION ALERT SETTINGS -->
 <div
   id="hsCalibrationAlertModal"
@@ -1044,36 +1911,482 @@
 </div>
 
 <!-- WARNING NOTICES -->
-    <div
-      id="hsPanelWarnings"
-      class="hs-panel"
-    >
-      <div class="hs-section-placeholder">
-        <div class="hs-placeholder-icon">
-          !
+<div
+  id="hsPanelWarnings"
+  class="hs-panel"
+>
+  <div class="hs-warning-notices">
+
+    <div class="hs-warning-header">
+      <div>
+        <div class="hs-eyebrow">
+          Health &amp; Safety
         </div>
 
         <h3>
-          Warning Notices
+          Warning Notice Compliance
         </h3>
 
-        <p>
-          This will become the register for
-          warning notices, reasons, engineers,
-          properties and follow-up status.
+        <p class="muted">
+          Compliance checks completed against engineer warning notices.
         </p>
 
-        <div class="hs-placeholder-tags">
-          <span>Date</span>
-          <span>Engineer</span>
-          <span>Job / property</span>
-          <span>Notice type</span>
-          <span>Status</span>
+        <div
+          id="hsWarningImportStatus"
+          class="hs-warning-import-status"
+        >
+          No warning notice workbook imported.
+        </div>
+
+        <div
+          id="hsWarningCloudStatus"
+          class="hs-warning-cloud-status"
+        >
+          Cloud sync not checked.
         </div>
       </div>
+
+      <div class="hs-warning-header-actions">
+
+  <button
+    id="hsWarningManageBtn"
+    class="btn ghost"
+    type="button"
+  >
+    Manage Warning Notices
+  </button>
+
+  <input
+    id="hsWarningWorkbookInput"
+    class="hidden"
+    type="file"
+    accept=".xlsx,.xlsm,.xlsb,.xls"
+  />
+
+        <button
+  id="hsWarningGenerateSlideBtn"
+  class="btn ghost"
+  type="button"
+>
+  Generate Slide
+</button>
+  <button
+    id="hsWarningImportBtn"
+    class="btn"
+    type="button"
+  >
+    Import Warning Notices Workbook
+  </button>
+
+</div>
     </div>
 
-    <!-- ACTIONS -->
+
+    <div
+      id="hsWarningKpis"
+      class="hs-warning-kpi-grid"
+    >
+    </div>
+
+
+    <div class="hs-warning-filter-card">
+
+      <div class="hs-warning-filter-grid">
+
+        <label class="field">
+          <span>Period</span>
+
+          <select id="hsWarningPeriod">
+            <option value="all">
+              All time
+            </option>
+
+            <option value="this-month">
+              This month
+            </option>
+
+            <option value="last-month">
+              Last month
+            </option>
+
+            <option value="this-quarter">
+              This quarter
+            </option>
+
+            <option value="custom">
+              Custom
+            </option>
+          </select>
+        </label>
+
+
+        <label class="field">
+          <span>Date from</span>
+
+          <input
+            id="hsWarningDateFrom"
+            type="date"
+          />
+        </label>
+
+
+        <label class="field">
+          <span>Date to</span>
+
+          <input
+            id="hsWarningDateTo"
+            type="date"
+          />
+        </label>
+
+
+        <label class="field">
+          <span>Engineer</span>
+
+          <select id="hsWarningEngineer">
+            <option value="">
+              All engineers
+            </option>
+          </select>
+        </label>
+
+
+        <label class="field">
+          <span>Result</span>
+
+          <select id="hsWarningResult">
+            <option value="">
+              All results
+            </option>
+
+            <option value="PASS">
+              PASS
+            </option>
+
+            <option value="FAIL">
+              FAIL
+            </option>
+          </select>
+        </label>
+
+
+        <label class="field">
+          <span>Source workbook</span>
+
+          <select id="hsWarningSource">
+            <option value="">
+              All workbooks
+            </option>
+          </select>
+        </label>
+
+
+        <label class="field hs-warning-search-field">
+          <span>Search</span>
+
+          <input
+            id="hsWarningSearch"
+            type="search"
+            placeholder="Address, engineer or reason"
+          />
+        </label>
+
+
+        <div class="hs-warning-clear-wrap">
+          <button
+            id="hsWarningClearFiltersBtn"
+            class="btn ghost"
+            type="button"
+          >
+            Clear filters
+          </button>
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <div class="hs-warning-section-card">
+
+  <div class="hs-warning-section-head">
+    <div>
+      <h4>
+        Engineer Compliance Chart
+      </h4>
+
+      <p class="muted">
+        PASS / FAIL split and compliance rate for the currently filtered warning notice records.
+      </p>
+    </div>
+  </div>
+
+  <div
+    id="hsWarningEngineerChart"
+    class="hs-warning-engineer-chart"
+  >
+  </div>
+
+</div>
+
+
+<div class="hs-warning-section-card">
+
+  <div class="hs-warning-section-head">
+    <div>
+      <h4>
+        Engineer Performance
+      </h4>
+
+      <p class="muted">
+        Calculated from the currently filtered warning notice records.
+      </p>
+    </div>
+  </div>
+
+  <div class="hs-warning-table-wrap">
+    <table class="hs-warning-table">
+      <thead>
+        <tr>
+          <th>Engineer</th>
+          <th>Notices checked</th>
+          <th>Correct</th>
+          <th>Incorrect</th>
+          <th>Compliance</th>
+        </tr>
+      </thead>
+
+      <tbody
+        id="hsWarningEngineerTableBody"
+      >
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+
+    <details
+  class="hs-warning-section-card hs-warning-register-collapsible"
+>
+  <summary
+    class="hs-warning-section-head hs-warning-register-summary"
+  >
+    <div>
+      <h4>
+        Warning Notice Register
+      </h4>
+
+      <p
+        id="hsWarningRecordCount"
+        class="muted"
+      >
+        0 records
+      </p>
+    </div>
+
+    <span class="hs-warning-collapse-indicator">
+      View register
+    </span>
+  </summary>
+
+  <div class="hs-warning-table-wrap">
+    <table class="hs-warning-table">
+
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Address</th>
+          <th>Engineer</th>
+          <th>Result</th>
+          <th>Reason</th>
+          <th>Source</th>
+        </tr>
+      </thead>
+
+      <tbody
+        id="hsWarningTableBody"
+      >
+      </tbody>
+
+    </table>
+  </div>
+
+</details>
+
+  </div>
+</div>
+<!-- WARNING NOTICE RECORD MANAGER -->
+<div
+  id="hsWarningManagerModal"
+  class="performance-record-modal hidden"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="hsWarningManagerTitle"
+>
+  <div class="performance-record-modal-card">
+
+    <div class="performance-record-modal-head">
+      <div>
+        <div class="performance-record-type">
+          Health &amp; Safety
+        </div>
+
+        <h3 id="hsWarningManagerTitle">
+          Manage Warning Notices
+        </h3>
+
+        <p class="muted">
+          Filter, select and remove individual Warning Notice records.
+        </p>
+      </div>
+
+      <button
+        id="hsWarningManagerCloseBtn"
+        class="btn ghost small"
+        type="button"
+      >
+        Close
+      </button>
+    </div>
+
+
+    <div class="performance-record-filters">
+
+      <label class="field">
+        <span>Source workbook</span>
+
+        <select id="hsWarningManagerSource">
+          <option value="">
+            All workbooks
+          </option>
+        </select>
+      </label>
+
+
+      <label class="field">
+        <span>Engineer</span>
+
+        <select id="hsWarningManagerEngineer">
+          <option value="">
+            All engineers
+          </option>
+        </select>
+      </label>
+
+
+      <label class="field">
+        <span>Result</span>
+
+        <select id="hsWarningManagerResult">
+          <option value="">
+            All results
+          </option>
+
+          <option value="PASS">
+            PASS
+          </option>
+
+          <option value="FAIL">
+            FAIL
+          </option>
+        </select>
+      </label>
+
+
+      <label class="field performance-record-search">
+        <span>Search</span>
+
+        <input
+          id="hsWarningManagerSearch"
+          type="search"
+          placeholder="Address, engineer or reason"
+        />
+      </label>
+
+    </div>
+
+
+    <div class="performance-record-actions">
+
+      <div class="performance-record-selection-actions">
+
+        <button
+          id="hsWarningManagerSelectVisibleBtn"
+          class="btn ghost small"
+          type="button"
+        >
+          Select visible
+        </button>
+
+        <button
+          id="hsWarningManagerClearSelectionBtn"
+          class="btn ghost small"
+          type="button"
+        >
+          Clear selection
+        </button>
+
+      </div>
+
+
+      <div class="performance-record-delete-area">
+
+        <span
+          id="hsWarningManagerSelectedCount"
+          class="performance-record-selected-count"
+        >
+          0 selected
+        </span>
+
+        <button
+          id="hsWarningManagerDeleteBtn"
+          class="btn danger small"
+          type="button"
+          disabled
+        >
+          Delete selected
+        </button>
+
+      </div>
+
+    </div>
+
+
+    <div
+      id="hsWarningManagerStatus"
+      class="performance-record-status"
+    ></div>
+
+
+    <div class="performance-record-table-wrap">
+
+      <table class="performance-record-table">
+
+        <thead>
+          <tr>
+            <th></th>
+            <th>Date</th>
+            <th>Address</th>
+            <th>Engineer</th>
+            <th>Result</th>
+            <th>Reason</th>
+            <th>Source</th>
+          </tr>
+        </thead>
+
+        <tbody
+          id="hsWarningManagerTableBody"
+        >
+        </tbody>
+
+      </table>
+
+    </div>
+
+  </div>
+</div>
+<!-- ACTIONS -->
     <div
       id="hsPanelActions"
       class="hs-panel"
