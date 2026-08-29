@@ -24,6 +24,24 @@ const PERFORMANCE_IMPORT_META_KEY =
 const DASHBOARD_DATES_KEY =
   "ppc_dashboard_dates_v1";
 
+const HS_WARNING_NOTICES_KEY =
+  "ppc_hs_warning_notices_v1";
+
+const HS_WARNING_META_KEY =
+  "ppc_hs_warning_meta_v1";
+
+const HS_AUDIT_REGISTER_KEY =
+  "ppc_hs_audit_register_v1";
+
+const HS_AUDIT_REGISTER_META_KEY =
+  "ppc_hs_audit_register_meta_v1";
+
+const HS_AUDIT_PENDING_UPDATES_KEY =
+  "ppc_hs_audit_pending_updates_v1";
+
+const HS_AUDIT_HISTORY_KEY =
+  "ppc_hs_audit_history_v1";
+
 const HS_CALIBRATION_KEY =
   "ppc_hs_calibration_v1";
 
@@ -35,6 +53,9 @@ const HS_CALIBRATION_ALERT_SETTINGS_KEY =
 
 const HS_CALIBRATION_POPUP_HISTORY_KEY =
   "ppc_hs_calibration_popup_history_v1";
+
+const HS_CALIBRATION_PENDING_UPDATES_KEY =
+  "ppc_hs_calibration_pending_updates_v1";
 
 const el = (id) => document.getElementById(id);
 const uid = () => Math.random().toString(16).slice(2) + Date.now().toString(16);
@@ -201,7 +222,123 @@ function saveLocalHsCalibrationAlertSettings() {
   );
 }
 
+function loadHsWarningMeta() {
+  try {
+    const parsed =
+      JSON.parse(
+        localStorage.getItem(
+          HS_WARNING_META_KEY
+        ) || "null"
+      );
 
+    return parsed &&
+      typeof parsed === "object"
+      ? parsed
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+
+const hsWarningState = {
+  records:
+    loadAnalyticsArray(
+      HS_WARNING_NOTICES_KEY
+    ),
+
+  importMeta:
+    loadHsWarningMeta()
+};
+
+
+function saveHsWarningState() {
+  localStorage.setItem(
+    HS_WARNING_NOTICES_KEY,
+    JSON.stringify(
+      hsWarningState.records
+    )
+  );
+
+  localStorage.setItem(
+    HS_WARNING_META_KEY,
+    JSON.stringify(
+      hsWarningState.importMeta
+    )
+  );
+}
+function loadHsAuditRegisterMeta() {
+  try {
+    const parsed =
+      JSON.parse(
+        localStorage.getItem(
+          HS_AUDIT_REGISTER_META_KEY
+        ) || "null"
+      );
+
+    return parsed &&
+      typeof parsed === "object"
+      ? parsed
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+
+const hsAuditRegisterState = {
+  records:
+    loadAnalyticsArray(
+      HS_AUDIT_REGISTER_KEY
+    ),
+
+  importMeta:
+    loadHsAuditRegisterMeta()
+};
+let hsAuditPendingUpdates =
+  loadAnalyticsArray(
+    HS_AUDIT_PENDING_UPDATES_KEY
+  );
+
+let hsAuditHistory =
+  loadAnalyticsArray(
+    HS_AUDIT_HISTORY_KEY
+  );
+
+
+function saveHsAuditHistoryLocal() {
+  localStorage.setItem(
+    HS_AUDIT_HISTORY_KEY,
+    JSON.stringify(
+      hsAuditHistory
+    )
+  );
+}
+
+function saveHsAuditPendingUpdatesLocal() {
+  localStorage.setItem(
+    HS_AUDIT_PENDING_UPDATES_KEY,
+    JSON.stringify(
+      hsAuditPendingUpdates
+    )
+  );
+}
+
+function saveHsAuditRegisterState() {
+  localStorage.setItem(
+    HS_AUDIT_REGISTER_KEY,
+    JSON.stringify(
+      hsAuditRegisterState.records
+    )
+  );
+
+  localStorage.setItem(
+    HS_AUDIT_REGISTER_META_KEY,
+    JSON.stringify(
+      hsAuditRegisterState.importMeta
+    )
+  );
+}
 const hsCalibrationState = {
   records:
     loadAnalyticsArray(
@@ -211,7 +348,20 @@ const hsCalibrationState = {
   importMeta:
     loadHsCalibrationMeta()
 };
+let hsCalibrationPendingUpdates =
+  loadAnalyticsArray(
+    HS_CALIBRATION_PENDING_UPDATES_KEY
+  );
 
+
+function saveHsCalibrationPendingUpdatesLocal() {
+  localStorage.setItem(
+    HS_CALIBRATION_PENDING_UPDATES_KEY,
+    JSON.stringify(
+      hsCalibrationPendingUpdates
+    )
+  );
+}
 
 function saveHsCalibrationState() {
   localStorage.setItem(
@@ -1090,6 +1240,16 @@ function inspectionsCol(uid) {
     .doc(uid)
     .collection("inspections");
 }
+function hsWarningNoticesCloudCol(
+  uid
+) {
+  return cloudDb
+    .collection("users")
+    .doc(uid)
+    .collection(
+      "hsWarningNotices"
+    );
+}
 function hsCalibrationCloudCol(uid) {
   return cloudDb
     .collection("users")
@@ -1109,6 +1269,40 @@ function hsCalibrationMetaRef(uid) {
     )
     .doc(
       "calibration"
+    );
+}
+function hsAuditRegisterCloudCol(
+  uid
+) {
+  return cloudDb
+    .collection("users")
+    .doc(uid)
+    .collection(
+      "hsAuditRegister"
+    );
+}
+function hsAuditHistoryCloudCol(
+  uid
+) {
+  return cloudDb
+    .collection("users")
+    .doc(uid)
+    .collection(
+      "hsAuditHistory"
+    );
+}
+
+function hsAuditRegisterMetaRef(
+  uid
+) {
+  return cloudDb
+    .collection("users")
+    .doc(uid)
+    .collection(
+      "hsSettings"
+    )
+    .doc(
+      "auditRegister"
     );
 }
 function analyticsAuditsCol(uid) {
@@ -1477,7 +1671,9 @@ initBoilersLibrary().then(() => {
    initAnalytics();
 initExecutiveDashboard();
 initHealthSafety();
+initHsAuditRegister();
 initHsCalibration();
+initHsWarningNotices();
 initPerformanceWorkbookImport();
 initPerformanceRecordManager();
 initPerformanceExplorer();
@@ -1590,6 +1786,32 @@ if (
     "function"
 ) {
   await loadHsCalibrationAlertSettingsFromCloud();
+}
+    if (
+  typeof loadHsCalibrationPendingUpdatesFromCloud ===
+    "function"
+) {
+  await loadHsCalibrationPendingUpdatesFromCloud();
+}
+    if (
+  typeof loadHsAuditRegisterFromCloud ===
+    "function"
+) {
+  await loadHsAuditRegisterFromCloud();
+}
+  if (
+  typeof loadHsAuditHistoryFromCloud ===
+    "function"
+) {
+  await loadHsAuditHistoryFromCloud();
+}
+    if (
+  typeof hsWarningState !==
+    "undefined" &&
+  hsWarningState.records
+    ?.length
+) {
+  await syncHsWarningNoticesToCloud();
 }
 } catch (err) {
   console.error(
@@ -20932,8 +21154,142 @@ function setHealthSafetyTab(
   ) {
     renderHsCalibration();
   }
+  if (
+  selected === "audits" &&
+  typeof renderHsAuditRegister ===
+    "function"
+) {
+  renderHsAuditRegister();
+}
+  if (
+  name === "warnings" &&
+  typeof renderHsWarningNotices ===
+    "function"
+) {
+  renderHsWarningNotices();
+}if (
+  name === "warnings" &&
+  typeof renderHsWarningNotices ===
+    "function"
+) {
+  renderHsWarningNotices();
+}
 }
 
+async function saveHsCalibrationPendingUpdatesToCloud() {
+  saveHsCalibrationPendingUpdatesLocal();
+
+
+  if (!cloudSignedIn()) {
+    return {
+      saved: false,
+      reason: "not-signed-in"
+    };
+  }
+
+
+  try {
+    const user =
+      getUser();
+
+
+    await hsCalibrationMetaRef(
+      user.uid
+    ).set(
+      {
+        pendingExcelUpdates:
+          hsCalibrationPendingUpdates,
+
+        pendingExcelUpdatesUpdatedAt:
+          firebase
+            .firestore
+            .FieldValue
+            .serverTimestamp()
+      },
+      {
+        merge: true
+      }
+    );
+
+
+    return {
+      saved: true
+    };
+  } catch (error) {
+    console.error(
+      "Calibration pending updates could not be synced:",
+      error
+    );
+
+
+    return {
+      saved: false,
+      reason: "error",
+      error
+    };
+  }
+}
+
+
+async function loadHsCalibrationPendingUpdatesFromCloud() {
+  if (!cloudSignedIn()) {
+    return false;
+  }
+
+
+  try {
+    const user =
+      getUser();
+
+
+    const snapshot =
+      await hsCalibrationMetaRef(
+        user.uid
+      ).get();
+
+
+    if (!snapshot.exists) {
+      return false;
+    }
+
+
+    const data =
+      snapshot.data() || {};
+
+
+    if (
+      !Array.isArray(
+        data.pendingExcelUpdates
+      )
+    ) {
+      return false;
+    }
+
+
+    hsCalibrationPendingUpdates =
+      data.pendingExcelUpdates;
+
+
+    saveHsCalibrationPendingUpdatesLocal();
+
+
+    renderHsCalibrationPendingUpdates();
+
+
+    renderHsCalibration();
+
+
+    return true;
+  } catch (error) {
+    console.error(
+      "Calibration pending updates could not be loaded:",
+      error
+    );
+
+
+    return false;
+  }
+}
 async function loadHsCalibrationAlertSettingsFromCloud() {
   if (!cloudSignedIn()) {
     return false;
@@ -21856,17 +22212,70 @@ async function shareHsCalibrationAlertEmail(
   );
 
 
-  const mailto =
-    `mailto:${encodeURIComponent(
-      recipient
-    )}?${parameters.join("&")}`;
-
-
   /*
-    Open the user's normal email client.
-  */
-  window.location.href =
-    mailto;
+  Open a proper Outlook compose window.
+
+  This works much more reliably from
+  inside CodePen than mailto:, because
+  CodePen runs the app inside an iframe.
+*/
+const outlookParams = [];
+
+
+if (recipient) {
+  outlookParams.push(
+    `to=${encodeURIComponent(
+      recipient
+    )}`
+  );
+}
+
+
+if (
+  uniqueCcRecipients.length
+) {
+  outlookParams.push(
+    `cc=${encodeURIComponent(
+      uniqueCcRecipients.join(",")
+    )}`
+  );
+}
+
+
+outlookParams.push(
+  `subject=${encodeURIComponent(
+    subject
+  )}`
+);
+
+
+outlookParams.push(
+  `body=${encodeURIComponent(
+    body
+  )}`
+);
+
+
+const outlookUrl =
+  "https://outlook.office.com/mail/deeplink/compose?" +
+  outlookParams.join("&");
+
+
+/*
+  Open Outlook in a new browser tab/window.
+*/
+const emailWindow =
+  window.open(
+    outlookUrl,
+    "_blank"
+  );
+
+
+if (!emailWindow) {
+  alert(
+    "The Outlook email window was blocked by the browser. Please allow pop-ups for this app and try again."
+  );
+}
 }
 function openHsCalibrationStartupAlert(
   alerts
@@ -22099,7 +22508,7 @@ function openHsCalibrationStartupAlert(
         reminder cycle automatically.
       </div>
 
-     <div
+  <div
   class="hs-startup-alert-actions"
 >
   <button
@@ -22116,6 +22525,14 @@ function openHsCalibrationStartupAlert(
     type="button"
   >
     Email Recipients
+  </button>
+
+  <button
+    id="hsStartupRemindLaterBtn"
+    class="btn ghost"
+    type="button"
+  >
+    Remind Me Next Time
   </button>
 
   <button
@@ -22163,6 +22580,21 @@ el(
     await shareHsCalibrationAlertEmail(
       alerts
     );
+  }
+);
+  el(
+  "hsStartupRemindLaterBtn"
+)?.addEventListener(
+  "click",
+  () => {
+    /*
+      Close only.
+
+      Do NOT acknowledge these alerts,
+      so they will appear again the
+      next time the app opens.
+    */
+    closeHsCalibrationStartupAlert();
   }
 );
   el(
@@ -22360,7 +22792,2832 @@ function locateHsCalibrationSheet(
   return null;
 }
 
+function getHsAuditDueMonth(
+  lastAuditDate
+) {
+  if (!lastAuditDate) {
+    return null;
+  }
 
+
+  const parts =
+    String(lastAuditDate)
+      .split("-")
+      .map(Number);
+
+
+  if (
+    parts.length !== 3 ||
+    !parts[0] ||
+    !parts[1]
+  ) {
+    return null;
+  }
+
+
+  /*
+    Use the first day of the last-audit month,
+    then move forward exactly three months.
+
+    Example:
+    15 June 2026 -> September 2026
+  */
+  const dueMonth =
+    new Date(
+      Date.UTC(
+        parts[0],
+        parts[1] - 1 + 3,
+        1
+      )
+    );
+
+
+  return {
+    year:
+      dueMonth.getUTCFullYear(),
+
+    month:
+      dueMonth.getUTCMonth() + 1,
+
+    key:
+      `${dueMonth.getUTCFullYear()}-${String(
+        dueMonth.getUTCMonth() + 1
+      ).padStart(2, "0")}`,
+
+    label:
+      dueMonth.toLocaleDateString(
+        "en-GB",
+        {
+          month: "long",
+          year: "numeric",
+          timeZone: "UTC"
+        }
+      )
+  };
+}
+
+
+function getHsAuditScheduleStatus(
+  lastAuditDate
+) {
+  const due =
+    getHsAuditDueMonth(
+      lastAuditDate
+    );
+
+
+  if (!due) {
+    return {
+      key: "overdue",
+      label: "No audit date",
+      tone: "danger",
+      sort: 0
+    };
+  }
+
+
+  const now =
+    new Date();
+
+
+  const currentKey =
+    `${now.getFullYear()}-${String(
+      now.getMonth() + 1
+    ).padStart(2, "0")}`;
+
+
+  if (
+    currentKey >
+    due.key
+  ) {
+    return {
+      key: "overdue",
+      label: "Overdue",
+      tone: "danger",
+      sort: 0
+    };
+  }
+
+
+  if (
+    currentKey ===
+    due.key
+  ) {
+    return {
+      key: "due",
+      label: "Due this month",
+      tone: "warning",
+      sort: 1
+    };
+  }
+
+
+  return {
+    key: "current",
+    label: "Current",
+    tone: "good",
+    sort: 2
+  };
+}
+function locateHsAuditRegisterSheet(
+  workbook
+) {
+  const sheetNames =
+    workbook?.SheetNames ||
+    [];
+
+
+  for (
+    const sheetName of
+    sheetNames
+  ) {
+    const sheet =
+      workbook.Sheets[
+        sheetName
+      ];
+
+
+    if (!sheet) {
+      continue;
+    }
+
+
+    const rows =
+      workbookRows(
+        sheet
+      );
+
+
+    const header =
+      findWorkbookHeader(
+        rows,
+        {
+          engineer: [
+            "assigned engineer",
+            "engineer",
+            "engineer name"
+          ],
+
+          lastInspection: [
+            "last inspection date",
+            "last inspection",
+            "last audit date",
+            "last audit"
+          ],
+
+          vehicle: [
+            "vehicle reg",
+            "vehicle registration",
+            "vehicle"
+          ]
+        }
+      );
+
+
+    if (header) {
+      return {
+        sheetName,
+        rows,
+        header
+      };
+    }
+  }
+
+
+  return null;
+}
+function importHsAuditRegisterRecords(
+  workbook,
+  sourceFileName
+) {
+  const located =
+    locateHsAuditRegisterSheet(
+      workbook
+    );
+
+
+  if (!located) {
+    throw new Error(
+      "An H&S engineer register could not be found.\n\n" +
+      "The app looked for Assigned Engineer, Last Inspection Date and Vehicle Reg headings."
+    );
+  }
+
+
+  const {
+    rows,
+    header,
+    sheetName
+  } = located;
+
+
+  const headerRow =
+    rows[
+      header.rowIndex
+    ] || [];
+
+
+  const clockIndex =
+    findOptionalHsCalibrationColumn(
+      headerRow,
+      [
+        "clock number",
+        "clock no",
+        "clock"
+      ]
+    );
+
+
+  const gasSafeIndex =
+    findOptionalHsCalibrationColumn(
+      headerRow,
+      [
+        "gas safe numbers",
+        "gas safe number",
+        "gas safe no"
+      ]
+    );
+
+
+  const telescopicsIndex =
+    findOptionalHsCalibrationColumn(
+      headerRow,
+      [
+        "telescopics",
+        "telescopic"
+      ]
+    );
+
+
+  const stepsIndex =
+    findOptionalHsCalibrationColumn(
+      headerRow,
+      [
+        "steps",
+        "step"
+      ]
+    );
+
+
+  const hopUpIndex =
+    findOptionalHsCalibrationColumn(
+      headerRow,
+      [
+        "hop up",
+        "hopup"
+      ]
+    );
+
+
+  const firstAidIndex =
+    findOptionalHsCalibrationColumn(
+      headerRow,
+      [
+        "first aid kit",
+        "first aid"
+      ]
+    );
+
+
+  const extinguisherIndex =
+    findOptionalHsCalibrationColumn(
+      headerRow,
+      [
+        "fire extinguisher",
+        "extinguisher"
+      ]
+    );
+
+
+  const notesIndex =
+    findOptionalHsCalibrationColumn(
+      headerRow,
+      [
+        "notes",
+        "note",
+        "comments"
+      ]
+    );
+
+
+  const imported = [];
+
+
+  for (
+    let rowIndex =
+      header.rowIndex + 1;
+
+    rowIndex <
+    rows.length;
+
+    rowIndex++
+  ) {
+    const row =
+      rows[rowIndex] || [];
+
+
+    const engineer =
+      String(
+        row[
+          header.indexes
+            .engineer
+        ] ?? ""
+      ).trim();
+
+
+    const vehicleReg =
+      String(
+        row[
+          header.indexes
+            .vehicle
+        ] ?? ""
+      ).trim();
+
+
+    const lastInspectionDate =
+      workbookDateToIso(
+        row[
+          header.indexes
+            .lastInspection
+        ]
+      );
+
+
+    /*
+      Ignore completely blank rows.
+    */
+    if (
+      !engineer &&
+      !vehicleReg &&
+      !lastInspectionDate
+    ) {
+      continue;
+    }
+
+
+    /*
+      Engineer name identifies the register row.
+    */
+    if (!engineer) {
+      continue;
+    }
+
+
+    const readOptionalText =
+      index =>
+        index >= 0
+          ? String(
+              row[index] ??
+              ""
+            ).trim()
+          : "";
+
+
+    imported.push({
+      id:
+        `hs-audit-engineer-` +
+        `${normalizePerformanceSourceName(
+          engineer
+        ) || rowIndex}`,
+
+      engineer,
+
+      clockNumber:
+        readOptionalText(
+          clockIndex
+        ),
+
+      gasSafeNumber:
+        readOptionalText(
+          gasSafeIndex
+        ),
+
+      vehicleReg,
+
+      lastInspectionDate,
+
+      telescopics:
+        readOptionalText(
+          telescopicsIndex
+        ),
+
+      steps:
+        readOptionalText(
+          stepsIndex
+        ),
+
+      hopUp:
+        readOptionalText(
+          hopUpIndex
+        ),
+
+      firstAidKit:
+        readOptionalText(
+          firstAidIndex
+        ),
+
+      fireExtinguisher:
+        readOptionalText(
+          extinguisherIndex
+        ),
+
+      notes:
+        readOptionalText(
+          notesIndex
+        ),
+
+      sourceFile:
+        sourceFileName,
+
+      sourceSheet:
+        sheetName
+    });
+  }
+
+
+  return {
+    records:
+      imported,
+
+    sheetName
+  };
+}
+
+function applyPendingHsAuditRegisterUpdates(
+  records
+) {
+  const result =
+    (records || []).map(
+      record => ({
+        ...record
+      })
+    );
+
+
+  hsAuditPendingUpdates
+    .slice()
+    .sort(
+      (a, b) =>
+        String(
+          a.changedAt || ""
+        ).localeCompare(
+          String(
+            b.changedAt || ""
+          )
+        )
+    )
+    .forEach(
+      update => {
+        const record =
+          result.find(
+            item =>
+              item.engineer ===
+              update.engineer
+          );
+
+
+        if (!record) {
+          return;
+        }
+
+
+        if (
+          Object.prototype
+            .hasOwnProperty.call(
+              record,
+              update.field
+            )
+        ) {
+          record[
+            update.field
+          ] =
+            update.newValue;
+        }
+      }
+    );
+
+
+  return result;
+}
+async function importHsAuditRegisterWorkbook(
+  file
+) {
+  if (!window.XLSX) {
+    throw new Error(
+      "The Excel import library has not loaded."
+    );
+  }
+
+
+  if (!file) {
+    throw new Error(
+      "No workbook was selected."
+    );
+  }
+
+
+  const buffer =
+    await file.arrayBuffer();
+
+
+  const workbook =
+    window.XLSX.read(
+      buffer,
+      {
+        type: "array",
+        cellDates: true
+      }
+    );
+
+
+  const result =
+    importHsAuditRegisterRecords(
+      workbook,
+      file.name
+    );
+
+
+  if (
+    !result.records.length
+  ) {
+    throw new Error(
+      "The H&S register sheet was found, but no engineer records could be imported."
+    );
+  }
+
+
+  /*
+    This is a current engineer/equipment
+    register, so the latest spreadsheet
+    replaces the previous imported register.
+  */
+ hsAuditRegisterState.records =
+  applyPendingHsAuditRegisterUpdates(
+    result.records
+  );
+
+
+  hsAuditRegisterState.importMeta = {
+    fileName:
+      file.name,
+
+    sheetName:
+      result.sheetName,
+
+    importedAt:
+      new Date()
+        .toISOString(),
+
+    recordCount:
+      result.records.length
+  };
+
+
+  saveHsAuditRegisterState();
+
+
+renderHsAuditRegister();
+
+
+if (cloudSignedIn()) {
+  await syncHsAuditRegisterToCloud();
+}
+
+
+return result.records.length;
+}
+
+function updateHsAuditPendingBadge() {
+  const badge =
+    el(
+      "hsAuditPendingCount"
+    );
+
+
+  if (!badge) {
+    return;
+  }
+
+
+  const count =
+    hsAuditPendingUpdates.length;
+
+
+  badge.textContent =
+    String(count);
+
+
+  badge.classList.toggle(
+    "hidden",
+    count === 0
+  );
+}
+
+
+function formatHsAuditPendingField(
+  field
+) {
+  const labels = {
+  lastInspectionDate:
+    "Last Inspection Date",
+
+  clockNumber:
+    "Clock Number",
+
+  gasSafeNumber:
+    "Gas Safe Number",
+
+    vehicleReg:
+      "Vehicle Reg",
+
+    telescopics:
+      "Telescopics",
+
+    steps:
+      "Steps",
+
+    hopUp:
+      "Hop Up",
+
+    firstAidKit:
+      "First Aid Kit",
+
+    fireExtinguisher:
+      "Fire Extinguisher",
+
+    notes:
+      "Notes"
+  };
+
+
+  return (
+    labels[field] ||
+    field
+  );
+}
+
+
+function renderHsAuditPendingUpdates() {
+  updateHsAuditPendingBadge();
+
+
+  const body =
+    el(
+      "hsAuditPendingTableBody"
+    );
+
+
+  const empty =
+    el(
+      "hsAuditPendingEmpty"
+    );
+
+
+  const wrap =
+    el(
+      "hsAuditPendingTableWrap"
+    );
+
+
+  const markAll =
+    el(
+      "hsAuditMarkAllCompleteBtn"
+    );
+
+
+  const pending =
+    hsAuditPendingUpdates
+      .slice()
+      .sort(
+        (a, b) =>
+          String(
+            b.changedAt || ""
+          ).localeCompare(
+            String(
+              a.changedAt || ""
+            )
+          )
+      );
+
+
+  empty?.classList.toggle(
+    "hidden",
+    pending.length > 0
+  );
+
+
+  wrap?.classList.toggle(
+    "hidden",
+    pending.length === 0
+  );
+
+
+  if (markAll) {
+    markAll.disabled =
+      pending.length === 0;
+  }
+
+
+  if (!body) {
+    return;
+  }
+
+
+  body.innerHTML =
+    pending
+      .map(
+        update => {
+          const changed =
+            update.changedAt
+              ? new Date(
+                  update.changedAt
+                ).toLocaleString(
+                  "en-GB"
+                )
+              : "—";
+
+
+          return `
+            <tr>
+
+              <td>
+                ${escapeHtml(
+                  changed
+                )}
+              </td>
+
+              <td>
+                <strong>
+                  ${escapeHtml(
+                    update.engineer ||
+                    "—"
+                  )}
+                </strong>
+              </td>
+
+              <td>
+                ${escapeHtml(
+                  formatHsAuditPendingField(
+                    update.field
+                  )
+                )}
+              </td>
+
+              <td>
+               ${escapeHtml(
+  update.field ===
+    "lastInspectionDate"
+      ? (
+          update.oldValue
+            ? formatDate(
+                update.oldValue
+              )
+            : "—"
+        )
+      : String(
+          update.oldValue ||
+          "—"
+        )
+)}
+              </td>
+
+              <td>
+                <strong>
+                 ${escapeHtml(
+  update.field ===
+    "lastInspectionDate"
+      ? (
+          update.newValue
+            ? formatDate(
+                update.newValue
+              )
+            : "—"
+        )
+      : String(
+          update.newValue ||
+          "—"
+        )
+)}
+                </strong>
+              </td>
+
+              <td>
+                <button
+                  type="button"
+                  class="btn ghost small"
+                  data-hs-audit-update-complete="${escapeHtml(
+                    update.id
+                  )}"
+                >
+                  Updated in Excel
+                </button>
+              </td>
+
+            </tr>
+          `;
+        }
+      )
+      .join("");
+
+
+  body
+    .querySelectorAll(
+      "[data-hs-audit-update-complete]"
+    )
+    .forEach(
+      button => {
+        button.addEventListener(
+          "click",
+          async () => {
+            hsAuditPendingUpdates =
+              hsAuditPendingUpdates
+                .filter(
+                  update =>
+                    update.id !==
+                    button.dataset
+                      .hsAuditUpdateComplete
+                );
+
+
+           await saveHsAuditPendingUpdatesToCloud();
+
+renderHsAuditPendingUpdates();
+          }
+        );
+      }
+    );
+}
+
+function openHsAuditRecordModal(
+  recordId
+) {
+  const record =
+    (
+      hsAuditRegisterState.records ||
+      []
+    ).find(
+      item =>
+        item.id ===
+        recordId
+    );
+
+
+  if (!record) {
+    return;
+  }
+
+
+  el(
+    "hsAuditRecordEngineerId"
+  ).value =
+    record.id;
+
+
+  el(
+    "hsAuditRecordEngineer"
+  ).value =
+    record.engineer ||
+    "";
+
+
+  const today =
+    new Date();
+
+
+  const todayIso =
+    `${today.getFullYear()}-${String(
+      today.getMonth() + 1
+    ).padStart(2, "0")}-${String(
+      today.getDate()
+    ).padStart(2, "0")}`;
+
+
+  el(
+    "hsAuditRecordDate"
+  ).value =
+    todayIso;
+
+
+  el(
+    "hsAuditRecordResult"
+  ).value =
+    "";
+
+
+  el(
+    "hsAuditRecordReason"
+  ).value =
+    "";
+
+
+  el(
+    "hsAuditRecordNotes"
+  ).value =
+    "";
+
+
+  el(
+    "hsAuditRecordFollowUp"
+  ).checked =
+    false;
+
+
+  const status =
+    el(
+      "hsAuditRecordSaveStatus"
+    );
+
+
+  if (status) {
+    status.textContent =
+      "";
+
+    status.className =
+      "hs-alert-save-status";
+  }
+
+
+  el(
+    "hsAuditRecordModal"
+  )?.classList.remove(
+    "hidden"
+  );
+}
+
+
+function closeHsAuditRecordModal() {
+  el(
+    "hsAuditRecordModal"
+  )?.classList.add(
+    "hidden"
+  );
+}
+
+
+async function saveHsAuditRecord() {
+  const recordId =
+    el(
+      "hsAuditRecordEngineerId"
+    )?.value;
+
+
+  const engineerRecord =
+    (
+      hsAuditRegisterState.records ||
+      []
+    ).find(
+      item =>
+        item.id ===
+        recordId
+    );
+
+
+  if (!engineerRecord) {
+    return;
+  }
+
+
+  const auditDate =
+    String(
+      el(
+        "hsAuditRecordDate"
+      )?.value || ""
+    ).trim();
+
+
+  const result =
+    String(
+      el(
+        "hsAuditRecordResult"
+      )?.value || ""
+    ).trim();
+
+
+  const reason =
+    String(
+      el(
+        "hsAuditRecordReason"
+      )?.value || ""
+    ).trim();
+
+
+  const notes =
+    String(
+      el(
+        "hsAuditRecordNotes"
+      )?.value || ""
+    ).trim();
+
+
+  const followUpRequired =
+    el(
+      "hsAuditRecordFollowUp"
+    )?.checked === true;
+
+
+  const status =
+    el(
+      "hsAuditRecordSaveStatus"
+    );
+
+
+  if (!auditDate) {
+    if (status) {
+      status.textContent =
+        "Choose the audit date.";
+    }
+
+    return;
+  }
+
+
+  if (
+    result !== "PASS" &&
+    result !== "FAIL"
+  ) {
+    if (status) {
+      status.textContent =
+        "Choose PASS or FAIL.";
+    }
+
+    return;
+  }
+
+
+  if (
+    result === "FAIL" &&
+    !reason
+  ) {
+    if (status) {
+      status.textContent =
+        "A reason or finding is required for a failed audit.";
+    }
+
+    return;
+  }
+
+
+  const oldLastInspectionDate =
+    engineerRecord
+      .lastInspectionDate ||
+    "";
+
+
+  /*
+    Build the permanent audit record.
+  */
+  const audit = {
+    id:
+      `hs-audit-${uid()}`,
+
+    engineerId:
+      engineerRecord.id,
+
+    engineer:
+      engineerRecord.engineer ||
+      "",
+
+    auditDate,
+
+    result,
+
+    reason,
+
+    notes,
+
+    followUpRequired:
+      followUpRequired ||
+      result === "FAIL",
+
+    resolved:
+      result === "PASS",
+
+    resolvedAt:
+      result === "PASS"
+        ? auditDate
+        : "",
+
+    vehicleReg:
+      engineerRecord.vehicleReg ||
+      "",
+
+    telescopics:
+      engineerRecord.telescopics ||
+      "",
+
+    steps:
+      engineerRecord.steps ||
+      "",
+
+    hopUp:
+      engineerRecord.hopUp ||
+      "",
+
+    firstAidKit:
+      engineerRecord.firstAidKit ||
+      "",
+
+    fireExtinguisher:
+      engineerRecord.fireExtinguisher ||
+      "",
+
+    createdAt:
+      new Date()
+        .toISOString()
+  };
+
+
+  hsAuditHistory.push(
+    audit
+  );
+
+
+  /*
+    Update the live engineer register.
+
+    PASS or FAIL both count as an audit
+    having taken place.
+  */
+  engineerRecord
+    .lastInspectionDate =
+      auditDate;
+
+
+  /*
+    Add Last Inspection Date to the
+    Pending Excel Updates list.
+
+    If this engineer already has a
+    pending Last Inspection Date change,
+    retain the original spreadsheet value
+    and only update the newest value.
+  */
+  if (
+    oldLastInspectionDate !==
+    auditDate
+  ) {
+    const existingPending =
+      hsAuditPendingUpdates
+        .find(
+          update =>
+            update.engineer ===
+              engineerRecord.engineer &&
+            update.field ===
+              "lastInspectionDate"
+        );
+
+
+    if (existingPending) {
+      existingPending.newValue =
+        auditDate;
+
+      existingPending.changedAt =
+        new Date()
+          .toISOString();
+    } else {
+      hsAuditPendingUpdates
+        .push({
+          id:
+            `hs-audit-change-${uid()}`,
+
+          engineer:
+            engineerRecord.engineer,
+
+          field:
+            "lastInspectionDate",
+
+          oldValue:
+            oldLastInspectionDate,
+
+          newValue:
+            auditDate,
+
+          changedAt:
+            new Date()
+              .toISOString(),
+
+          sourceFile:
+            engineerRecord
+              .sourceFile ||
+            ""
+        });
+    }
+  }
+
+
+  saveHsAuditHistoryLocal();
+
+  saveHsAuditRegisterState();
+
+  saveHsAuditPendingUpdatesLocal();
+
+
+  renderHsAuditRegister();
+
+  renderHsAuditPendingUpdates();
+
+
+  if (status) {
+    status.textContent =
+      "Saving audit…";
+  }
+
+
+  if (cloudSignedIn()) {
+    const [
+      auditResult,
+      registerResult,
+      pendingResult
+    ] =
+      await Promise.all([
+        saveHsAuditRecordToCloud(
+          audit
+        ),
+
+        syncHsAuditRegisterToCloud(),
+
+        saveHsAuditPendingUpdatesToCloud()
+      ]);
+
+
+    if (
+      auditResult.saved &&
+      registerResult.synced &&
+      pendingResult.saved
+    ) {
+      if (status) {
+        status.textContent =
+          `${result} audit saved to Firebase.`;
+      }
+    } else {
+      if (status) {
+        status.textContent =
+          "Audit saved locally, but Firebase sync needs attention.";
+      }
+    }
+  } else if (status) {
+    status.textContent =
+      `${result} audit saved locally.`;
+  }
+
+
+  setTimeout(
+    closeHsAuditRecordModal,
+    1000
+  );
+}
+function openHsAuditEditor(
+  recordId
+) {
+  const record =
+    (
+      hsAuditRegisterState.records ||
+      []
+    ).find(
+      item =>
+        item.id ===
+        recordId
+    );
+
+
+  if (!record) {
+    return;
+  }
+
+
+  el(
+    "hsAuditEditRecordId"
+  ).value =
+    record.id;
+
+
+  el(
+    "hsAuditEditEngineer"
+  ).value =
+    record.engineer || "";
+
+
+  el(
+    "hsAuditEditClock"
+  ).value =
+    record.clockNumber || "";
+
+
+  el(
+    "hsAuditEditGasSafe"
+  ).value =
+    record.gasSafeNumber || "";
+
+
+  el(
+    "hsAuditEditVehicle"
+  ).value =
+    record.vehicleReg || "";
+
+
+  el(
+    "hsAuditEditTelescopics"
+  ).value =
+    record.telescopics || "";
+
+
+  el(
+    "hsAuditEditSteps"
+  ).value =
+    record.steps || "";
+
+
+  el(
+    "hsAuditEditHopUp"
+  ).value =
+    record.hopUp || "";
+
+
+  el(
+    "hsAuditEditFirstAid"
+  ).value =
+    record.firstAidKit || "";
+
+
+  el(
+    "hsAuditEditExtinguisher"
+  ).value =
+    record.fireExtinguisher || "";
+
+
+  el(
+    "hsAuditEditNotes"
+  ).value =
+    record.notes || "";
+
+
+  const status =
+    el(
+      "hsAuditEditStatus"
+    );
+
+
+  if (status) {
+    status.textContent = "";
+    status.className =
+      "hs-alert-save-status";
+  }
+
+
+  el(
+    "hsAuditEditModal"
+  )?.classList.remove(
+    "hidden"
+  );
+}
+
+
+function closeHsAuditEditor() {
+  el(
+    "hsAuditEditModal"
+  )?.classList.add(
+    "hidden"
+  );
+}
+
+
+async function saveHsAuditEditor() {
+  const recordId =
+    el(
+      "hsAuditEditRecordId"
+    )?.value;
+
+
+  const record =
+    (
+      hsAuditRegisterState.records ||
+      []
+    ).find(
+      item =>
+        item.id ===
+        recordId
+    );
+
+
+  if (!record) {
+    return;
+  }
+
+
+  const values = {
+    clockNumber:
+      String(
+        el(
+          "hsAuditEditClock"
+        )?.value || ""
+      ).trim(),
+
+    gasSafeNumber:
+      String(
+        el(
+          "hsAuditEditGasSafe"
+        )?.value || ""
+      ).trim(),
+
+    vehicleReg:
+      String(
+        el(
+          "hsAuditEditVehicle"
+        )?.value || ""
+      ).trim(),
+
+    telescopics:
+      String(
+        el(
+          "hsAuditEditTelescopics"
+        )?.value || ""
+      ).trim(),
+
+    steps:
+      String(
+        el(
+          "hsAuditEditSteps"
+        )?.value || ""
+      ).trim(),
+
+    hopUp:
+      String(
+        el(
+          "hsAuditEditHopUp"
+        )?.value || ""
+      ).trim(),
+
+    firstAidKit:
+      String(
+        el(
+          "hsAuditEditFirstAid"
+        )?.value || ""
+      ).trim(),
+
+    fireExtinguisher:
+      String(
+        el(
+          "hsAuditEditExtinguisher"
+        )?.value || ""
+      ).trim(),
+
+    notes:
+      String(
+        el(
+          "hsAuditEditNotes"
+        )?.value || ""
+      ).trim()
+  };
+
+
+  const changedAt =
+    new Date()
+      .toISOString();
+
+
+  let changesMade =
+    0;
+
+
+  Object.entries(
+    values
+  ).forEach(
+    ([field, newValue]) => {
+      const oldValue =
+        String(
+          record[field] ||
+          ""
+        );
+
+
+      if (
+        oldValue ===
+        newValue
+      ) {
+        return;
+      }
+
+
+      changesMade++;
+
+
+      const existing =
+        hsAuditPendingUpdates
+          .find(
+            update =>
+              update.engineer ===
+                record.engineer &&
+              update.field ===
+                field
+          );
+
+
+      if (existing) {
+        existing.newValue =
+          newValue;
+
+        existing.changedAt =
+          changedAt;
+      } else {
+        hsAuditPendingUpdates
+          .push({
+            id:
+              `hs-audit-change-${uid()}`,
+
+            engineer:
+              record.engineer,
+
+            field,
+
+            oldValue,
+
+            newValue,
+
+            changedAt,
+
+            sourceFile:
+              record.sourceFile ||
+              ""
+          });
+      }
+
+
+      record[field] =
+        newValue;
+    }
+  );
+
+
+  const status =
+    el(
+      "hsAuditEditStatus"
+    );
+
+
+  if (!changesMade) {
+    if (status) {
+      status.textContent =
+        "No changes were made.";
+    }
+
+    return;
+  }
+
+
+ saveHsAuditRegisterState();
+
+saveHsAuditPendingUpdatesLocal();
+
+
+renderHsAuditRegister();
+
+renderHsAuditPendingUpdates();
+
+
+if (status) {
+  status.textContent =
+    "Saving changes…";
+}
+
+
+const [
+  registerResult,
+  pendingResult
+] =
+  await Promise.all([
+    syncHsAuditRegisterToCloud(),
+    saveHsAuditPendingUpdatesToCloud()
+  ]);
+
+
+if (
+  registerResult.synced &&
+  pendingResult.saved
+) {
+  if (status) {
+    status.textContent =
+      `${changesMade} change${
+        changesMade === 1
+          ? ""
+          : "s"
+      } saved to Firebase and added to Pending Excel Updates.`;
+  }
+} else {
+  if (status) {
+    status.textContent =
+      `${changesMade} change${
+        changesMade === 1
+          ? ""
+          : "s"
+      } saved locally. Firebase sync needs attention.`;
+  }
+}
+
+
+setTimeout(
+  closeHsAuditEditor,
+  1000
+);
+}
+
+
+function openHsAuditPendingUpdates() {
+  renderHsAuditPendingUpdates();
+
+
+  el(
+    "hsAuditPendingModal"
+  )?.classList.remove(
+    "hidden"
+  );
+}
+
+
+function closeHsAuditPendingUpdates() {
+  el(
+    "hsAuditPendingModal"
+  )?.classList.add(
+    "hidden"
+  );
+}
+
+
+async function markAllHsAuditUpdatesComplete() {
+  if (
+    !hsAuditPendingUpdates.length
+  ) {
+    return;
+  }
+
+
+  const confirmed =
+    confirm(
+      `Mark all ${hsAuditPendingUpdates.length} pending H&S register update${
+        hsAuditPendingUpdates.length === 1
+          ? ""
+          : "s"
+      } as transferred to Excel?`
+    );
+
+
+  if (!confirmed) {
+    return;
+  }
+
+
+  hsAuditPendingUpdates =
+    [];
+
+
+  await saveHsAuditPendingUpdatesToCloud();
+
+
+renderHsAuditPendingUpdates();
+}
+
+async function saveHsAuditRecordToCloud(
+  audit
+) {
+  if (!cloudSignedIn()) {
+    return {
+      saved: false,
+      reason: "not-signed-in"
+    };
+  }
+
+
+  try {
+    const user =
+      getUser();
+
+
+    await hsAuditHistoryCloudCol(
+      user.uid
+    )
+      .doc(
+        String(
+          audit.id
+        )
+      )
+      .set(
+        {
+          ...audit,
+
+          updatedAt:
+            firebase
+              .firestore
+              .FieldValue
+              .serverTimestamp()
+        },
+        {
+          merge: true
+        }
+      );
+
+
+    return {
+      saved: true
+    };
+  } catch (error) {
+    console.error(
+      "H&S audit record Firebase save failed:",
+      error
+    );
+
+
+    return {
+      saved: false,
+      reason: "error",
+      error
+    };
+  }
+}
+async function syncHsAuditRegisterToCloud() {
+  if (!cloudSignedIn()) {
+    const status =
+      el(
+        "hsAuditCloudStatus"
+      );
+
+    if (status) {
+      status.textContent =
+        "Local only • Log in to sync H&S register data.";
+    }
+
+
+    return {
+      synced: false,
+      reason: "not-signed-in"
+    };
+  }
+
+
+  const user =
+    getUser();
+
+
+  const records =
+    hsAuditRegisterState.records ||
+    [];
+
+
+  const status =
+    el(
+      "hsAuditCloudStatus"
+    );
+
+
+  if (status) {
+    status.textContent =
+      "Syncing H&S register to Firebase…";
+  }
+
+
+  try {
+    const collection =
+      hsAuditRegisterCloudCol(
+        user.uid
+      );
+
+
+    const existingSnapshot =
+      await collection.get();
+
+
+    const currentIds =
+      new Set(
+        records.map(
+          record =>
+            String(
+              record.id
+            )
+        )
+      );
+
+
+    const operations =
+      [];
+
+
+    /*
+      Remove cloud engineer rows which
+      no longer exist in the current
+      register.
+    */
+    existingSnapshot.docs.forEach(
+      document => {
+        if (
+          !currentIds.has(
+            document.id
+          )
+        ) {
+          operations.push({
+            type: "delete",
+            ref:
+              document.ref
+          });
+        }
+      }
+    );
+
+
+    /*
+      Add/update the current register.
+    */
+    records.forEach(
+      record => {
+        if (!record.id) {
+          return;
+        }
+
+
+        const ref =
+          collection.doc(
+            String(
+              record.id
+            )
+          );
+
+
+        operations.push({
+          type: "set",
+
+          ref,
+
+          data: {
+            ...record,
+
+            updatedAt:
+              firebase
+                .firestore
+                .FieldValue
+                .serverTimestamp()
+          }
+        });
+      }
+    );
+
+
+    const batchSize =
+      400;
+
+
+    for (
+      let index = 0;
+      index < operations.length;
+      index += batchSize
+    ) {
+      const batch =
+        cloudDb.batch();
+
+
+      operations
+        .slice(
+          index,
+          index + batchSize
+        )
+        .forEach(
+          operation => {
+            if (
+              operation.type ===
+              "delete"
+            ) {
+              batch.delete(
+                operation.ref
+              );
+            } else {
+              batch.set(
+                operation.ref,
+                operation.data,
+                {
+                  merge: true
+                }
+              );
+            }
+          }
+        );
+
+
+      await batch.commit();
+    }
+
+
+    await hsAuditRegisterMetaRef(
+      user.uid
+    ).set(
+      {
+        importMeta:
+          hsAuditRegisterState
+            .importMeta || null,
+
+        registerUpdatedAt:
+          firebase
+            .firestore
+            .FieldValue
+            .serverTimestamp()
+      },
+      {
+        merge: true
+      }
+    );
+
+
+    if (status) {
+      status.textContent =
+        `Cloud synced • ${records.length} engineer${
+          records.length === 1
+            ? ""
+            : "s"
+        } stored in Firebase.`;
+    }
+
+
+    return {
+      synced: true
+    };
+  } catch (error) {
+    console.error(
+      "H&S register Firebase sync failed:",
+      error
+    );
+
+
+    if (status) {
+      status.textContent =
+        "H&S register cloud sync failed.";
+    }
+
+
+    return {
+      synced: false,
+      reason: "error",
+      error
+    };
+  }
+}
+
+async function saveHsAuditPendingUpdatesToCloud() {
+  /*
+    Always save locally first.
+  */
+  saveHsAuditPendingUpdatesLocal();
+
+
+  if (!cloudSignedIn()) {
+    return {
+      saved: false,
+      reason: "not-signed-in"
+    };
+  }
+
+
+  try {
+    const user =
+      getUser();
+
+
+    await hsAuditRegisterMetaRef(
+      user.uid
+    ).set(
+      {
+        pendingExcelUpdates:
+          hsAuditPendingUpdates,
+
+        pendingExcelUpdatesUpdatedAt:
+          firebase
+            .firestore
+            .FieldValue
+            .serverTimestamp()
+      },
+      {
+        merge: true
+      }
+    );
+
+
+    return {
+      saved: true
+    };
+  } catch (error) {
+    console.error(
+      "H&S pending Excel updates Firebase sync failed:",
+      error
+    );
+
+
+    return {
+      saved: false,
+      reason: "error",
+      error
+    };
+  }
+}
+
+async function loadHsAuditHistoryFromCloud() {
+  if (!cloudSignedIn()) {
+    return false;
+  }
+
+
+  try {
+    const user =
+      getUser();
+
+
+    const snapshot =
+      await hsAuditHistoryCloudCol(
+        user.uid
+      ).get();
+
+
+    if (
+      snapshot.empty
+    ) {
+      /*
+        If Firebase has no history yet,
+        upload any local records.
+      */
+      for (
+        const audit of
+        hsAuditHistory
+      ) {
+        await saveHsAuditRecordToCloud(
+          audit
+        );
+      }
+
+
+      return true;
+    }
+
+
+    const merged =
+      new Map();
+
+
+    hsAuditHistory.forEach(
+      audit => {
+        if (audit.id) {
+          merged.set(
+            audit.id,
+            audit
+          );
+        }
+      }
+    );
+
+
+    snapshot.docs.forEach(
+      document => {
+        const data =
+          document.data() ||
+          {};
+
+
+        const {
+          updatedAt,
+          ...audit
+        } = data;
+
+
+        merged.set(
+          document.id,
+          {
+            ...audit,
+
+            id:
+              audit.id ||
+              document.id
+          }
+        );
+      }
+    );
+
+
+    hsAuditHistory =
+      Array.from(
+        merged.values()
+      );
+
+
+    saveHsAuditHistoryLocal();
+
+
+    return true;
+  } catch (error) {
+    console.error(
+      "H&S audit history could not be loaded from Firebase:",
+      error
+    );
+
+
+    return false;
+  }
+}
+async function loadHsAuditRegisterFromCloud() {
+  if (!cloudSignedIn()) {
+    return false;
+  }
+
+
+  try {
+    const user =
+      getUser();
+
+
+    const [
+      registerSnapshot,
+      metaSnapshot
+    ] =
+      await Promise.all([
+        hsAuditRegisterCloudCol(
+          user.uid
+        ).get(),
+
+        hsAuditRegisterMetaRef(
+          user.uid
+        ).get()
+      ]);
+
+
+    /*
+      If Firebase already contains the
+      register, use it as the current
+      working register on this device.
+    */
+    if (
+      !registerSnapshot.empty
+    ) {
+      hsAuditRegisterState.records =
+        registerSnapshot.docs.map(
+          document => {
+            const data =
+              document.data() ||
+              {};
+
+
+            /*
+              Do not retain Firestore's
+              server timestamp inside our
+              local register.
+            */
+            const {
+              updatedAt,
+              ...record
+            } = data;
+
+
+            return {
+              ...record,
+
+              id:
+                record.id ||
+                document.id
+            };
+          }
+        );
+
+
+      saveHsAuditRegisterState();
+    } else if (
+      hsAuditRegisterState.records
+        ?.length
+    ) {
+      /*
+        Cloud is empty but this device has
+        a register. Upload it rather than
+        throwing the local register away.
+      */
+      await syncHsAuditRegisterToCloud();
+    }
+
+
+    if (
+      metaSnapshot.exists
+    ) {
+      const data =
+        metaSnapshot.data() ||
+        {};
+
+
+      if (
+        data.importMeta &&
+        typeof data.importMeta ===
+          "object"
+      ) {
+        hsAuditRegisterState.importMeta =
+          data.importMeta;
+      }
+
+
+      if (
+        Array.isArray(
+          data.pendingExcelUpdates
+        )
+      ) {
+        hsAuditPendingUpdates =
+          data.pendingExcelUpdates;
+
+
+        saveHsAuditPendingUpdatesLocal();
+      }
+    }
+
+
+    saveHsAuditRegisterState();
+
+
+    renderHsAuditRegister();
+
+    renderHsAuditPendingUpdates();
+
+
+    const status =
+      el(
+        "hsAuditCloudStatus"
+      );
+
+
+    if (status) {
+      status.textContent =
+        `Cloud loaded • ${
+          hsAuditRegisterState.records
+            .length
+        } engineer${
+          hsAuditRegisterState.records
+            .length === 1
+            ? ""
+            : "s"
+        }.`;
+    }
+
+
+    return true;
+  } catch (error) {
+    console.error(
+      "H&S register could not be loaded from Firebase:",
+      error
+    );
+
+
+    const status =
+      el(
+        "hsAuditCloudStatus"
+      );
+
+
+    if (status) {
+      status.textContent =
+        "H&S register cloud load failed.";
+    }
+
+
+    return false;
+  }
+}
+function getFilteredHsAuditRegisterRecords() {
+  const statusFilter =
+    el(
+      "hsAuditStatusFilter"
+    )?.value || "";
+
+
+  const search =
+    String(
+      el(
+        "hsAuditSearch"
+      )?.value || ""
+    )
+      .trim()
+      .toLowerCase();
+
+
+  return (
+    hsAuditRegisterState.records ||
+    []
+  )
+    .filter(
+      record => {
+        const status =
+          getHsAuditScheduleStatus(
+            record.lastInspectionDate
+          );
+
+
+        if (
+          statusFilter &&
+          status.key !==
+            statusFilter
+        ) {
+          return false;
+        }
+
+
+        if (search) {
+          const haystack =
+            `
+              ${record.engineer || ""}
+              ${record.clockNumber || ""}
+              ${record.gasSafeNumber || ""}
+              ${record.vehicleReg || ""}
+              ${record.telescopics || ""}
+              ${record.steps || ""}
+              ${record.hopUp || ""}
+              ${record.firstAidKit || ""}
+              ${record.fireExtinguisher || ""}
+              ${record.notes || ""}
+            `
+              .toLowerCase();
+
+
+          if (
+            !haystack.includes(
+              search
+            )
+          ) {
+            return false;
+          }
+        }
+
+
+        return true;
+      }
+    )
+    .sort(
+      (a, b) => {
+        const statusA =
+          getHsAuditScheduleStatus(
+            a.lastInspectionDate
+          );
+
+        const statusB =
+          getHsAuditScheduleStatus(
+            b.lastInspectionDate
+          );
+
+
+        if (
+          statusA.sort !==
+          statusB.sort
+        ) {
+          return (
+            statusA.sort -
+            statusB.sort
+          );
+        }
+
+
+        const dueA =
+          getHsAuditDueMonth(
+            a.lastInspectionDate
+          )?.key || "";
+
+        const dueB =
+          getHsAuditDueMonth(
+            b.lastInspectionDate
+          )?.key || "";
+
+
+        return (
+          dueA.localeCompare(
+            dueB
+          ) ||
+          String(
+            a.engineer || ""
+          ).localeCompare(
+            String(
+              b.engineer || ""
+            )
+          )
+        );
+      }
+    );
+}
+
+
+function getHsAuditRegisterCounts() {
+  const counts = {
+    total: 0,
+    current: 0,
+    due: 0,
+    overdue: 0
+  };
+
+
+  (
+    hsAuditRegisterState.records ||
+    []
+  ).forEach(
+    record => {
+      counts.total++;
+
+
+      const status =
+        getHsAuditScheduleStatus(
+          record.lastInspectionDate
+        );
+
+
+      if (
+        Object.prototype
+          .hasOwnProperty.call(
+            counts,
+            status.key
+          )
+      ) {
+        counts[
+          status.key
+        ]++;
+      }
+    }
+  );
+
+
+  return counts;
+}
+
+
+function renderHsAuditRegister() {
+  const records =
+    hsAuditRegisterState.records ||
+    [];
+
+
+  const filtered =
+    getFilteredHsAuditRegisterRecords();
+
+
+  const counts =
+    getHsAuditRegisterCounts();
+
+
+  const kpis =
+    el(
+      "hsAuditKpis"
+    );
+
+
+  if (kpis) {
+    kpis.innerHTML = `
+      <button
+        type="button"
+        class="hs-calibration-kpi"
+        data-hs-audit-status=""
+      >
+        <span>Engineers</span>
+        <strong>${counts.total}</strong>
+      </button>
+
+      <button
+        type="button"
+        class="
+          hs-calibration-kpi
+          hs-calibration-kpi-good
+        "
+        data-hs-audit-status="current"
+      >
+        <span>Current</span>
+        <strong>${counts.current}</strong>
+      </button>
+
+      <button
+        type="button"
+        class="
+          hs-calibration-kpi
+          hs-calibration-kpi-warning
+        "
+        data-hs-audit-status="due"
+      >
+        <span>Due this month</span>
+        <strong>${counts.due}</strong>
+      </button>
+
+      <button
+        type="button"
+        class="
+          hs-calibration-kpi
+          hs-calibration-kpi-danger
+        "
+        data-hs-audit-status="overdue"
+      >
+        <span>Overdue</span>
+        <strong>${counts.overdue}</strong>
+      </button>
+    `;
+
+
+    kpis
+      .querySelectorAll(
+        "[data-hs-audit-status]"
+      )
+      .forEach(
+        button => {
+          button.addEventListener(
+            "click",
+            () => {
+              const select =
+                el(
+                  "hsAuditStatusFilter"
+                );
+
+
+              if (!select) {
+                return;
+              }
+
+
+              select.value =
+                button.dataset
+                  .hsAuditStatus ||
+                "";
+
+
+              renderHsAuditRegister();
+            }
+          );
+        }
+      );
+  }
+
+
+  const countElement =
+    el(
+      "hsAuditRecordCount"
+    );
+
+
+  if (countElement) {
+    countElement.textContent =
+      `${filtered.length} of ` +
+      `${records.length} engineer${
+        records.length === 1
+          ? ""
+          : "s"
+      } shown`;
+  }
+
+
+  const importStatus =
+    el(
+      "hsAuditImportStatus"
+    );
+
+
+  if (importStatus) {
+    const meta =
+      hsAuditRegisterState
+        .importMeta;
+
+
+    if (!meta) {
+      importStatus.textContent =
+        "No H&S audit workbook imported.";
+    } else {
+      const imported =
+        new Date(
+          meta.importedAt
+        );
+
+
+      importStatus.textContent =
+        `Last refreshed: ${
+          Number.isNaN(
+            imported.getTime()
+          )
+            ? "Unknown"
+            : imported
+                .toLocaleString(
+                  "en-GB"
+                )
+        } • ` +
+        `${meta.recordCount} engineers • ` +
+        `${meta.fileName} • ` +
+        `Sheet: ${meta.sheetName}`;
+    }
+  }
+
+
+  const body =
+    el(
+      "hsAuditTableBody"
+    );
+
+
+  if (!body) {
+    return;
+  }
+
+
+  if (!filtered.length) {
+    body.innerHTML = `
+      <tr>
+        <td
+          colspan="14"
+          class="hs-calibration-empty"
+        >
+          ${
+            records.length
+              ? "No engineers match the selected filters."
+              : "Import your H&S register workbook to build the register."
+          }
+        </td>
+      </tr>
+    `;
+
+    return;
+  }
+
+
+  body.innerHTML =
+    filtered
+      .map(
+        record => {
+          const due =
+            getHsAuditDueMonth(
+              record.lastInspectionDate
+            );
+
+
+          const status =
+            getHsAuditScheduleStatus(
+              record.lastInspectionDate
+            );
+
+
+          return `
+            <tr>
+
+              <td>
+                <strong>
+                  ${escapeHtml(
+                    record.engineer ||
+                    "—"
+                  )}
+                </strong>
+              </td>
+
+              <td>
+                ${escapeHtml(
+                  record.clockNumber ||
+                  "—"
+                )}
+              </td>
+
+              <td>
+                ${escapeHtml(
+                  record.gasSafeNumber ||
+                  "—"
+                )}
+              </td>
+
+              <td>
+                ${escapeHtml(
+                  record.vehicleReg ||
+                  "—"
+                )}
+              </td>
+
+              <td>
+                ${escapeHtml(
+                  record.lastInspectionDate
+                    ? formatDate(
+                        record.lastInspectionDate
+                      )
+                    : "—"
+                )}
+              </td>
+
+              <td>
+                <strong>
+                  ${escapeHtml(
+                    due?.label ||
+                    "—"
+                  )}
+                </strong>
+              </td>
+
+              <td>
+                <span
+                  class="
+                    hs-calibration-status
+                    hs-calibration-status-${status.tone}
+                  "
+                >
+                  ${escapeHtml(
+                    status.label
+                  )}
+                </span>
+              </td>
+
+              <td>
+                ${escapeHtml(
+                  record.telescopics ||
+                  "—"
+                )}
+              </td>
+
+              <td>
+                ${escapeHtml(
+                  record.steps ||
+                  "—"
+                )}
+              </td>
+
+              <td>
+                ${escapeHtml(
+                  record.hopUp ||
+                  "—"
+                )}
+              </td>
+
+              <td>
+                ${escapeHtml(
+                  record.firstAidKit ||
+                  "—"
+                )}
+              </td>
+
+              <td>
+                ${escapeHtml(
+                  record.fireExtinguisher ||
+                  "—"
+                )}
+              </td>
+
+                           <td>
+                ${escapeHtml(
+                  record.notes ||
+                  "—"
+                )}
+              </td>
+
+              <td>
+  <div class="hs-audit-row-actions">
+
+    <button
+      type="button"
+      class="btn small"
+      data-hs-record-audit="${escapeHtml(
+        record.id
+      )}"
+    >
+      Record Audit
+    </button>
+
+    <button
+      type="button"
+      class="btn ghost small"
+      data-hs-audit-edit="${escapeHtml(
+        record.id
+      )}"
+    >
+      Edit
+    </button>
+
+  </div>
+</td>
+
+            </tr>
+          `;
+        }
+           )
+      .join("");
+
+body
+  .querySelectorAll(
+    "[data-hs-record-audit]"
+  )
+  .forEach(
+    button => {
+      button.addEventListener(
+        "click",
+        () => {
+          openHsAuditRecordModal(
+            button.dataset
+              .hsRecordAudit
+          );
+        }
+      );
+    }
+  );
+  body
+    .querySelectorAll(
+      "[data-hs-audit-edit]"
+    )
+    .forEach(
+      button => {
+        button.addEventListener(
+          "click",
+          () => {
+            openHsAuditEditor(
+              button.dataset
+                .hsAuditEdit
+            );
+          }
+        );
+      }
+    );
+}
 function findOptionalHsCalibrationColumn(
   headerRow,
   alternatives
@@ -22542,7 +25799,66 @@ function importHsCalibrationRecords(
   };
 }
 
+function applyPendingHsCalibrationUpdates(
+  records
+) {
+  const result =
+    (records || []).map(
+      record => ({
+        ...record
+      })
+    );
 
+
+  hsCalibrationPendingUpdates
+    .slice()
+    .sort(
+      (a, b) =>
+        String(
+          a.changedAt || ""
+        ).localeCompare(
+          String(
+            b.changedAt || ""
+          )
+        )
+    )
+    .forEach(
+      update => {
+        const record =
+          result.find(
+            item =>
+              item.analyserCode ===
+              update.analyserCode
+          );
+
+
+        if (!record) {
+          return;
+        }
+
+
+        if (
+          update.field ===
+          "engineer"
+        ) {
+          record.engineer =
+            update.newValue;
+        }
+
+
+        if (
+          update.field ===
+          "dueDate"
+        ) {
+          record.dueDate =
+            update.newValue;
+        }
+      }
+    );
+
+
+  return result;
+}
 async function importHsCalibrationWorkbook(
   file
 ) {
@@ -22590,7 +25906,9 @@ async function importHsCalibrationWorkbook(
     previous register completely.
   */
   hsCalibrationState.records =
-    result.records;
+  applyPendingHsCalibrationUpdates(
+    result.records
+  );
 
   hsCalibrationState.importMeta = {
     fileName:
@@ -23033,7 +26351,633 @@ function renderHsCalibrationOverview() {
     });
 }
 
+function updateHsCalibrationPendingBadge() {
+  const badge =
+    el(
+      "hsCalibrationPendingCount"
+    );
 
+
+  if (!badge) {
+    return;
+  }
+
+
+  const count =
+    hsCalibrationPendingUpdates
+      .length;
+
+
+  badge.textContent =
+    String(count);
+
+
+  badge.classList.toggle(
+    "hidden",
+    count === 0
+  );
+}
+
+
+function formatHsCalibrationPendingField(
+  field
+) {
+  if (
+    field === "engineer"
+  ) {
+    return "Assigned engineer";
+  }
+
+
+  if (
+    field === "dueDate"
+  ) {
+    return "Calibration due";
+  }
+
+
+  return field;
+}
+
+
+function formatHsCalibrationPendingValue(
+  field,
+  value
+) {
+  if (
+    field === "dueDate"
+  ) {
+    return value
+      ? formatDate(value)
+      : "—";
+  }
+
+
+  return String(
+    value || "—"
+  );
+}
+
+
+function renderHsCalibrationPendingUpdates() {
+  updateHsCalibrationPendingBadge();
+
+
+  const body =
+    el(
+      "hsCalibrationPendingTableBody"
+    );
+
+
+  const empty =
+    el(
+      "hsCalibrationPendingEmpty"
+    );
+
+
+  const wrap =
+    el(
+      "hsCalibrationPendingTableWrap"
+    );
+
+
+  const markAllButton =
+    el(
+      "hsCalibrationMarkAllCompleteBtn"
+    );
+
+
+  const pending =
+    hsCalibrationPendingUpdates
+      .slice()
+      .sort(
+        (a, b) =>
+          String(
+            b.changedAt || ""
+          ).localeCompare(
+            String(
+              a.changedAt || ""
+            )
+          )
+      );
+
+
+  if (empty) {
+    empty.classList.toggle(
+      "hidden",
+      pending.length > 0
+    );
+  }
+
+
+  if (wrap) {
+    wrap.classList.toggle(
+      "hidden",
+      pending.length === 0
+    );
+  }
+
+
+  if (markAllButton) {
+    markAllButton.disabled =
+      pending.length === 0;
+  }
+
+
+  if (!body) {
+    return;
+  }
+
+
+  body.innerHTML =
+    pending
+      .map(
+        update => {
+          const changed =
+            update.changedAt
+              ? new Date(
+                  update.changedAt
+                ).toLocaleString(
+                  "en-GB"
+                )
+              : "—";
+
+
+          return `
+            <tr>
+              <td>
+                ${escapeHtml(
+                  changed
+                )}
+              </td>
+
+              <td>
+                <strong>
+                  ${escapeHtml(
+                    update.analyserCode ||
+                    "—"
+                  )}
+                </strong>
+              </td>
+
+              <td>
+                ${escapeHtml(
+                  formatHsCalibrationPendingField(
+                    update.field
+                  )
+                )}
+              </td>
+
+              <td>
+                ${escapeHtml(
+                  formatHsCalibrationPendingValue(
+                    update.field,
+                    update.oldValue
+                  )
+                )}
+              </td>
+
+              <td>
+                <strong>
+                  ${escapeHtml(
+                    formatHsCalibrationPendingValue(
+                      update.field,
+                      update.newValue
+                    )
+                  )}
+                </strong>
+              </td>
+
+              <td>
+                <button
+                  type="button"
+                  class="btn ghost small"
+                  data-calibration-update-complete="${escapeHtml(
+                    update.id
+                  )}"
+                >
+                  Updated in Excel
+                </button>
+              </td>
+            </tr>
+          `;
+        }
+      )
+      .join("");
+
+
+  body
+    .querySelectorAll(
+      "[data-calibration-update-complete]"
+    )
+    .forEach(
+      button => {
+        button.addEventListener(
+          "click",
+          async () => {
+            const id =
+              button.dataset
+                .calibrationUpdateComplete;
+
+
+            hsCalibrationPendingUpdates =
+              hsCalibrationPendingUpdates
+                .filter(
+                  update =>
+                    update.id !== id
+                );
+
+
+            await saveHsCalibrationPendingUpdatesToCloud();
+
+
+            renderHsCalibrationPendingUpdates();
+          }
+        );
+      }
+    );
+}
+
+
+function openHsCalibrationEdit(
+  recordId
+) {
+  const record =
+    (
+      hsCalibrationState.records ||
+      []
+    ).find(
+      item =>
+        item.id ===
+        recordId
+    );
+
+
+  if (!record) {
+    return;
+  }
+
+
+  el(
+    "hsCalibrationEditRecordId"
+  ).value =
+    record.id;
+
+
+  el(
+    "hsCalibrationEditCode"
+  ).value =
+    record.analyserCode ||
+    "";
+
+
+  el(
+    "hsCalibrationEditModel"
+  ).value =
+    record.model ||
+    "";
+
+
+  el(
+    "hsCalibrationEditEngineer"
+  ).value =
+    record.engineer ||
+    "";
+
+
+  el(
+    "hsCalibrationEditDueDate"
+  ).value =
+    record.dueDate ||
+    "";
+
+
+  const status =
+    el(
+      "hsCalibrationEditStatus"
+    );
+
+
+  if (status) {
+    status.textContent = "";
+    status.className =
+      "hs-alert-save-status";
+  }
+
+
+  el(
+    "hsCalibrationEditModal"
+  )?.classList.remove(
+    "hidden"
+  );
+}
+
+
+function closeHsCalibrationEdit() {
+  el(
+    "hsCalibrationEditModal"
+  )?.classList.add(
+    "hidden"
+  );
+}
+
+
+async function saveHsCalibrationEdit() {
+  const recordId =
+    el(
+      "hsCalibrationEditRecordId"
+    )?.value;
+
+
+  const record =
+    (
+      hsCalibrationState.records ||
+      []
+    ).find(
+      item =>
+        item.id ===
+        recordId
+    );
+
+
+  if (!record) {
+    return;
+  }
+
+
+  const newEngineer =
+    String(
+      el(
+        "hsCalibrationEditEngineer"
+      )?.value || ""
+    ).trim();
+
+
+  const newDueDate =
+    String(
+      el(
+        "hsCalibrationEditDueDate"
+      )?.value || ""
+    ).trim();
+
+
+  const status =
+    el(
+      "hsCalibrationEditStatus"
+    );
+
+
+  if (!newDueDate) {
+    if (status) {
+      status.textContent =
+        "Calibration due date is required.";
+
+      status.className =
+        "hs-alert-save-status hs-alert-save-error";
+    }
+
+    return;
+  }
+
+
+  const changes =
+    [];
+
+
+  if (
+    newEngineer !==
+    String(
+      record.engineer || ""
+    )
+  ) {
+    changes.push({
+      field: "engineer",
+      oldValue:
+        record.engineer || "",
+      newValue:
+        newEngineer
+    });
+  }
+
+
+  if (
+    newDueDate !==
+    String(
+      record.dueDate || ""
+    )
+  ) {
+    changes.push({
+      field: "dueDate",
+      oldValue:
+        record.dueDate || "",
+      newValue:
+        newDueDate
+    });
+  }
+
+
+  if (!changes.length) {
+    if (status) {
+      status.textContent =
+        "No changes were made.";
+
+      status.className =
+        "hs-alert-save-status hs-alert-save-warning";
+    }
+
+    return;
+  }
+
+
+  const changedAt =
+    new Date()
+      .toISOString();
+
+
+  changes.forEach(
+    change => {
+      /*
+        If the same analyser/field already
+        has a pending update, retain the
+        original Excel value but update
+        the newest value.
+
+        Example:
+        Excel = Smith
+        App change = Jones
+        App change again = Porter
+
+        Pending update remains:
+        Smith -> Porter
+      */
+      const existing =
+        hsCalibrationPendingUpdates
+          .find(
+            update =>
+              update.analyserCode ===
+                record.analyserCode &&
+              update.field ===
+                change.field
+          );
+
+
+      if (existing) {
+        existing.newValue =
+          change.newValue;
+
+        existing.changedAt =
+          changedAt;
+
+        existing.sourceFile =
+          record.sourceFile ||
+          "";
+      } else {
+        hsCalibrationPendingUpdates
+          .push({
+            id:
+              `hs-cal-change-${uid()}`,
+
+            analyserCode:
+              record.analyserCode,
+
+            field:
+              change.field,
+
+            oldValue:
+              change.oldValue,
+
+            newValue:
+              change.newValue,
+
+            changedAt,
+
+            sourceFile:
+              record.sourceFile ||
+              ""
+          });
+      }
+    }
+  );
+
+
+  record.engineer =
+    newEngineer;
+
+
+  record.dueDate =
+    newDueDate;
+
+
+  saveHsCalibrationState();
+
+  saveHsCalibrationPendingUpdatesLocal();
+
+
+  renderHsCalibration();
+
+  renderHsCalibrationPendingUpdates();
+
+
+  if (status) {
+    status.textContent =
+      "Saving changes…";
+
+    status.className =
+      "hs-alert-save-status";
+  }
+
+
+  const [
+    registerResult,
+    pendingResult
+  ] =
+    await Promise.all([
+      syncHsCalibrationToCloud(),
+      saveHsCalibrationPendingUpdatesToCloud()
+    ]);
+
+
+  if (
+    registerResult.synced &&
+    pendingResult.saved
+  ) {
+    if (status) {
+      status.textContent =
+        "Changes saved to Firebase and added to Pending Excel Updates.";
+
+      status.className =
+        "hs-alert-save-status hs-alert-save-good";
+    }
+
+
+    setTimeout(
+      closeHsCalibrationEdit,
+      900
+    );
+  } else if (status) {
+    status.textContent =
+      "Changes saved locally. Firebase sync needs attention.";
+
+    status.className =
+      "hs-alert-save-status hs-alert-save-warning";
+  }
+}
+
+
+function openHsCalibrationPendingUpdates() {
+  renderHsCalibrationPendingUpdates();
+
+
+  el(
+    "hsCalibrationPendingModal"
+  )?.classList.remove(
+    "hidden"
+  );
+}
+
+
+function closeHsCalibrationPendingUpdates() {
+  el(
+    "hsCalibrationPendingModal"
+  )?.classList.add(
+    "hidden"
+  );
+}
+
+
+async function markAllHsCalibrationUpdatesComplete() {
+  if (
+    !hsCalibrationPendingUpdates
+      .length
+  ) {
+    return;
+  }
+
+
+  const confirmed =
+    confirm(
+      `Mark all ${hsCalibrationPendingUpdates.length} pending calibration update${
+        hsCalibrationPendingUpdates.length === 1
+          ? ""
+          : "s"
+      } as transferred to Excel?`
+    );
+
+
+  if (!confirmed) {
+    return;
+  }
+
+
+  hsCalibrationPendingUpdates =
+    [];
+
+
+  await saveHsCalibrationPendingUpdatesToCloud();
+
+
+  renderHsCalibrationPendingUpdates();
+}
 function renderHsCalibration() {
   populateHsCalibrationFilters();
 
@@ -23196,7 +27140,7 @@ function renderHsCalibration() {
       tableBody.innerHTML = `
         <tr>
           <td
-            colspan="7"
+            colspan="8"
             class="hs-calibration-empty"
           >
             ${
@@ -23274,7 +27218,7 @@ function renderHsCalibration() {
                   </span>
                 </td>
 
-                <td>
+                               <td>
                   ${
                     record.email
                       ? `
@@ -23292,10 +27236,41 @@ function renderHsCalibration() {
                       : "—"
                   }
                 </td>
+
+                <td>
+                  <button
+                    type="button"
+                    class="btn ghost small hs-calibration-edit-btn"
+                    data-calibration-edit="${escapeHtml(
+                      record.id
+                    )}"
+                  >
+                    Edit
+                  </button>
+                </td>
               </tr>
             `;
-          })
+                })
           .join("");
+
+
+      tableBody
+        .querySelectorAll(
+          "[data-calibration-edit]"
+        )
+        .forEach(
+          button => {
+            button.addEventListener(
+              "click",
+              () => {
+                openHsCalibrationEdit(
+                  button.dataset
+                    .calibrationEdit
+                );
+              }
+            );
+          }
+        );
     }
   }
 
@@ -23674,6 +27649,65 @@ function initHsCalibrationAlertSettings() {
 function initHsCalibration() {
   initHsCalibrationAlertSettings();
 
+
+  el(
+    "hsCalibrationPendingBtn"
+  )?.addEventListener(
+    "click",
+    openHsCalibrationPendingUpdates
+  );
+
+
+  el(
+    "hsCalibrationEditCloseBtn"
+  )?.addEventListener(
+    "click",
+    closeHsCalibrationEdit
+  );
+
+
+  el(
+    "hsCalibrationEditCancelBtn"
+  )?.addEventListener(
+    "click",
+    closeHsCalibrationEdit
+  );
+
+
+  el(
+    "hsCalibrationEditSaveBtn"
+  )?.addEventListener(
+    "click",
+    saveHsCalibrationEdit
+  );
+
+
+  el(
+    "hsCalibrationPendingCloseBtn"
+  )?.addEventListener(
+    "click",
+    closeHsCalibrationPendingUpdates
+  );
+
+
+  el(
+    "hsCalibrationPendingCloseFooterBtn"
+  )?.addEventListener(
+    "click",
+    closeHsCalibrationPendingUpdates
+  );
+
+
+  el(
+    "hsCalibrationMarkAllCompleteBtn"
+  )?.addEventListener(
+    "click",
+    markAllHsCalibrationUpdatesComplete
+  );
+
+
+  renderHsCalibrationPendingUpdates();
+
 setTimeout(
   checkHsCalibrationStartupAlerts,
   700
@@ -23815,7 +27849,4632 @@ alert(
   renderHsCalibration();
 }
 
+// =========================================================
+// H&S WARNING NOTICE COMPLIANCE
+// =========================================================
+const hsWarningManagerState = {
+  selectedIds:
+    new Set(),
 
+  source: "",
+
+  engineer: "",
+
+  result: "",
+
+  search: ""
+};
+const hsWarningFilters = {
+  period: "all",
+  dateFrom: "",
+  dateTo: "",
+  engineer: "",
+  result: "",
+  source: "",
+  search: ""
+};
+
+
+function normalizeHsWarningResult(
+  value
+) {
+  const text =
+    String(value || "")
+      .trim()
+      .toUpperCase();
+
+  if (
+    text.includes("FAIL") ||
+    text === "NO" ||
+    text === "INCORRECT"
+  ) {
+    return "FAIL";
+  }
+
+  if (
+    text.includes("PASS") ||
+    text === "YES" ||
+    text === "CORRECT"
+  ) {
+    return "PASS";
+  }
+
+  return "";
+}
+
+
+function hsWarningSourceKey(
+  filename
+) {
+  return String(
+    filename || ""
+  )
+    .trim()
+    .toLowerCase();
+}
+
+
+function findOptionalHsWarningColumn(
+  headerRow,
+  alternatives
+) {
+  const normalized =
+    (headerRow || []).map(
+      value =>
+        normalizeWorkbookText(
+          value
+        )
+    );
+
+  for (
+    const alternative of
+    alternatives
+  ) {
+    const target =
+      normalizeWorkbookText(
+        alternative
+      );
+
+    const index =
+      normalized.findIndex(
+        value =>
+          value === target ||
+          value.includes(target)
+      );
+
+    if (index >= 0) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+
+function locateHsWarningSheet(
+  workbook
+) {
+  for (
+    const sheetName of
+    workbook.SheetNames || []
+  ) {
+    const sheet =
+      workbook.Sheets[
+        sheetName
+      ];
+
+    const rows =
+      workbookRows(
+        sheet
+      );
+
+    const header =
+      findWorkbookHeader(
+        rows,
+        {
+          address: [
+            "address",
+            "property address"
+          ],
+
+          engineer: [
+            "engineer",
+            "engineer name"
+          ],
+
+          result: [
+            "compliant pass/fail",
+            "compliant pass fail",
+            "pass/fail",
+            "pass fail",
+            "compliant",
+            "result"
+          ]
+        }
+      );
+
+    if (header) {
+      return {
+        sheetName,
+        rows,
+        header
+      };
+    }
+  }
+
+  return null;
+}
+
+
+function importHsWarningRecordsFromWorkbook(
+  workbook,
+  sourceFileName
+) {
+  const located =
+    locateHsWarningSheet(
+      workbook
+    );
+
+  if (!located) {
+    throw new Error(
+      "Could not find a Warning Notice sheet containing Address, Engineer and PASS/FAIL columns."
+    );
+  }
+
+
+  const {
+    sheetName,
+    rows,
+    header
+  } = located;
+
+
+  const headerRow =
+    rows[
+      header.rowIndex
+    ] || [];
+
+
+  const dateColumn =
+    findOptionalHsWarningColumn(
+      headerRow,
+      [
+        "date",
+        "inspection date",
+        "checked date"
+      ]
+    );
+
+
+ const addressColumn =
+  header.indexes.address;
+
+
+const engineerColumn =
+  header.indexes.engineer;
+
+
+const resultColumn =
+  header.indexes.result;
+
+
+  const reasonColumn =
+    findOptionalHsWarningColumn(
+      headerRow,
+      [
+        "reason",
+        "comments",
+        "comment",
+        "failure reason",
+        "details"
+      ]
+    );
+
+
+  const sourceFileKey =
+    hsWarningSourceKey(
+      sourceFileName
+    );
+
+
+  const imported = [];
+
+
+  for (
+    let rowIndex =
+      header.rowIndex + 1;
+
+    rowIndex <
+      rows.length;
+
+    rowIndex++
+  ) {
+    const row =
+      rows[rowIndex] || [];
+
+
+    const date =
+      dateColumn >= 0
+        ? workbookDateToIso(
+            row[
+              dateColumn
+            ]
+          )
+        : "";
+
+
+    const address =
+      String(
+        row[
+          addressColumn
+        ] || ""
+      ).trim();
+
+
+    const engineer =
+      String(
+        row[
+          engineerColumn
+        ] || ""
+      ).trim();
+
+
+    const result =
+      normalizeHsWarningResult(
+        row[
+          resultColumn
+        ]
+      );
+
+
+    const reason =
+      reasonColumn >= 0
+        ? String(
+            row[
+              reasonColumn
+            ] || ""
+          ).trim()
+        : "";
+
+
+    /*
+      Ignore blank / summary-table rows.
+    */
+    if (
+      !address ||
+      !engineer ||
+      !result
+    ) {
+      continue;
+    }
+
+
+    const recordId =
+      [
+        "hs-warning",
+        sourceFileKey,
+        date || "no-date",
+        normalizePerformanceSourceName(
+          engineer
+        ),
+        normalizePerformanceSourceName(
+          address
+        ),
+        rowIndex
+      ].join("-");
+
+
+    imported.push({
+      id:
+        recordId,
+
+      date,
+
+      address,
+
+      engineer,
+
+      result,
+
+      reason,
+
+      sourceFile:
+        sourceFileName,
+
+      sourceFileKey,
+
+      sourceSheet:
+        sheetName,
+
+      sourceRow:
+        rowIndex + 1
+    });
+  }
+
+
+  if (!imported.length) {
+    throw new Error(
+      "The Warning Notice sheet was found, but no valid compliance records could be imported."
+    );
+  }
+
+
+  return {
+    records:
+      imported,
+
+    sheetName
+  };
+}
+
+
+async function importHsWarningWorkbook(
+  file
+) {
+  const buffer =
+    await file.arrayBuffer();
+
+
+  const workbook =
+    window.XLSX.read(
+      buffer,
+      {
+        type: "array",
+        cellDates: true
+      }
+    );
+
+
+  const result =
+    importHsWarningRecordsFromWorkbook(
+      workbook,
+      file.name
+    );
+
+
+  const sourceFileKey =
+    hsWarningSourceKey(
+      file.name
+    );
+
+
+  /*
+    Warning Notices are historical.
+
+    Re-importing the SAME workbook
+    replaces records belonging to that
+    workbook only.
+
+    Other previously imported workbooks
+    remain untouched.
+  */
+  const retained =
+    (
+      hsWarningState.records ||
+      []
+    ).filter(
+      record =>
+        record.sourceFileKey !==
+        sourceFileKey
+    );
+
+
+  hsWarningState.records =
+    [
+      ...retained,
+      ...result.records
+    ];
+
+
+  hsWarningState.importMeta = {
+    ...(hsWarningState.importMeta ||
+      {}),
+
+    lastFileName:
+      file.name,
+
+    lastSheetName:
+      result.sheetName,
+
+    lastImportedAt:
+      new Date()
+        .toISOString(),
+
+    lastImportCount:
+      result.records.length,
+
+    totalCount:
+      hsWarningState.records
+        .length
+  };
+
+
+  saveHsWarningState();
+
+
+  renderHsWarningNotices();
+
+
+  return {
+    count:
+      result.records.length,
+
+    sheetName:
+      result.sheetName
+  };
+}
+
+
+function setHsWarningCloudStatus(
+  message,
+  state = ""
+) {
+  const element =
+    el(
+      "hsWarningCloudStatus"
+    );
+
+  if (!element) {
+    return;
+  }
+
+
+  element.textContent =
+    message;
+
+
+  element.classList.remove(
+    "hs-cloud-good",
+    "hs-cloud-warning",
+    "hs-cloud-error"
+  );
+
+
+  if (state === "good") {
+    element.classList.add(
+      "hs-cloud-good"
+    );
+  }
+
+
+  if (state === "warning") {
+    element.classList.add(
+      "hs-cloud-warning"
+    );
+  }
+
+
+  if (state === "error") {
+    element.classList.add(
+      "hs-cloud-error"
+    );
+  }
+}
+
+
+async function syncHsWarningNoticesToCloud() {
+  if (!cloudSignedIn()) {
+    setHsWarningCloudStatus(
+      "Local only • Log in to sync Warning Notice data to Firebase.",
+      "warning"
+    );
+
+    return {
+      synced: false,
+      reason:
+        "not-signed-in"
+    };
+  }
+
+
+  try {
+    const user =
+      getUser();
+
+
+    const collection =
+      hsWarningNoticesCloudCol(
+        user.uid
+      );
+
+
+    /*
+      Cloud mirrors the entire historical
+      Warning Notice register currently
+      stored by this app.
+    */
+    const existingSnapshot =
+      await collection.get();
+
+
+    const currentIds =
+      new Set(
+        (
+          hsWarningState.records ||
+          []
+        )
+          .map(
+            record =>
+              String(
+                record.id || ""
+              )
+          )
+          .filter(Boolean)
+      );
+
+
+    const operations = [];
+
+
+    existingSnapshot.docs.forEach(
+      document => {
+        if (
+          !currentIds.has(
+            document.id
+          )
+        ) {
+          operations.push({
+            type: "delete",
+            ref:
+              document.ref
+          });
+        }
+      }
+    );
+
+
+    (
+      hsWarningState.records ||
+      []
+    ).forEach(
+      record => {
+        if (!record.id) {
+          return;
+        }
+
+
+        operations.push({
+          type: "set",
+
+          ref:
+            collection.doc(
+              record.id
+            ),
+
+          data: {
+            ...record,
+
+            updatedAt:
+              firebase
+                .firestore
+                .FieldValue
+                .serverTimestamp()
+          }
+        });
+      }
+    );
+
+
+    const batchSize = 400;
+
+
+    for (
+      let index = 0;
+      index <
+        operations.length;
+      index += batchSize
+    ) {
+      const group =
+        operations.slice(
+          index,
+          index +
+            batchSize
+        );
+
+
+      const batch =
+        cloudDb.batch();
+
+
+      group.forEach(
+        operation => {
+          if (
+            operation.type ===
+            "delete"
+          ) {
+            batch.delete(
+              operation.ref
+            );
+          } else {
+            batch.set(
+              operation.ref,
+              operation.data,
+              {
+                merge: true
+              }
+            );
+          }
+        }
+      );
+
+
+      await batch.commit();
+    }
+
+
+    setHsWarningCloudStatus(
+      `Cloud synced • ${
+        hsWarningState.records
+          .length
+      } Warning Notice record${
+        hsWarningState.records
+          .length === 1
+          ? ""
+          : "s"
+      } stored in Firebase.`,
+      "good"
+    );
+
+
+    return {
+      synced: true
+    };
+  } catch (error) {
+    console.error(
+      "Warning Notice Firebase sync failed:",
+      error
+    );
+
+
+    setHsWarningCloudStatus(
+      "Firebase sync failed • Local Warning Notice data is still safe.",
+      "error"
+    );
+
+
+    return {
+      synced: false,
+      reason: "error",
+      error
+    };
+  }
+}
+
+
+function getHsWarningPeriodRange() {
+  const period =
+    hsWarningFilters.period;
+
+
+  if (
+    period === "all"
+  ) {
+    return {
+      from: "",
+      to: ""
+    };
+  }
+
+
+  if (
+    period === "custom"
+  ) {
+    return {
+      from:
+        hsWarningFilters
+          .dateFrom,
+
+      to:
+        hsWarningFilters
+          .dateTo
+    };
+  }
+
+
+  const today =
+    new Date();
+
+
+  today.setHours(
+    0,
+    0,
+    0,
+    0
+  );
+
+
+  let from;
+  let to;
+
+
+  if (
+    period ===
+    "this-month"
+  ) {
+    from =
+      new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        1
+      );
+
+    to =
+      new Date(
+        today.getFullYear(),
+        today.getMonth() + 1,
+        0
+      );
+  }
+
+
+  if (
+    period ===
+    "last-month"
+  ) {
+    from =
+      new Date(
+        today.getFullYear(),
+        today.getMonth() - 1,
+        1
+      );
+
+    to =
+      new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        0
+      );
+  }
+
+
+  if (
+    period ===
+    "this-quarter"
+  ) {
+    const quarterMonth =
+      Math.floor(
+        today.getMonth() /
+          3
+      ) * 3;
+
+
+    from =
+      new Date(
+        today.getFullYear(),
+        quarterMonth,
+        1
+      );
+
+
+    to =
+      new Date(
+        today.getFullYear(),
+        quarterMonth + 3,
+        0
+      );
+  }
+
+
+  const toIso =
+    date => {
+      if (!date) {
+        return "";
+      }
+
+      return [
+        date.getFullYear(),
+        String(
+          date.getMonth() +
+            1
+        ).padStart(
+          2,
+          "0"
+        ),
+        String(
+          date.getDate()
+        ).padStart(
+          2,
+          "0"
+        )
+      ].join("-");
+    };
+
+
+  return {
+    from:
+      toIso(from),
+
+    to:
+      toIso(to)
+  };
+}
+
+
+function getFilteredHsWarningRecords() {
+  const {
+    from,
+    to
+  } =
+    getHsWarningPeriodRange();
+
+
+  const search =
+    hsWarningFilters.search
+      .trim()
+      .toLowerCase();
+
+
+  return (
+    hsWarningState.records ||
+    []
+  )
+    .filter(
+      record => {
+        if (
+          from &&
+          (
+            !record.date ||
+            record.date < from
+          )
+        ) {
+          return false;
+        }
+
+
+        if (
+          to &&
+          (
+            !record.date ||
+            record.date > to
+          )
+        ) {
+          return false;
+        }
+
+
+        if (
+          hsWarningFilters
+            .engineer &&
+          record.engineer !==
+            hsWarningFilters
+              .engineer
+        ) {
+          return false;
+        }
+
+
+        if (
+          hsWarningFilters
+            .result &&
+          record.result !==
+            hsWarningFilters
+              .result
+        ) {
+          return false;
+        }
+
+
+        if (
+          hsWarningFilters
+            .source &&
+          record.sourceFileKey !==
+            hsWarningFilters
+              .source
+        ) {
+          return false;
+        }
+
+
+        if (search) {
+          const haystack =
+            [
+              record.address,
+              record.engineer,
+              record.reason,
+              record.result,
+              record.sourceFile
+            ]
+              .join(" ")
+              .toLowerCase();
+
+
+          if (
+            !haystack.includes(
+              search
+            )
+          ) {
+            return false;
+          }
+        }
+
+
+        return true;
+      }
+    )
+    .sort(
+      (a, b) =>
+        String(
+          b.date || ""
+        ).localeCompare(
+          String(
+            a.date || ""
+          )
+        )
+    );
+}
+
+
+function getHsWarningSummary(
+  records
+) {
+  const total =
+    records.length;
+
+
+  const correct =
+    records.filter(
+      record =>
+        record.result ===
+        "PASS"
+    ).length;
+
+
+  const incorrect =
+    records.filter(
+      record =>
+        record.result ===
+        "FAIL"
+    ).length;
+
+
+  const engineers =
+    new Set(
+      records
+        .map(
+          record =>
+            record.engineer
+        )
+        .filter(Boolean)
+    ).size;
+
+
+  const compliance =
+    total
+      ? Math.round(
+          correct /
+            total *
+            100
+        )
+      : 0;
+
+
+  return {
+    total,
+    correct,
+    incorrect,
+    engineers,
+    compliance
+  };
+}
+
+
+function buildHsWarningEngineerSummary(
+  records
+) {
+  const map =
+    new Map();
+
+
+  records.forEach(
+    record => {
+      const engineer =
+        record.engineer ||
+        "Not recorded";
+
+
+      if (
+        !map.has(
+          engineer
+        )
+      ) {
+        map.set(
+          engineer,
+          {
+            engineer,
+            total: 0,
+            correct: 0,
+            incorrect: 0
+          }
+        );
+      }
+
+
+      const row =
+        map.get(
+          engineer
+        );
+
+
+      row.total += 1;
+
+
+      if (
+        record.result ===
+        "PASS"
+      ) {
+        row.correct += 1;
+      }
+
+
+      if (
+        record.result ===
+        "FAIL"
+      ) {
+        row.incorrect += 1;
+      }
+    }
+  );
+
+
+  return Array.from(
+    map.values()
+  )
+    .map(
+      row => ({
+        ...row,
+
+        compliance:
+          row.total
+            ? Math.round(
+                row.correct /
+                  row.total *
+                  100
+              )
+            : 0
+      })
+    )
+    .sort(
+      (a, b) =>
+        a.engineer.localeCompare(
+          b.engineer
+        )
+    );
+}
+
+
+function populateHsWarningFilters() {
+  const records =
+    hsWarningState.records ||
+    [];
+
+
+  const engineers =
+    Array.from(
+      new Set(
+        records
+          .map(
+            record =>
+              record.engineer
+          )
+          .filter(Boolean)
+      )
+    ).sort(
+      (a, b) =>
+        a.localeCompare(b)
+    );
+
+
+  const engineerSelect =
+    el(
+      "hsWarningEngineer"
+    );
+
+
+  if (engineerSelect) {
+    const current =
+      hsWarningFilters
+        .engineer;
+
+
+    engineerSelect.innerHTML =
+      `
+        <option value="">
+          All engineers
+        </option>
+      ` +
+      engineers
+        .map(
+          engineer =>
+            `
+              <option value="${escapeHtml(
+                engineer
+              )}">
+                ${escapeHtml(
+                  engineer
+                )}
+              </option>
+            `
+        )
+        .join("");
+
+
+    engineerSelect.value =
+      current;
+  }
+
+
+  const sources =
+    Array.from(
+      new Map(
+        records
+          .filter(
+            record =>
+              record
+                .sourceFileKey
+          )
+          .map(
+            record => [
+              record
+                .sourceFileKey,
+
+              record
+                .sourceFile
+            ]
+          )
+      ).entries()
+    )
+      .sort(
+        (a, b) =>
+          String(
+            a[1]
+          ).localeCompare(
+            String(
+              b[1]
+            )
+          )
+      );
+
+
+  const sourceSelect =
+    el(
+      "hsWarningSource"
+    );
+
+
+  if (sourceSelect) {
+    const current =
+      hsWarningFilters
+        .source;
+
+
+    sourceSelect.innerHTML =
+      `
+        <option value="">
+          All workbooks
+        </option>
+      ` +
+      sources
+        .map(
+          ([key, name]) =>
+            `
+              <option value="${escapeHtml(
+                key
+              )}">
+                ${escapeHtml(
+                  name
+                )}
+              </option>
+            `
+        )
+        .join("");
+
+
+    sourceSelect.value =
+      current;
+  }
+}
+
+
+function renderHsWarningKpis(
+  records
+) {
+  const container =
+    el(
+      "hsWarningKpis"
+    );
+
+
+  if (!container) {
+    return;
+  }
+
+
+  const summary =
+    getHsWarningSummary(
+      records
+    );
+
+
+  container.innerHTML = `
+    <button
+      class="hs-warning-kpi"
+      type="button"
+      data-warning-result=""
+    >
+      <span>Notices checked</span>
+      <strong>${summary.total}</strong>
+    </button>
+
+    <button
+      class="hs-warning-kpi hs-warning-kpi-good"
+      type="button"
+      data-warning-result="PASS"
+    >
+      <span>Compliant</span>
+      <strong>${summary.correct}</strong>
+    </button>
+
+    <button
+      class="hs-warning-kpi hs-warning-kpi-bad"
+      type="button"
+      data-warning-result="FAIL"
+    >
+      <span>Non-compliant</span>
+      <strong>${summary.incorrect}</strong>
+    </button>
+
+    <div
+      class="hs-warning-kpi"
+    >
+      <span>Compliance</span>
+      <strong>${summary.compliance}%</strong>
+    </div>
+
+    <div
+      class="hs-warning-kpi"
+    >
+      <span>Engineers reviewed</span>
+      <strong>${summary.engineers}</strong>
+    </div>
+  `;
+
+
+  container
+    .querySelectorAll(
+      "[data-warning-result]"
+    )
+    .forEach(
+      button => {
+        button.addEventListener(
+          "click",
+          () => {
+            hsWarningFilters.result =
+              button.dataset
+                .warningResult ||
+              "";
+
+
+            const select =
+              el(
+                "hsWarningResult"
+              );
+
+
+            if (select) {
+              select.value =
+                hsWarningFilters
+                  .result;
+            }
+
+
+            renderHsWarningNotices();
+          }
+        );
+      }
+    );
+}
+
+function renderHsWarningEngineerChart(
+  records
+) {
+  const container =
+    el(
+      "hsWarningEngineerChart"
+    );
+
+  if (!container) {
+    return;
+  }
+
+  const engineers =
+    buildHsWarningEngineerSummary(
+      records
+    ).sort(
+      (a, b) => {
+        if (
+          b.compliance !==
+          a.compliance
+        ) {
+          return (
+            b.compliance -
+            a.compliance
+          );
+        }
+
+        if (
+          b.total !==
+          a.total
+        ) {
+          return (
+            b.total -
+            a.total
+          );
+        }
+
+        if (
+          a.incorrect !==
+          b.incorrect
+        ) {
+          return (
+            a.incorrect -
+            b.incorrect
+          );
+        }
+
+        return a.engineer.localeCompare(
+          b.engineer
+        );
+      }
+    );
+
+  if (!engineers.length) {
+    container.innerHTML = `
+      <div class="hs-warning-chart-empty">
+        No engineers match the current filters.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML =
+    engineers
+      .map(
+        row => {
+          const passPercent =
+            row.total
+              ? (
+                  row.correct /
+                  row.total *
+                  100
+                )
+              : 0;
+
+          const failPercent =
+            row.total
+              ? (
+                  row.incorrect /
+                  row.total *
+                  100
+                )
+              : 0;
+
+          return `
+            <button
+              class="hs-warning-chart-row"
+              type="button"
+              data-warning-chart-engineer="${escapeHtml(
+                row.engineer
+              )}"
+              title="Filter to ${escapeHtml(
+                row.engineer
+              )}"
+            >
+              <div class="hs-warning-chart-row-top">
+                <div class="hs-warning-chart-row-left">
+                  <div class="hs-warning-chart-engineer">
+                    ${escapeHtml(
+                      row.engineer
+                    )}
+                  </div>
+
+                  <div class="hs-warning-chart-meta">
+                    ${row.total} notice${
+                      row.total === 1
+                        ? ""
+                        : "s"
+                    } • ${row.correct} PASS • ${row.incorrect} FAIL
+                  </div>
+                </div>
+
+                <div class="hs-warning-chart-row-right">
+                  <div class="hs-warning-chart-rate ${
+                    row.compliance ===
+                    100
+                      ? "good"
+                      : row.compliance >=
+                          80
+                        ? "mid"
+                        : "bad"
+                  }">
+                    ${row.compliance}%
+                  </div>
+                </div>
+              </div>
+
+              <div class="hs-warning-chart-bar">
+                <span
+                  class="hs-warning-chart-bar-pass"
+                  style="width:${passPercent}%;"
+                ></span>
+                <span
+                  class="hs-warning-chart-bar-fail"
+                  style="width:${failPercent}%;"
+                ></span>
+              </div>
+            </button>
+          `;
+        }
+      )
+      .join("");
+
+  container
+    .querySelectorAll(
+      "[data-warning-chart-engineer]"
+    )
+    .forEach(
+      button => {
+        button.addEventListener(
+          "click",
+          () => {
+            hsWarningFilters.engineer =
+              button.dataset
+                .warningChartEngineer || "";
+
+            const select =
+              el(
+                "hsWarningEngineer"
+              );
+
+            if (select) {
+              select.value =
+                hsWarningFilters.engineer;
+            }
+
+            renderHsWarningNotices();
+          }
+        );
+      }
+    );
+}
+function renderHsWarningEngineerTable(
+  records
+) {
+  const body =
+    el(
+      "hsWarningEngineerTableBody"
+    );
+
+
+  if (!body) {
+    return;
+  }
+
+
+  const engineers =
+    buildHsWarningEngineerSummary(
+      records
+    );
+
+
+  if (!engineers.length) {
+    body.innerHTML = `
+      <tr>
+        <td
+          colspan="5"
+          class="hs-warning-empty"
+        >
+          No engineers match the current filters.
+        </td>
+      </tr>
+    `;
+
+    return;
+  }
+
+
+  body.innerHTML =
+    engineers
+      .map(
+        row => `
+          <tr
+            class="hs-warning-engineer-row"
+            data-warning-engineer="${escapeHtml(
+              row.engineer
+            )}"
+            title="Filter to ${escapeHtml(
+              row.engineer
+            )}"
+          >
+            <td>
+              <strong>
+                ${escapeHtml(
+                  row.engineer
+                )}
+              </strong>
+            </td>
+
+            <td>
+              ${row.total}
+            </td>
+
+            <td>
+              ${row.correct}
+            </td>
+
+            <td>
+              ${row.incorrect}
+            </td>
+
+            <td>
+              <span class="${
+                row.compliance ===
+                  100
+                  ? "hs-warning-rate-good"
+                  : row.compliance <
+                      80
+                    ? "hs-warning-rate-bad"
+                    : "hs-warning-rate-mid"
+              }">
+                ${row.compliance}%
+              </span>
+            </td>
+          </tr>
+        `
+      )
+      .join("");
+
+
+  body
+    .querySelectorAll(
+      "[data-warning-engineer]"
+    )
+    .forEach(
+      row => {
+        row.addEventListener(
+          "click",
+          () => {
+            hsWarningFilters.engineer =
+              row.dataset
+                .warningEngineer ||
+              "";
+
+
+            const select =
+              el(
+                "hsWarningEngineer"
+              );
+
+
+            if (select) {
+              select.value =
+                hsWarningFilters
+                  .engineer;
+            }
+
+
+            renderHsWarningNotices();
+          }
+        );
+      }
+    );
+}
+
+
+function renderHsWarningRegister(
+  records
+) {
+  const body =
+    el(
+      "hsWarningTableBody"
+    );
+
+
+  const count =
+    el(
+      "hsWarningRecordCount"
+    );
+
+
+  if (count) {
+    count.textContent =
+      `${records.length} record${
+        records.length === 1
+          ? ""
+          : "s"
+      }`;
+  }
+
+
+  if (!body) {
+    return;
+  }
+
+
+  if (!records.length) {
+    body.innerHTML = `
+      <tr>
+        <td
+          colspan="6"
+          class="hs-warning-empty"
+        >
+          No Warning Notice records match the current filters.
+        </td>
+      </tr>
+    `;
+
+    return;
+  }
+
+
+  body.innerHTML =
+    records
+      .map(
+        record => `
+          <tr>
+            <td>
+              ${
+                record.date
+                  ? escapeHtml(
+                      formatDate(
+                        record.date
+                      )
+                    )
+                  : "—"
+              }
+            </td>
+
+            <td>
+              ${escapeHtml(
+                record.address ||
+                "—"
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                record.engineer ||
+                "—"
+              )}
+            </td>
+
+            <td>
+              <span
+                class="
+                  hs-warning-result
+                  ${
+                    record.result ===
+                      "PASS"
+                      ? "hs-warning-pass"
+                      : "hs-warning-fail"
+                  }
+                "
+              >
+                ${record.result}
+              </span>
+            </td>
+
+            <td
+              class="hs-warning-reason"
+            >
+              ${
+                record.reason
+                  ? escapeHtml(
+                      record.reason
+                    )
+                  : "—"
+              }
+            </td>
+
+            <td
+              class="hs-warning-source"
+              title="${escapeHtml(
+                record.sourceFile ||
+                ""
+              )}"
+            >
+              ${escapeHtml(
+                record.sourceFile ||
+                "—"
+              )}
+            </td>
+          </tr>
+        `
+      )
+      .join("");
+}
+
+
+function renderHsWarningImportStatus() {
+  const element =
+    el(
+      "hsWarningImportStatus"
+    );
+
+
+  if (!element) {
+    return;
+  }
+
+
+  const meta =
+    hsWarningState.importMeta ||
+    {};
+
+
+  if (
+    !meta.lastFileName
+  ) {
+    element.textContent =
+      hsWarningState.records
+        .length
+        ? `${hsWarningState.records.length} historical Warning Notice records available.`
+        : "No warning notice workbook imported.";
+
+    return;
+  }
+
+
+  const importedDate =
+    meta.lastImportedAt
+      ? new Date(
+          meta.lastImportedAt
+        ).toLocaleString(
+          "en-GB"
+        )
+      : "";
+
+
+  element.textContent =
+    `Last import: ${
+      meta.lastFileName
+    } • ${
+      meta.lastImportCount || 0
+    } records • Sheet: ${
+      meta.lastSheetName || "Unknown"
+    }${
+      importedDate
+        ? ` • ${importedDate}`
+        : ""
+    }`;
+}
+
+
+function updateHsWarningDateControlState() {
+  const custom =
+    hsWarningFilters.period ===
+      "custom";
+
+
+  const from =
+    el(
+      "hsWarningDateFrom"
+    );
+
+
+  const to =
+    el(
+      "hsWarningDateTo"
+    );
+
+
+  if (from) {
+    from.disabled =
+      !custom;
+  }
+
+
+  if (to) {
+    to.disabled =
+      !custom;
+  }
+}
+
+
+function renderHsWarningNotices() {
+  populateHsWarningFilters();
+
+  updateHsWarningDateControlState();
+
+  const records =
+    getFilteredHsWarningRecords();
+
+
+  renderHsWarningKpis(
+    records
+  );
+
+
+  renderHsWarningEngineerChart(
+  records
+);
+
+renderHsWarningEngineerTable(
+  records
+);
+
+
+  renderHsWarningRegister(
+    records
+  );
+
+
+  renderHsWarningImportStatus();
+
+
+  /*
+    Update H&S Overview Warning KPI.
+
+    For now this represents the number
+    of FAIL records in the entire stored
+    Warning Notice register.
+  */
+  const overview =
+    el(
+      "hsOverviewWarningCount"
+    );
+
+
+  if (overview) {
+    overview.textContent =
+      (
+        hsWarningState.records ||
+        []
+      ).filter(
+        record =>
+          record.result ===
+          "FAIL"
+      ).length;
+  }
+}
+
+
+function clearHsWarningFilters() {
+  hsWarningFilters.period =
+    "all";
+
+  hsWarningFilters.dateFrom =
+    "";
+
+  hsWarningFilters.dateTo =
+    "";
+
+  hsWarningFilters.engineer =
+    "";
+
+  hsWarningFilters.result =
+    "";
+
+  hsWarningFilters.source =
+    "";
+
+  hsWarningFilters.search =
+    "";
+
+
+  if (
+    el("hsWarningPeriod")
+  ) {
+    el(
+      "hsWarningPeriod"
+    ).value =
+      "all";
+  }
+
+
+  if (
+    el("hsWarningDateFrom")
+  ) {
+    el(
+      "hsWarningDateFrom"
+    ).value =
+      "";
+  }
+
+
+  if (
+    el("hsWarningDateTo")
+  ) {
+    el(
+      "hsWarningDateTo"
+    ).value =
+      "";
+  }
+
+
+  if (
+    el("hsWarningEngineer")
+  ) {
+    el(
+      "hsWarningEngineer"
+    ).value =
+      "";
+  }
+
+
+  if (
+    el("hsWarningResult")
+  ) {
+    el(
+      "hsWarningResult"
+    ).value =
+      "";
+  }
+
+
+  if (
+    el("hsWarningSource")
+  ) {
+    el(
+      "hsWarningSource"
+    ).value =
+      "";
+  }
+
+
+  if (
+    el("hsWarningSearch")
+  ) {
+    el(
+      "hsWarningSearch"
+    ).value =
+      "";
+  }
+
+
+  renderHsWarningNotices();
+}
+
+function getHsWarningManagerRecords() {
+  const search =
+    hsWarningManagerState
+      .search
+      .trim()
+      .toLowerCase();
+
+  return (
+    hsWarningState.records ||
+    []
+  )
+    .filter(
+      record => {
+
+        if (
+          hsWarningManagerState.source &&
+          record.sourceFileKey !==
+            hsWarningManagerState.source
+        ) {
+          return false;
+        }
+
+
+        if (
+          hsWarningManagerState.engineer &&
+          record.engineer !==
+            hsWarningManagerState.engineer
+        ) {
+          return false;
+        }
+
+
+        if (
+          hsWarningManagerState.result &&
+          record.result !==
+            hsWarningManagerState.result
+        ) {
+          return false;
+        }
+
+
+        if (search) {
+          const haystack =
+            [
+              record.date,
+              record.address,
+              record.engineer,
+              record.result,
+              record.reason,
+              record.sourceFile
+            ]
+              .join(" ")
+              .toLowerCase();
+
+          if (
+            !haystack.includes(
+              search
+            )
+          ) {
+            return false;
+          }
+        }
+
+
+        return true;
+      }
+    )
+    .sort(
+      (a, b) =>
+        String(
+          b.date || ""
+        ).localeCompare(
+          String(
+            a.date || ""
+          )
+        )
+    );
+}
+
+
+function populateHsWarningManagerFilters() {
+  const records =
+    hsWarningState.records ||
+    [];
+
+
+  const engineers =
+    Array.from(
+      new Set(
+        records
+          .map(
+            record =>
+              record.engineer
+          )
+          .filter(Boolean)
+      )
+    ).sort(
+      (a, b) =>
+        a.localeCompare(b)
+    );
+
+
+  const engineerSelect =
+    el(
+      "hsWarningManagerEngineer"
+    );
+
+
+  if (engineerSelect) {
+    engineerSelect.innerHTML =
+      `
+        <option value="">
+          All engineers
+        </option>
+      ` +
+      engineers
+        .map(
+          engineer => `
+            <option
+              value="${escapeHtml(
+                engineer
+              )}"
+            >
+              ${escapeHtml(
+                engineer
+              )}
+            </option>
+          `
+        )
+        .join("");
+
+
+    engineerSelect.value =
+      hsWarningManagerState
+        .engineer;
+  }
+
+
+  const sources =
+    Array.from(
+      new Map(
+        records
+          .filter(
+            record =>
+              record.sourceFileKey
+          )
+          .map(
+            record => [
+              record.sourceFileKey,
+              record.sourceFile
+            ]
+          )
+      ).entries()
+    ).sort(
+      (a, b) =>
+        String(
+          a[1]
+        ).localeCompare(
+          String(
+            b[1]
+          )
+        )
+    );
+
+
+  const sourceSelect =
+    el(
+      "hsWarningManagerSource"
+    );
+
+
+  if (sourceSelect) {
+    sourceSelect.innerHTML =
+      `
+        <option value="">
+          All workbooks
+        </option>
+      ` +
+      sources
+        .map(
+          ([key, name]) => `
+            <option
+              value="${escapeHtml(
+                key
+              )}"
+            >
+              ${escapeHtml(
+                name
+              )}
+            </option>
+          `
+        )
+        .join("");
+
+
+    sourceSelect.value =
+      hsWarningManagerState
+        .source;
+  }
+}
+
+
+function updateHsWarningManagerSelectionUi() {
+  const selectedCount =
+    hsWarningManagerState
+      .selectedIds
+      .size;
+
+
+  const countElement =
+    el(
+      "hsWarningManagerSelectedCount"
+    );
+
+
+  const deleteButton =
+    el(
+      "hsWarningManagerDeleteBtn"
+    );
+
+
+  if (countElement) {
+    countElement.textContent =
+      `${selectedCount} selected`;
+  }
+
+
+  if (deleteButton) {
+    deleteButton.disabled =
+      selectedCount === 0;
+  }
+}
+
+
+function renderHsWarningManager() {
+  populateHsWarningManagerFilters();
+
+
+  const records =
+    getHsWarningManagerRecords();
+
+
+  const body =
+    el(
+      "hsWarningManagerTableBody"
+    );
+
+
+  const status =
+    el(
+      "hsWarningManagerStatus"
+    );
+
+
+  if (status) {
+    status.textContent =
+      `${records.length} matching record${
+        records.length === 1
+          ? ""
+          : "s"
+      }`;
+  }
+
+
+  if (!body) {
+    return;
+  }
+
+
+  if (!records.length) {
+    body.innerHTML = `
+      <tr>
+        <td colspan="7">
+          No Warning Notice records match the current filters.
+        </td>
+      </tr>
+    `;
+
+    updateHsWarningManagerSelectionUi();
+
+    return;
+  }
+
+
+  body.innerHTML =
+    records
+      .map(
+        record => `
+          <tr>
+            <td>
+              <input
+                type="checkbox"
+                class="hs-warning-manager-checkbox"
+                data-warning-id="${escapeHtml(
+                  record.id
+                )}"
+                ${
+                  hsWarningManagerState
+                    .selectedIds
+                    .has(
+                      record.id
+                    )
+                    ? "checked"
+                    : ""
+                }
+              />
+            </td>
+
+            <td>
+              ${
+                record.date
+                  ? escapeHtml(
+                      formatDate(
+                        record.date
+                      )
+                    )
+                  : "—"
+              }
+            </td>
+
+            <td>
+              ${escapeHtml(
+                record.address ||
+                "—"
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                record.engineer ||
+                "—"
+              )}
+            </td>
+
+            <td>
+              <span
+                class="
+                  hs-warning-result
+                  ${
+                    record.result ===
+                      "PASS"
+                      ? "hs-warning-pass"
+                      : "hs-warning-fail"
+                  }
+                "
+              >
+                ${escapeHtml(
+                  record.result ||
+                  "—"
+                )}
+              </span>
+            </td>
+
+            <td>
+              ${escapeHtml(
+                record.reason ||
+                "—"
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                record.sourceFile ||
+                "—"
+              )}
+            </td>
+          </tr>
+        `
+      )
+      .join("");
+
+
+  body
+    .querySelectorAll(
+      ".hs-warning-manager-checkbox"
+    )
+    .forEach(
+      checkbox => {
+        checkbox.addEventListener(
+          "change",
+          () => {
+            const id =
+              checkbox.dataset
+                .warningId;
+
+
+            if (!id) {
+              return;
+            }
+
+
+            if (
+              checkbox.checked
+            ) {
+              hsWarningManagerState
+                .selectedIds
+                .add(id);
+            } else {
+              hsWarningManagerState
+                .selectedIds
+                .delete(id);
+            }
+
+
+            updateHsWarningManagerSelectionUi();
+          }
+        );
+      }
+    );
+
+
+  updateHsWarningManagerSelectionUi();
+}
+
+
+function openHsWarningManager() {
+  hsWarningManagerState
+    .selectedIds
+    .clear();
+
+
+  hsWarningManagerState.source =
+    "";
+
+  hsWarningManagerState.engineer =
+    "";
+
+  hsWarningManagerState.result =
+    "";
+
+  hsWarningManagerState.search =
+    "";
+
+
+  const source =
+    el(
+      "hsWarningManagerSource"
+    );
+
+  const engineer =
+    el(
+      "hsWarningManagerEngineer"
+    );
+
+  const result =
+    el(
+      "hsWarningManagerResult"
+    );
+
+  const search =
+    el(
+      "hsWarningManagerSearch"
+    );
+
+
+  if (source) {
+    source.value = "";
+  }
+
+  if (engineer) {
+    engineer.value = "";
+  }
+
+  if (result) {
+    result.value = "";
+  }
+
+  if (search) {
+    search.value = "";
+  }
+
+
+  el(
+    "hsWarningManagerModal"
+  )?.classList.remove(
+    "hidden"
+  );
+
+
+  renderHsWarningManager();
+}
+
+
+function closeHsWarningManager() {
+  el(
+    "hsWarningManagerModal"
+  )?.classList.add(
+    "hidden"
+  );
+}
+
+
+async function deleteSelectedHsWarningRecords() {
+  const selectedIds =
+    hsWarningManagerState
+      .selectedIds;
+
+
+  if (!selectedIds.size) {
+    return;
+  }
+
+
+  const count =
+    selectedIds.size;
+
+
+  const confirmed =
+    confirm(
+      `Delete ${count} selected Warning Notice record${
+        count === 1
+          ? ""
+          : "s"
+      }?\n\nThis cannot be undone.`
+    );
+
+
+  if (!confirmed) {
+    return;
+  }
+
+
+  hsWarningState.records =
+    (
+      hsWarningState.records ||
+      []
+    ).filter(
+      record =>
+        !selectedIds.has(
+          record.id
+        )
+    );
+
+
+  hsWarningState.importMeta = {
+    ...(hsWarningState.importMeta ||
+      {}),
+
+    totalCount:
+      hsWarningState.records
+        .length
+  };
+
+
+  saveHsWarningState();
+
+
+  selectedIds.clear();
+
+
+  /*
+    Refresh the main Warning Notices
+    page immediately.
+
+    This updates KPIs, chart, engineer
+    table and register.
+  */
+  renderHsWarningNotices();
+
+
+  renderHsWarningManager();
+
+
+  const status =
+    el(
+      "hsWarningManagerStatus"
+    );
+
+
+  if (
+    cloudSignedIn()
+  ) {
+    const cloudResult =
+      await syncHsWarningNoticesToCloud();
+
+
+    if (status) {
+      status.textContent =
+        cloudResult.synced
+          ? `${count} record${
+              count === 1
+                ? ""
+                : "s"
+            } deleted • Firebase updated.`
+          : `${count} record${
+              count === 1
+                ? ""
+                : "s"
+            } deleted locally • Firebase sync needs attention.`;
+    }
+  } else if (status) {
+    status.textContent =
+      `${count} record${
+        count === 1
+          ? ""
+          : "s"
+      } deleted locally.`;
+  }
+}
+
+
+function initHsWarningManager() {
+  el(
+    "hsWarningManageBtn"
+  )?.addEventListener(
+    "click",
+    openHsWarningManager
+  );
+
+
+  el(
+    "hsWarningManagerCloseBtn"
+  )?.addEventListener(
+    "click",
+    closeHsWarningManager
+  );
+
+
+  el(
+    "hsWarningManagerSource"
+  )?.addEventListener(
+    "change",
+    event => {
+      hsWarningManagerState.source =
+        event.target.value;
+
+      renderHsWarningManager();
+    }
+  );
+
+
+  el(
+    "hsWarningManagerEngineer"
+  )?.addEventListener(
+    "change",
+    event => {
+      hsWarningManagerState.engineer =
+        event.target.value;
+
+      renderHsWarningManager();
+    }
+  );
+
+
+  el(
+    "hsWarningManagerResult"
+  )?.addEventListener(
+    "change",
+    event => {
+      hsWarningManagerState.result =
+        event.target.value;
+
+      renderHsWarningManager();
+    }
+  );
+
+
+  el(
+    "hsWarningManagerSearch"
+  )?.addEventListener(
+    "input",
+    event => {
+      hsWarningManagerState.search =
+        event.target.value;
+
+      renderHsWarningManager();
+    }
+  );
+
+
+  el(
+    "hsWarningManagerSelectVisibleBtn"
+  )?.addEventListener(
+    "click",
+    () => {
+      getHsWarningManagerRecords()
+        .forEach(
+          record => {
+            hsWarningManagerState
+              .selectedIds
+              .add(
+                record.id
+              );
+          }
+        );
+
+
+      renderHsWarningManager();
+    }
+  );
+
+
+  el(
+    "hsWarningManagerClearSelectionBtn"
+  )?.addEventListener(
+    "click",
+    () => {
+      hsWarningManagerState
+        .selectedIds
+        .clear();
+
+
+      renderHsWarningManager();
+    }
+  );
+
+
+  el(
+    "hsWarningManagerDeleteBtn"
+  )?.addEventListener(
+    "click",
+    deleteSelectedHsWarningRecords
+  );
+
+
+  el(
+    "hsWarningManagerModal"
+  )?.addEventListener(
+    "click",
+    event => {
+      if (
+        event.target ===
+        el(
+          "hsWarningManagerModal"
+        )
+      ) {
+        closeHsWarningManager();
+      }
+    }
+  );
+
+
+  document.addEventListener(
+    "keydown",
+    event => {
+      if (
+        event.key === "Escape" &&
+        !el(
+          "hsWarningManagerModal"
+        )?.classList.contains(
+          "hidden"
+        )
+      ) {
+        closeHsWarningManager();
+      }
+    }
+  );
+}
+
+// =========================================================
+// H&S WARNING NOTICE POWERPOINT SLIDE
+// =========================================================
+
+function getHsWarningSlidePeriodLabel(
+  records
+) {
+  const range =
+    getHsWarningPeriodRange();
+
+
+  if (
+    range.from ||
+    range.to
+  ) {
+    return formatPptPeriodLabel(
+      range.from,
+      range.to
+    );
+  }
+
+
+  const dates =
+    (records || [])
+      .map(
+        record =>
+          record.date
+      )
+      .filter(Boolean)
+      .sort();
+
+
+  if (!dates.length) {
+    return "All imported records";
+  }
+
+
+  return formatPptPeriodLabel(
+    dates[0],
+    dates[
+      dates.length - 1
+    ]
+  );
+}
+
+
+function getHsWarningFailureTheme(
+  reason
+) {
+  const text =
+    String(
+      reason || ""
+    )
+      .trim()
+      .toLowerCase();
+
+
+  if (!text) {
+    return "Reason not recorded";
+  }
+
+
+  /*
+    Property / tenant information
+  */
+  if (
+    text.includes(
+      "tenant name"
+    ) ||
+    text.includes(
+      "full address"
+    ) ||
+    text.includes(
+      "address not"
+    ) ||
+    text.includes(
+      "property details"
+    )
+  ) {
+    return "Missing property / tenant details";
+  }
+
+
+  /*
+    Boiler / appliance information
+  */
+  if (
+    text.includes(
+      "boiler info"
+    ) ||
+    text.includes(
+      "boiler information"
+    ) ||
+    text.includes(
+      "appliance info"
+    ) ||
+    text.includes(
+      "appliance details"
+    ) ||
+    text.includes(
+      "gs number"
+    ) ||
+    text.includes(
+      "serial number"
+    )
+  ) {
+    return "Missing boiler / appliance information";
+  }
+
+
+  /*
+    Warning notice itself missing,
+    unreadable, no photograph etc.
+  */
+  if (
+    text.includes(
+      "warning sticker"
+    ) ||
+    text.includes(
+      "warning notice"
+    ) ||
+    text.includes(
+      "readable notice"
+    ) ||
+    text.includes(
+      "readable"
+    ) ||
+    text.includes(
+      "picture"
+    ) ||
+    text.includes(
+      "photo"
+    ) ||
+    text.includes(
+      "pic of"
+    )
+  ) {
+    return "Warning notice evidence incomplete";
+  }
+
+
+  /*
+    Date not recorded
+  */
+  if (
+    text.includes(
+      "no date"
+    ) ||
+    text.includes(
+      "date missing"
+    ) ||
+    text.includes(
+      "missing date"
+    )
+  ) {
+    return "Date not recorded";
+  }
+
+
+  /*
+    How the appliance/job was left,
+    remedial action, parts etc.
+  */
+  if (
+    text.includes(
+      "how boiler was left"
+    ) ||
+    text.includes(
+      "how boiler left"
+    ) ||
+    text.includes(
+      "how situation was left"
+    ) ||
+    text.includes(
+      "what is being done"
+    ) ||
+    text.includes(
+      "what is being done"
+    ) ||
+    text.includes(
+      "parts ordered"
+    ) ||
+    text.includes(
+      "part req"
+    ) ||
+    text.includes(
+      "remedial"
+    ) ||
+    text.includes(
+      "isolation"
+    )
+  ) {
+    return "Outcome / remedial action not recorded";
+  }
+
+
+  return "Other documentation issue";
+}
+
+
+function getHsWarningTopFailureReasons(
+  records,
+  limit = 5
+) {
+  const themeMap =
+    new Map();
+
+
+  (records || [])
+    .filter(
+      record =>
+        record.result ===
+        "FAIL"
+    )
+    .forEach(
+      record => {
+        /*
+          A single reason can contain
+          several separate documentation
+          problems.
+
+          Detect every applicable theme
+          rather than forcing it into only
+          one category.
+        */
+        const text =
+          String(
+            record.reason || ""
+          )
+            .trim()
+            .toLowerCase();
+
+
+        const themes =
+          new Set();
+
+
+        if (!text) {
+          themes.add(
+            "Reason not recorded"
+          );
+        }
+
+
+        if (
+          text.includes(
+            "tenant name"
+          ) ||
+          text.includes(
+            "full address"
+          ) ||
+          text.includes(
+            "address not"
+          ) ||
+          text.includes(
+            "property details"
+          )
+        ) {
+          themes.add(
+            "Missing property / tenant details"
+          );
+        }
+
+
+        if (
+          text.includes(
+            "boiler info"
+          ) ||
+          text.includes(
+            "boiler information"
+          ) ||
+          text.includes(
+            "appliance info"
+          ) ||
+          text.includes(
+            "appliance details"
+          ) ||
+          text.includes(
+            "gs number"
+          ) ||
+          text.includes(
+            "serial number"
+          )
+        ) {
+          themes.add(
+            "Missing boiler / appliance information"
+          );
+        }
+
+
+        if (
+          text.includes(
+            "warning sticker"
+          ) ||
+          text.includes(
+            "warning notice"
+          ) ||
+          text.includes(
+            "readable notice"
+          ) ||
+          text.includes(
+            "picture"
+          ) ||
+          text.includes(
+            "photo"
+          ) ||
+          text.includes(
+            "pic of"
+          )
+        ) {
+          themes.add(
+            "Warning notice evidence incomplete"
+          );
+        }
+
+
+        if (
+          text.includes(
+            "no date"
+          ) ||
+          text.includes(
+            "date missing"
+          ) ||
+          text.includes(
+            "missing date"
+          )
+        ) {
+          themes.add(
+            "Date not recorded"
+          );
+        }
+
+
+        if (
+          text.includes(
+            "how boiler was left"
+          ) ||
+          text.includes(
+            "how boiler left"
+          ) ||
+          text.includes(
+            "how situation was left"
+          ) ||
+          text.includes(
+            "what is being done"
+          ) ||
+          text.includes(
+            "parts ordered"
+          ) ||
+          text.includes(
+            "part req"
+          ) ||
+          text.includes(
+            "remedial"
+          ) ||
+          text.includes(
+            "isolation"
+          )
+        ) {
+          themes.add(
+            "Outcome / remedial action not recorded"
+          );
+        }
+
+
+        if (!themes.size) {
+          themes.add(
+            getHsWarningFailureTheme(
+              record.reason
+            )
+          );
+        }
+
+
+        themes.forEach(
+          theme => {
+            themeMap.set(
+              theme,
+              (
+                themeMap.get(
+                  theme
+                ) || 0
+              ) + 1
+            );
+          }
+        );
+      }
+    );
+
+
+  return Array.from(
+    themeMap.entries()
+  )
+    .map(
+      ([reason, count]) => ({
+        reason,
+        count
+      })
+    )
+    .sort(
+      (a, b) =>
+        b.count -
+        a.count
+    )
+    .slice(
+      0,
+      limit
+    );
+}
+
+
+function pptHsWarningNoticesSlide(
+  pptx,
+  records
+) {
+  const slide =
+    pptx.addSlide();
+
+
+  pptBackground(
+    pptx,
+    slide
+  );
+
+
+  const periodLabel =
+    getHsWarningSlidePeriodLabel(
+      records
+    );
+
+
+  pptTitle(
+    slide,
+    "Warning Notice Compliance",
+    periodLabel
+  );
+
+
+  const summary =
+    getHsWarningSummary(
+      records
+    );
+
+
+  /*
+    KPI CARDS
+  */
+  pptMetric(
+    pptx,
+    slide,
+    0.35,
+    0.92,
+    3.0,
+    "Notices checked",
+    summary.total,
+    periodLabel,
+    "",
+    true
+  );
+
+
+  pptMetric(
+  pptx,
+  slide,
+  3.55,
+  0.92,
+  3.0,
+  "Compliant",
+  summary.correct,
+  `${summary.correct} notice${
+    summary.correct === 1
+      ? ""
+      : "s"
+  } passed`,
+  "",
+  true
+);
+
+
+  pptMetric(
+    pptx,
+    slide,
+    6.75,
+    0.92,
+    3.0,
+    "Non-compliant",
+    summary.incorrect,
+    summary.total
+      ? `${Math.round(
+          summary.incorrect /
+          summary.total *
+          100
+        )}% of checks`
+      : "No checks",
+    "",
+    summary.incorrect === 0
+  );
+
+
+  pptMetric(
+    pptx,
+    slide,
+    9.95,
+    0.92,
+    3.0,
+    "Compliance rate",
+    `${summary.compliance}%`,
+    `${summary.engineers} engineer${
+      summary.engineers === 1
+        ? ""
+        : "s"
+    } reviewed`,
+    "",
+    summary.compliance >= 90
+  );
+
+
+  /*
+    LEFT CARD:
+    ENGINEER COMPLIANCE
+  */
+  pptCard(
+    pptx,
+    slide,
+    0.35,
+    2.52,
+    8.15,
+    4.35
+  );
+
+
+  slide.addText(
+    "Engineer compliance",
+    {
+      x: 0.65,
+      y: 2.72,
+      w: 4.5,
+      h: 0.28,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 15,
+      bold: true,
+
+      color:
+        PPT_THEME.navy,
+
+      margin: 0
+    }
+  );
+
+
+  slide.addText(
+    "PASS / FAIL split by engineer",
+    {
+      x: 0.65,
+      y: 3.02,
+      w: 4.5,
+      h: 0.18,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 9.5,
+
+      color:
+        PPT_THEME.muted,
+
+      margin: 0
+    }
+  );
+
+
+  const engineers =
+    buildHsWarningEngineerSummary(
+      records
+    )
+      .sort(
+        (a, b) => {
+          if (
+            a.compliance !==
+            b.compliance
+          ) {
+            return (
+              a.compliance -
+              b.compliance
+            );
+          }
+
+          return (
+            b.total -
+            a.total
+          );
+        }
+      )
+      .slice(
+        0,
+        10
+      );
+
+
+  if (!engineers.length) {
+    slide.addText(
+      "No engineer data available for the selected filters.",
+      {
+        x: 0.65,
+        y: 3.55,
+        w: 7.4,
+        h: 0.4,
+
+        fontFace:
+          PPT_THEME.font,
+
+        fontSize: 11,
+
+        color:
+          PPT_THEME.muted,
+
+        margin: 0
+      }
+    );
+  } else {
+    const startY =
+      3.38;
+
+    const rowHeight =
+      Math.min(
+        0.34,
+        2.95 /
+          engineers.length
+      );
+
+
+    engineers.forEach(
+      (
+        row,
+        index
+      ) => {
+        const y =
+          startY +
+          index *
+          rowHeight;
+
+
+        const passShare =
+          row.total
+            ? row.correct /
+              row.total
+            : 0;
+
+
+        const failShare =
+          row.total
+            ? row.incorrect /
+              row.total
+            : 0;
+
+
+        slide.addText(
+          row.engineer,
+          {
+            x: 0.65,
+            y,
+            w: 1.35,
+            h:
+              rowHeight *
+              0.7,
+
+            fontFace:
+              PPT_THEME.font,
+
+            fontSize: 8.7,
+            bold: true,
+
+            color:
+              PPT_THEME.navy,
+
+            margin: 0,
+
+            valign:
+              "mid",
+
+            fit:
+              "shrink"
+          }
+        );
+
+
+        /*
+          Grey background bar.
+        */
+        slide.addShape(
+          pptx.ShapeType.rect,
+          {
+            x: 2.05,
+            y:
+              y + 0.035,
+
+            w: 4.75,
+            h:
+              Math.max(
+                0.10,
+                rowHeight *
+                  0.46
+              ),
+
+            line: {
+              transparency: 100
+            },
+
+            fill: {
+              color:
+                PPT_THEME.grid
+            }
+          }
+        );
+
+
+        if (
+          passShare > 0
+        ) {
+          slide.addShape(
+            pptx.ShapeType.rect,
+            {
+              x: 2.05,
+              y:
+                y + 0.035,
+
+              w:
+                4.75 *
+                passShare,
+
+              h:
+                Math.max(
+                  0.10,
+                  rowHeight *
+                    0.46
+                ),
+
+              line: {
+                transparency: 100
+              },
+
+              fill: {
+                color:
+                  PPT_THEME.green
+              }
+            }
+          );
+        }
+
+
+        if (
+          failShare > 0
+        ) {
+          slide.addShape(
+            pptx.ShapeType.rect,
+            {
+              x:
+                2.05 +
+                4.75 *
+                  passShare,
+
+              y:
+                y + 0.035,
+
+              w:
+                4.75 *
+                failShare,
+
+              h:
+                Math.max(
+                  0.10,
+                  rowHeight *
+                    0.46
+                ),
+
+              line: {
+                transparency: 100
+              },
+
+              fill: {
+                color:
+                  PPT_THEME.red
+              }
+            }
+          );
+        }
+
+
+        slide.addText(
+          `${row.compliance}%`,
+          {
+            x: 6.95,
+            y:
+              y - 0.015,
+            w: 0.65,
+            h:
+              rowHeight *
+              0.8,
+
+            fontFace:
+              PPT_THEME.font,
+
+            fontSize: 9,
+            bold: true,
+
+            color:
+              row.compliance >=
+              90
+                ? PPT_THEME.greenDark
+                : row.compliance >=
+                    80
+                  ? PPT_THEME.amber
+                  : PPT_THEME.red,
+
+            align: "right",
+
+            margin: 0,
+
+            valign:
+              "mid"
+          }
+        );
+
+
+        slide.addText(
+          `${row.total}`,
+          {
+            x: 7.65,
+            y:
+              y - 0.015,
+            w: 0.4,
+            h:
+              rowHeight *
+              0.8,
+
+            fontFace:
+              PPT_THEME.font,
+
+            fontSize: 8,
+
+            color:
+              PPT_THEME.muted,
+
+            align: "right",
+
+            margin: 0,
+
+            valign:
+              "mid"
+          }
+        );
+      }
+    );
+
+
+    slide.addText(
+      "Green = compliant     Red = non-compliant     Figure right = notices checked",
+      {
+        x: 0.65,
+        y: 6.48,
+        w: 7.35,
+        h: 0.16,
+
+        fontFace:
+          PPT_THEME.font,
+
+        fontSize: 7.8,
+
+        color:
+          PPT_THEME.muted,
+
+        margin: 0,
+
+        fit:
+          "shrink"
+      }
+    );
+  }
+
+
+  /*
+    RIGHT CARD:
+    FAILURE REASONS
+  */
+  pptCard(
+    pptx,
+    slide,
+    8.72,
+    2.52,
+    4.26,
+    4.35
+  );
+
+
+  slide.addText(
+    "Non-compliance themes",
+    {
+      x: 9.02,
+      y: 2.72,
+      w: 3.55,
+      h: 0.28,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 15,
+      bold: true,
+
+      color:
+        PPT_THEME.navy,
+
+      margin: 0
+    }
+  );
+
+
+  slide.addText(
+    "Most common recorded reasons",
+    {
+      x: 9.02,
+      y: 3.02,
+      w: 3.55,
+      h: 0.18,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 9.5,
+
+      color:
+        PPT_THEME.muted,
+
+      margin: 0
+    }
+  );
+
+
+  const reasons =
+  getHsWarningTopFailureReasons(
+    records,
+    5
+  );
+
+
+const primaryTheme =
+  reasons[0] || null;
+
+
+let managementInsight =
+  "";
+
+
+if (!summary.total) {
+  managementInsight =
+    "No Warning Notice compliance checks were recorded for the selected period.";
+} else if (
+  summary.incorrect === 0
+) {
+  managementInsight =
+    `All ${summary.total} Warning Notices reviewed were compliant during the selected period.`;
+} else if (
+  primaryTheme
+) {
+  managementInsight =
+    `${summary.incorrect} of ${summary.total} notices were non-compliant (${100 - summary.compliance}%), with ${primaryTheme.reason.toLowerCase()} the most frequently identified documentation issue.`;
+} else {
+  managementInsight =
+    `${summary.incorrect} of ${summary.total} notices were non-compliant during the selected period.`;
+}
+
+
+  if (!reasons.length) {
+    slide.addText(
+      summary.incorrect
+        ? "No failure reasons were recorded for the selected records."
+        : "No non-compliant notices in the selected records.",
+      {
+        x: 9.02,
+        y: 3.55,
+        w: 3.5,
+        h: 0.6,
+
+        fontFace:
+          PPT_THEME.font,
+
+        fontSize: 11,
+
+        color:
+          PPT_THEME.muted,
+
+        margin: 0
+      }
+    );
+  } else {
+    const maximum =
+      Math.max(
+        ...reasons.map(
+          item =>
+            item.count
+        ),
+        1
+      );
+
+
+    reasons.forEach(
+      (
+        item,
+        index
+      ) => {
+        const y =
+          3.42 +
+          index *
+            0.63;
+
+
+        slide.addText(
+          item.reason,
+          {
+            x: 9.02,
+            y,
+            w: 2.75,
+            h: 0.25,
+
+            fontFace:
+              PPT_THEME.font,
+
+            fontSize: 8.8,
+            bold: true,
+
+            color:
+              PPT_THEME.navy,
+
+            margin: 0,
+
+            fit:
+              "shrink"
+          }
+        );
+
+
+        slide.addText(
+          String(
+            item.count
+          ),
+          {
+            x: 12.03,
+            y,
+            w: 0.38,
+            h: 0.22,
+
+            fontFace:
+              PPT_THEME.font,
+
+            fontSize: 9,
+            bold: true,
+
+            color:
+              PPT_THEME.red,
+
+            align: "right",
+
+            margin: 0
+          }
+        );
+
+
+        slide.addShape(
+          pptx.ShapeType.rect,
+          {
+            x: 9.02,
+            y:
+              y + 0.30,
+
+            w: 3.35,
+            h: 0.09,
+
+            line: {
+              transparency: 100
+            },
+
+            fill: {
+              color:
+                PPT_THEME.grid
+            }
+          }
+        );
+
+
+        slide.addShape(
+          pptx.ShapeType.rect,
+          {
+            x: 9.02,
+            y:
+              y + 0.30,
+
+            w:
+              3.35 *
+              (
+                item.count /
+                maximum
+              ),
+
+            h: 0.09,
+
+            line: {
+              transparency: 100
+            },
+
+            fill: {
+              color:
+                PPT_THEME.red
+            }
+          }
+        );
+      }
+    );
+  }
+
+/*
+  MANAGEMENT INSIGHT
+*/
+slide.addShape(
+  pptx.ShapeType.roundRect,
+  {
+    x: 0.55,
+    y: 6.88,
+    w: 12.23,
+    h: 0.38,
+
+    rectRadius: 0.05,
+
+    line: {
+      color:
+        PPT_THEME.purpleLight,
+      transparency: 100
+    },
+
+    fill: {
+      color:
+        PPT_THEME.purpleLight
+    }
+  }
+);
+
+
+slide.addText(
+  [
+    {
+      text:
+        "Management insight: ",
+
+      options: {
+        bold: true,
+        color:
+          PPT_THEME.purple
+      }
+    },
+
+    {
+      text:
+        managementInsight,
+
+      options: {
+        bold: false,
+        color:
+          PPT_THEME.navy
+      }
+    }
+  ],
+  {
+    x: 0.72,
+    y: 6.97,
+    w: 11.88,
+    h: 0.16,
+
+    fontFace:
+      PPT_THEME.font,
+
+    fontSize: 9.4,
+
+    margin: 0,
+
+    fit:
+      "shrink"
+  }
+);
+  /*
+    FOOTER
+  */
+  const filterParts =
+    [];
+
+
+  if (
+    hsWarningFilters.engineer
+  ) {
+    filterParts.push(
+      `Engineer: ${hsWarningFilters.engineer}`
+    );
+  }
+
+
+  if (
+    hsWarningFilters.result
+  ) {
+    filterParts.push(
+      `Result: ${hsWarningFilters.result}`
+    );
+  }
+
+
+  if (
+    hsWarningFilters.source
+  ) {
+    const sourceRecord =
+      (
+        hsWarningState.records ||
+        []
+      ).find(
+        record =>
+          record.sourceFileKey ===
+          hsWarningFilters.source
+      );
+
+
+    if (
+      sourceRecord
+        ?.sourceFile
+    ) {
+      filterParts.push(
+        `Source: ${sourceRecord.sourceFile}`
+      );
+    }
+  }
+
+
+  if (
+    hsWarningFilters.search
+      .trim()
+  ) {
+    filterParts.push(
+      `Search: ${hsWarningFilters.search.trim()}`
+    );
+  }
+
+
+  slide.addText(
+    filterParts.length
+      ? `Filters applied • ${filterParts.join(" • ")}`
+      : "All Warning Notice records within the selected period",
+    {
+      x: 0.5,
+      y: 7.31,
+      w: 12.3,
+      h: 0.10,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 7.8,
+
+      color:
+        PPT_THEME.muted,
+
+      align:
+        "center",
+
+      margin: 0,
+
+      fit:
+        "shrink"
+    }
+  );
+}
+
+
+async function generateHsWarningSlide() {
+  const button =
+    el(
+      "hsWarningGenerateSlideBtn"
+    );
+
+
+  const originalText =
+    button?.textContent ||
+    "Generate Slide";
+
+
+  try {
+    if (
+      !window.PptxGenJS
+    ) {
+      throw new Error(
+        "PptxGenJS has not loaded."
+      );
+    }
+
+
+    const records =
+      getFilteredHsWarningRecords();
+
+
+    if (!records.length) {
+      alert(
+        "There are no Warning Notice records matching the current filters."
+      );
+
+      return;
+    }
+
+
+    if (button) {
+      button.disabled =
+        true;
+
+      button.textContent =
+        "Generating…";
+    }
+
+
+    const pptx =
+      new window.PptxGenJS();
+
+
+    pptx.layout =
+      "LAYOUT_WIDE";
+
+
+    pptx.author =
+      "Property Care Auditing";
+
+
+    pptx.subject =
+      "Health & Safety Warning Notice Compliance";
+
+
+    pptx.title =
+      "Warning Notice Compliance";
+
+
+    pptx.company =
+      "Property Care";
+
+
+    pptx.lang =
+      "en-GB";
+
+
+    pptx.theme = {
+      headFontFace:
+        PPT_THEME.font,
+
+      bodyFontFace:
+        PPT_THEME.font,
+
+      lang: "en-GB"
+    };
+
+
+    pptHsWarningNoticesSlide(
+      pptx,
+      records
+    );
+
+
+    const safePeriod =
+      getHsWarningSlidePeriodLabel(
+        records
+      )
+        .replace(
+          /[^a-z0-9]+/gi,
+          "-"
+        )
+        .replace(
+          /^-+|-+$/g,
+          ""
+        );
+
+
+    await pptx.writeFile({
+      fileName:
+        `H-S-Warning-Notice-Compliance-${safePeriod || "Report"}.pptx`
+    });
+  } catch (error) {
+    console.error(
+      "Warning Notice slide generation failed:",
+      error
+    );
+
+
+    alert(
+      `The Warning Notice slide could not be generated: ${
+        error?.message ||
+        error
+      }`
+    );
+  } finally {
+    if (button) {
+      button.disabled =
+        false;
+
+      button.textContent =
+        originalText;
+    }
+  }
+}
+
+
+function initHsWarningSlideGenerator() {
+  const button =
+    el(
+      "hsWarningGenerateSlideBtn"
+    );
+
+
+  if (
+    !button ||
+    button.dataset
+      .pptInitialised ===
+      "true"
+  ) {
+    return;
+  }
+
+
+  button.dataset
+    .pptInitialised =
+      "true";
+
+
+  button.addEventListener(
+    "click",
+    generateHsWarningSlide
+  );
+}
+function initHsWarningNotices() {
+  initHsWarningManager();
+  initHsWarningSlideGenerator();
+
+  const importButton =
+    el(
+      "hsWarningImportBtn"
+    );
+
+
+  const input =
+    el(
+      "hsWarningWorkbookInput"
+    );
+
+
+  importButton
+    ?.addEventListener(
+      "click",
+      () => {
+        input?.click();
+      }
+    );
+
+
+  input
+    ?.addEventListener(
+      "change",
+      async event => {
+        const file =
+          event.target
+            .files?.[0];
+
+
+        event.target.value =
+          "";
+
+
+        if (!file) {
+          return;
+        }
+
+
+        try {
+          importButton.disabled =
+            true;
+
+
+          importButton.textContent =
+            "Importing…";
+
+
+          const result =
+            await importHsWarningWorkbook(
+              file
+            );
+
+
+          const cloudResult =
+            await syncHsWarningNoticesToCloud();
+
+
+          alert(
+            `Warning Notice workbook imported successfully.\n\n` +
+            `${result.count} compliance records imported from "${result.sheetName}".\n\n` +
+            (
+              cloudResult.synced
+                ? "Firebase cloud register updated successfully."
+                : cloudResult.reason ===
+                    "not-signed-in"
+                  ? "Data is saved locally. Log in to sync it to Firebase."
+                  : "Data was imported locally, but Firebase sync needs attention."
+            )
+          );
+        } catch (error) {
+          console.error(
+            "Warning Notice import failed:",
+            error
+          );
+
+
+          alert(
+            error?.message ||
+            "The Warning Notice workbook could not be imported."
+          );
+        } finally {
+          importButton.disabled =
+            false;
+
+
+          importButton.textContent =
+            "Import Warning Notices Workbook";
+        }
+      }
+    );
+
+
+  el(
+    "hsWarningPeriod"
+  )?.addEventListener(
+    "change",
+    event => {
+      hsWarningFilters.period =
+        event.target.value;
+
+      renderHsWarningNotices();
+    }
+  );
+
+
+  el(
+    "hsWarningDateFrom"
+  )?.addEventListener(
+    "change",
+    event => {
+      hsWarningFilters.dateFrom =
+        event.target.value;
+
+      renderHsWarningNotices();
+    }
+  );
+
+
+  el(
+    "hsWarningDateTo"
+  )?.addEventListener(
+    "change",
+    event => {
+      hsWarningFilters.dateTo =
+        event.target.value;
+
+      renderHsWarningNotices();
+    }
+  );
+
+
+  el(
+    "hsWarningEngineer"
+  )?.addEventListener(
+    "change",
+    event => {
+      hsWarningFilters.engineer =
+        event.target.value;
+
+      renderHsWarningNotices();
+    }
+  );
+
+
+  el(
+    "hsWarningResult"
+  )?.addEventListener(
+    "change",
+    event => {
+      hsWarningFilters.result =
+        event.target.value;
+
+      renderHsWarningNotices();
+    }
+  );
+
+
+  el(
+    "hsWarningSource"
+  )?.addEventListener(
+    "change",
+    event => {
+      hsWarningFilters.source =
+        event.target.value;
+
+      renderHsWarningNotices();
+    }
+  );
+
+
+  el(
+    "hsWarningSearch"
+  )?.addEventListener(
+    "input",
+    event => {
+      hsWarningFilters.search =
+        event.target.value;
+
+      renderHsWarningNotices();
+    }
+  );
+
+
+  el(
+    "hsWarningClearFiltersBtn"
+  )?.addEventListener(
+    "click",
+    clearHsWarningFilters
+  );
+
+
+  renderHsWarningNotices();
+
+
+  if (!cloudSignedIn()) {
+    setHsWarningCloudStatus(
+      "Local only • Log in to sync Warning Notice data to Firebase.",
+      "warning"
+    );
+  }
+}
+
+function initHsAuditRegister() {
+    el(
+    "hsAuditPendingBtn"
+  )?.addEventListener(
+    "click",
+    openHsAuditPendingUpdates
+  );
+
+
+  el(
+    "hsAuditEditCloseBtn"
+  )?.addEventListener(
+    "click",
+    closeHsAuditEditor
+  );
+
+el(
+  "hsAuditRecordCloseBtn"
+)?.addEventListener(
+  "click",
+  closeHsAuditRecordModal
+);
+
+
+el(
+  "hsAuditRecordCancelBtn"
+)?.addEventListener(
+  "click",
+  closeHsAuditRecordModal
+);
+
+
+el(
+  "hsAuditRecordSaveBtn"
+)?.addEventListener(
+  "click",
+  saveHsAuditRecord
+);
+  el(
+    "hsAuditEditCancelBtn"
+  )?.addEventListener(
+    "click",
+    closeHsAuditEditor
+  );
+el(
+  "hsAuditRecordResult"
+)?.addEventListener(
+  "change",
+  event => {
+    const followUp =
+      el(
+        "hsAuditRecordFollowUp"
+      );
+
+
+    if (!followUp) {
+      return;
+    }
+
+
+    if (
+      event.target.value ===
+      "FAIL"
+    ) {
+      followUp.checked =
+        true;
+    }
+
+
+    if (
+      event.target.value ===
+      "PASS"
+    ) {
+      followUp.checked =
+        false;
+    }
+  }
+);
+
+  el(
+    "hsAuditEditSaveBtn"
+  )?.addEventListener(
+    "click",
+    saveHsAuditEditor
+  );
+
+
+  el(
+    "hsAuditPendingCloseBtn"
+  )?.addEventListener(
+    "click",
+    closeHsAuditPendingUpdates
+  );
+
+
+  el(
+    "hsAuditPendingCloseFooterBtn"
+  )?.addEventListener(
+    "click",
+    closeHsAuditPendingUpdates
+  );
+
+
+  el(
+    "hsAuditMarkAllCompleteBtn"
+  )?.addEventListener(
+    "click",
+    markAllHsAuditUpdatesComplete
+  );
+
+
+  renderHsAuditPendingUpdates();
+  const importButton =
+    el(
+      "hsAuditImportBtn"
+    );
+
+
+  const input =
+    el(
+      "hsAuditWorkbookInput"
+    );
+
+
+  importButton
+    ?.addEventListener(
+      "click",
+      () =>
+        input?.click()
+    );
+
+
+  input?.addEventListener(
+    "change",
+    async event => {
+      const file =
+        event.target.files
+          ?.[0];
+
+
+      if (!file) {
+        return;
+      }
+
+
+      const status =
+        el(
+          "hsAuditImportStatus"
+        );
+
+
+      try {
+        if (status) {
+          status.textContent =
+            "Importing H&S register…";
+        }
+
+
+        const count =
+          await importHsAuditRegisterWorkbook(
+            file
+          );
+
+
+        if (status) {
+          status.textContent =
+            `Imported ${count} engineer${
+              count === 1
+                ? ""
+                : "s"
+            }.`;
+        }
+      } catch (error) {
+        console.error(
+          "H&S register import failed:",
+          error
+        );
+
+
+        if (status) {
+          status.textContent =
+            "H&S register import failed.";
+        }
+
+
+        alert(
+          error.message ||
+          "The H&S register could not be imported."
+        );
+      } finally {
+        event.target.value =
+          "";
+      }
+    }
+  );
+
+
+  el(
+    "hsAuditStatusFilter"
+  )?.addEventListener(
+    "change",
+    renderHsAuditRegister
+  );
+
+
+  el(
+    "hsAuditSearch"
+  )?.addEventListener(
+    "input",
+    renderHsAuditRegister
+  );
+
+
+  el(
+    "hsAuditClearFiltersBtn"
+  )?.addEventListener(
+    "click",
+    () => {
+      if (
+        el(
+          "hsAuditStatusFilter"
+        )
+      ) {
+        el(
+          "hsAuditStatusFilter"
+        ).value = "";
+      }
+
+
+      if (
+        el(
+          "hsAuditSearch"
+        )
+      ) {
+        el(
+          "hsAuditSearch"
+        ).value = "";
+      }
+
+
+      renderHsAuditRegister();
+    }
+  );
+
+
+  renderHsAuditRegister();
+}
 function initHealthSafety() {
   document
     .querySelectorAll(
