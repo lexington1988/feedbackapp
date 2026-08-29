@@ -5596,3 +5596,631 @@ button.dashboard-mini-column:focus-visible {
     width: 100%;
   }
 }
+/* =========================================================
+   H&S WARNING NOTICE COMPLIANCE
+   ========================================================= */
+
+.hs-warning-notices {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hs-warning-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.hs-warning-header h3 {
+  margin: 3px 0 4px;
+  font-size: 18px;
+}
+
+.hs-warning-header p {
+  margin: 0;
+}
+
+.hs-warning-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hs-warning-import-status,
+.hs-warning-cloud-status {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 6px;
+  margin-right: 5px;
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background:
+    rgba(255,255,255,.025);
+  color: var(--muted);
+  font-size: 8.5px;
+  font-weight: 700;
+}
+
+.hs-warning-cloud-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+
+.hs-warning-kpi-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(5,minmax(0,1fr));
+  gap: 9px;
+}
+
+.hs-warning-kpi {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background:
+    rgba(255,255,255,.025);
+  color: var(--text);
+  text-align: left;
+}
+
+button.hs-warning-kpi {
+  cursor: pointer;
+}
+
+button.hs-warning-kpi:hover {
+  transform:
+    translateY(-1px);
+}
+
+.hs-warning-kpi span {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--muted);
+  font-size: 8.5px;
+}
+
+.hs-warning-kpi strong {
+  display: block;
+  font-size: 22px;
+}
+
+.hs-warning-kpi-good {
+  border-color:
+    rgba(22,163,74,.24);
+  background:
+    rgba(22,163,74,.055);
+}
+
+.hs-warning-kpi-bad {
+  border-color:
+    rgba(220,38,38,.24);
+  background:
+    rgba(220,38,38,.055);
+}
+
+
+.hs-warning-filter-card,
+.hs-warning-section-card {
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background:
+    rgba(255,255,255,.018);
+}
+
+.hs-warning-filter-card {
+  padding: 12px;
+}
+
+.hs-warning-filter-grid {
+  display: grid;
+  grid-template-columns:
+    1fr 1fr 1fr 1.1fr 1fr 1.25fr 1.7fr auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.hs-warning-search-field {
+  min-width: 0;
+}
+
+.hs-warning-clear-wrap {
+  display: flex;
+  align-items: flex-end;
+}
+
+
+.hs-warning-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px 10px;
+}
+
+.hs-warning-section-head h4 {
+  margin: 0 0 2px;
+  font-size: 12px;
+}
+
+.hs-warning-section-head p {
+  margin: 0;
+  font-size: 8.5px;
+}
+
+
+.hs-warning-table-wrap {
+  width: 100%;
+  overflow: auto;
+  border-top:
+    1px solid var(--border);
+}
+
+.hs-warning-table {
+  width: 100%;
+  border-collapse:
+    collapse;
+  font-size: 9px;
+}
+
+.hs-warning-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 8px 10px;
+  border-bottom:
+    1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 800;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.hs-warning-table td {
+  padding: 9px 10px;
+  border-bottom:
+    1px solid
+    rgba(148,163,184,.10);
+  vertical-align: top;
+}
+
+.hs-warning-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.hs-warning-engineer-row {
+  cursor: pointer;
+}
+
+.hs-warning-engineer-row:hover {
+  background:
+    rgba(168,85,247,.055);
+}
+
+
+.hs-warning-result {
+  display: inline-flex;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 850;
+}
+
+.hs-warning-pass {
+  background:
+    rgba(22,163,74,.10);
+  color: #16a34a;
+}
+
+.hs-warning-fail {
+  background:
+    rgba(220,38,38,.10);
+  color: #dc2626;
+}
+
+.hs-warning-rate-good {
+  color: #16a34a;
+  font-weight: 850;
+}
+
+.hs-warning-rate-mid {
+  color: #d97706;
+  font-weight: 850;
+}
+
+.hs-warning-rate-bad {
+  color: #dc2626;
+  font-weight: 850;
+}
+
+.hs-warning-reason {
+  min-width: 260px;
+  max-width: 520px;
+  white-space: normal;
+  line-height: 1.4;
+}
+
+.hs-warning-source {
+  max-width: 180px;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hs-warning-empty {
+  padding: 20px !important;
+  color: var(--muted);
+  text-align: center;
+}
+
+
+@media (max-width: 1100px) {
+  .hs-warning-kpi-grid {
+    grid-template-columns:
+      repeat(3,minmax(0,1fr));
+  }
+
+  .hs-warning-filter-grid {
+    grid-template-columns:
+      repeat(4,minmax(0,1fr));
+  }
+}
+
+
+@media (max-width: 700px) {
+  .hs-warning-header {
+    flex-direction: column;
+  }
+
+  .hs-warning-kpi-grid {
+    grid-template-columns:
+      repeat(2,minmax(0,1fr));
+  }
+
+  .hs-warning-filter-grid {
+    grid-template-columns:
+      repeat(2,minmax(0,1fr));
+  }
+
+  .hs-warning-clear-wrap {
+    grid-column: 1 / -1;
+  }
+}
+/* Warning Notice Register collapse */
+
+.hs-warning-register-collapsible {
+  overflow: hidden;
+}
+
+.hs-warning-register-summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.hs-warning-register-summary::-webkit-details-marker {
+  display: none;
+}
+
+.hs-warning-collapse-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 8.5px;
+  font-weight: 800;
+}
+
+.hs-warning-collapse-indicator::after {
+  content: "▼";
+  margin-left: 5px;
+  font-size: 7px;
+  transition: transform .18s ease;
+}
+
+.hs-warning-register-collapsible[open]
+.hs-warning-collapse-indicator::after {
+  transform: rotate(180deg);
+}
+
+.hs-warning-register-collapsible[open]
+.hs-warning-collapse-indicator {
+  font-size: 0;
+}
+
+.hs-warning-register-collapsible[open]
+.hs-warning-collapse-indicator::before {
+  content: "Hide register";
+  font-size: 8.5px;
+}
+/* =========================================================
+   H&S WARNING NOTICE ENGINEER CHART
+   ========================================================= */
+
+.hs-warning-engineer-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 14px 14px;
+}
+
+.hs-warning-chart-empty {
+  padding: 16px;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.hs-warning-chart-row {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255,255,255,.02);
+  padding: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform .15s ease,
+    border-color .15s ease,
+    background .15s ease;
+}
+
+.hs-warning-chart-row:hover {
+  transform: translateY(-1px);
+  border-color: rgba(168,85,247,.35);
+  background: rgba(168,85,247,.04);
+}
+
+.hs-warning-chart-row-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 9px;
+}
+
+.hs-warning-chart-row-left {
+  min-width: 0;
+}
+
+.hs-warning-chart-engineer {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.hs-warning-chart-meta {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.hs-warning-chart-row-right {
+  flex-shrink: 0;
+}
+
+.hs-warning-chart-rate {
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.hs-warning-chart-rate.good {
+  color: #16a34a;
+}
+
+.hs-warning-chart-rate.mid {
+  color: #d97706;
+}
+
+.hs-warning-chart-rate.bad {
+  color: #dc2626;
+}
+
+.hs-warning-chart-bar {
+  display: flex;
+  width: 100%;
+  height: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148,163,184,.18);
+}
+
+.hs-warning-chart-bar-pass {
+  display: block;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(34,197,94,.92),
+    rgba(22,163,74,.92)
+  );
+}
+
+.hs-warning-chart-bar-fail {
+  display: block;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(239,68,68,.92),
+    rgba(220,38,38,.92)
+  );
+}
+
+@media (max-width: 700px) {
+  .hs-warning-chart-row-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .hs-warning-chart-rate {
+    font-size: 18px;
+  }
+}
+/* =========================================================
+   H&S CALIBRATION FIELD EDITING / EXCEL UPDATES
+   ========================================================= */
+
+.hs-calibration-pending-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 19px;
+  height: 19px;
+  margin-left: 5px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(217,119,6,.14);
+  color: #d97706;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.hs-calibration-pending-count.hidden {
+  display: none;
+}
+
+.hs-calibration-edit-btn {
+  white-space: nowrap;
+}
+
+.hs-calibration-pending-modal-card {
+  width: min(980px, 96vw);
+}
+
+.hs-calibration-pending-empty {
+  padding: 24px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 13px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 10px;
+}
+
+.hs-calibration-pending-table-wrap {
+  width: 100%;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+}
+
+.hs-calibration-pending-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9px;
+}
+
+.hs-calibration-pending-table th {
+  padding: 8px 9px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.hs-calibration-pending-table td {
+  padding: 9px;
+  border-bottom:
+    1px solid rgba(148,163,184,.10);
+  vertical-align: middle;
+}
+
+.hs-calibration-pending-table
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+/* =========================================================
+   H&S ENGINEER AUDIT REGISTER
+   ========================================================= */
+
+.hs-audit-register {
+  display: grid;
+  gap: 16px;
+}
+
+.hs-audit-register-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.hs-audit-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.hs-audit-table {
+  width: 100%;
+  min-width: 1450px;
+  border-collapse: collapse;
+  font-size: 9px;
+}
+
+.hs-audit-table th {
+  padding: 9px 10px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.hs-audit-table td {
+  padding: 9px 10px;
+  border-bottom:
+    1px solid rgba(148,163,184,.10);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.hs-audit-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.hs-audit-table tbody tr:hover {
+  background:
+    rgba(124,58,237,.035);
+}
+
+@media (max-width: 760px) {
+  .hs-audit-register-header {
+    flex-direction: column;
+  }
+}
+/* =========================================================
+   H&S AUDIT REGISTER EDITOR
+   ========================================================= */
+
+.hs-audit-edit-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 680px) {
+  .hs-audit-edit-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.hs-audit-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
