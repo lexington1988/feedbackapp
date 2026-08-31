@@ -6362,3 +6362,43 @@ tbody tr:last-child td {
   max-width: 100%;
   overflow-x: auto;
 }
+/* =========================================================
+   STANDARDISE ALL H&S PAGE WIDTHS
+   ========================================================= */
+
+#tabHealthSafety,
+#tabHealthSafety .hs-shell,
+#tabHealthSafety .hs-panel,
+#tabHealthSafety .hs-audit-register,
+#tabHealthSafety .hs-calibration,
+#tabHealthSafety .hs-warning-register,
+#tabHealthSafety .hs-section-placeholder {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+
+/* Prevent any H&S child from forcing the whole page wider */
+#tabHealthSafety .hs-panel > *,
+#tabHealthSafety .hs-audit-register > *,
+#tabHealthSafety .hs-calibration > * {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+
+/* Wide tables should scroll inside their own section */
+#tabHealthSafety .hs-audit-table-wrap,
+#tabHealthSafety .hs-audit-history-table-wrap,
+#tabHealthSafety .hs-calibration-table-wrap,
+#tabHealthSafety .performance-record-table-wrap {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
+}
