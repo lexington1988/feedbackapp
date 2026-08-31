@@ -25773,7 +25773,161 @@ async function resolveHsAuditRecord(
   }
 }
 
+async function deleteHsAuditRecord(
+  auditId
+) {
+  const audit =
+    (
+      hsAuditHistory ||
+      []
+    ).find(
+      item =>
+        item.id === auditId
+    );
 
+  if (!audit) {
+    alert(
+      "That audit record could not be found."
+    );
+
+    return;
+  }
+
+  const confirmed =
+    confirm(
+      `Delete this audit permanently?\n\n` +
+      `Engineer: ${audit.engineer || "Unknown"}\n` +
+      `Date: ${audit.auditDate || "Unknown"}\n` +
+      `Result: ${audit.result || "Unknown"}\n\n` +
+      `If this audit changed the engineer's Last Inspection Date, ` +
+      `the previous spreadsheet date will also be restored.`
+    );
+
+  if (!confirmed) {
+    return;
+  }
+
+
+  /*
+    Find the pending Last Inspection Date
+    update created by this audit.
+  */
+  const pendingUpdate =
+    (
+      hsAuditPendingUpdates ||
+      []
+    ).find(
+      update =>
+        update.engineer ===
+          audit.engineer &&
+        update.field ===
+          "lastInspectionDate" &&
+        update.newValue ===
+          audit.auditDate
+    );
+
+
+  /*
+    If we found the matching update,
+    restore the engineer's original
+    spreadsheet Last Inspection Date.
+  */
+  if (pendingUpdate) {
+    const engineerRecord =
+      (
+        hsAuditRegisterState.records ||
+        []
+      ).find(
+        record =>
+          record.engineer ===
+            audit.engineer
+      );
+
+    if (engineerRecord) {
+      engineerRecord.lastInspectionDate =
+        pendingUpdate.oldValue || "";
+    }
+
+
+    /*
+      Remove the now-unneeded pending
+      spreadsheet update.
+    */
+    hsAuditPendingUpdates =
+      (
+        hsAuditPendingUpdates ||
+        []
+      ).filter(
+        update =>
+          update.id !==
+            pendingUpdate.id
+      );
+  }
+
+
+  /*
+    Remove the permanent history record
+    locally.
+  */
+  hsAuditHistory =
+    (
+      hsAuditHistory ||
+      []
+    ).filter(
+      item =>
+        item.id !== auditId
+    );
+
+
+  saveHsAuditHistoryLocal();
+  saveHsAuditRegisterState();
+  saveHsAuditPendingUpdatesLocal();
+
+
+  /*
+    Remove the same record from Firebase
+    and sync the restored register.
+  */
+  if (cloudSignedIn()) {
+    try {
+      const user =
+        getUser();
+
+      await hsAuditHistoryCloudCol(
+        user.uid
+      )
+        .doc(
+          String(auditId)
+        )
+        .delete();
+
+      await Promise.all([
+        syncHsAuditRegisterToCloud(),
+        saveHsAuditPendingUpdatesToCloud()
+      ]);
+
+    } catch (error) {
+      console.error(
+        "H&S audit deletion Firebase sync failed:",
+        error
+      );
+
+      alert(
+        "The audit was deleted locally, but Firebase sync needs attention."
+      );
+    }
+  }
+
+
+  renderHsAuditRegister();
+  renderHsAuditPendingUpdates();
+  renderHsAuditHistory();
+  renderHsAuditOverview();
+
+  alert(
+    "Audit deleted. The engineer's previous Last Inspection Date has been restored where possible."
+  );
+}
 function renderHsAuditHistory() {
   populateHsAuditHistoryEngineerFilter();
 
@@ -25987,22 +26141,32 @@ function renderHsAuditHistory() {
 
 
               <td>
-                ${
-                  isOpen
-                    ? `
-                        <button
-                          type="button"
-                          class="btn small"
-                          data-hs-audit-resolve="${escapeHtml(
-                            audit.id
-                          )}"
-                        >
-                          Resolve
-                        </button>
-                      `
-                    : ""
-                }
-              </td>
+  ${
+    isOpen
+      ? `
+          <button
+            type="button"
+            class="btn small"
+            data-hs-audit-resolve="${escapeHtml(
+              audit.id
+            )}"
+          >
+            Resolve
+          </button>
+        `
+      : ""
+  }
+
+  <button
+    type="button"
+    class="btn danger small"
+    data-hs-audit-delete="${escapeHtml(
+      audit.id
+    )}"
+  >
+    Delete
+  </button>
+</td>
 
             </tr>
           `;
@@ -26028,7 +26192,23 @@ function renderHsAuditHistory() {
         );
       }
     );
-
+body
+  .querySelectorAll(
+    "[data-hs-audit-delete]"
+  )
+  .forEach(
+    button => {
+      button.addEventListener(
+        "click",
+        () => {
+          deleteHsAuditRecord(
+            button.dataset
+              .hsAuditDelete
+          );
+        }
+      );
+    }
+  );
 
   renderHsAuditOverview();
 }
