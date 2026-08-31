@@ -33074,6 +33074,887 @@ function getHsWarningRecordsForRange(
     }
   );
 }
+
+// =========================================================
+// H&S AUDIT POWERPOINT SLIDE
+// =========================================================
+
+function getHsAuditRecordsForRange(
+  from,
+  to
+) {
+  return (
+    hsAuditHistory ||
+    []
+  ).filter(
+    audit => {
+      const date =
+        String(
+          audit.auditDate ||
+          ""
+        );
+
+      if (!date) {
+        return false;
+      }
+
+      if (
+        from &&
+        date < from
+      ) {
+        return false;
+      }
+
+      if (
+        to &&
+        date > to
+      ) {
+        return false;
+      }
+
+      return true;
+    }
+  );
+}
+
+
+function getHsAuditSlidePeriodLabel(
+  records
+) {
+  const from =
+    el(
+      "hsAuditHistoryFrom"
+    )?.value || "";
+
+  const to =
+    el(
+      "hsAuditHistoryTo"
+    )?.value || "";
+
+  if (
+    from ||
+    to
+  ) {
+    return formatPptPeriodLabel(
+      from,
+      to
+    );
+  }
+
+  const dates =
+    (records || [])
+      .map(
+        record =>
+          record.auditDate
+      )
+      .filter(Boolean)
+      .sort();
+
+  if (!dates.length) {
+    return "All recorded audits";
+  }
+
+  return formatPptPeriodLabel(
+    dates[0],
+    dates[
+      dates.length - 1
+    ]
+  );
+}
+
+
+function pptHsAuditSlide(
+  pptx,
+  records,
+  periodLabelOverride = ""
+) {
+  const slide =
+    pptx.addSlide();
+
+  pptBackground(
+    pptx,
+    slide
+  );
+
+  const periodLabel =
+    periodLabelOverride ||
+    getHsAuditSlidePeriodLabel(
+      records
+    );
+
+  pptTitle(
+    slide,
+    "Health & Safety Audit Performance",
+    periodLabel
+  );
+
+
+  const total =
+    records.length;
+
+  const passes =
+    records.filter(
+      audit =>
+        audit.result ===
+        "PASS"
+    ).length;
+
+  const fails =
+    records.filter(
+      audit =>
+        audit.result ===
+        "FAIL"
+    ).length;
+
+  const passRate =
+    total
+      ? Math.round(
+          passes /
+          total *
+          100
+        )
+      : 0;
+
+  const openFailures =
+    records.filter(
+      audit =>
+        audit.result ===
+          "FAIL" &&
+        audit.resolved !==
+          true
+    );
+
+  const registerCounts =
+    getHsAuditRegisterCounts();
+
+
+  /*
+    KPI CARDS
+  */
+
+  pptMetric(
+    pptx,
+    slide,
+    0.35,
+    0.92,
+    3.0,
+    "Audits completed",
+    total,
+    periodLabel,
+    "",
+    true
+  );
+
+
+  pptMetric(
+    pptx,
+    slide,
+    3.55,
+    0.92,
+    3.0,
+    "PASS rate",
+    `${passRate}%`,
+    `${passes} PASS • ${fails} FAIL`,
+    "",
+    passRate >= 90
+  );
+
+
+  pptMetric(
+    pptx,
+    slide,
+    6.75,
+    0.92,
+    3.0,
+    "Open failures",
+    openFailures.length,
+    "Unresolved failed audits",
+
+    openFailures.length
+      ? "Needs attention"
+      : "Clear",
+
+    openFailures.length === 0
+  );
+
+
+  pptMetric(
+    pptx,
+    slide,
+    9.95,
+    0.92,
+    3.0,
+    "Audits overdue",
+    registerCounts.overdue,
+    `${registerCounts.total} engineers in register`,
+    "",
+    registerCounts.overdue === 0
+  );
+
+
+  /*
+    LEFT CARD:
+    PASS / FAIL
+  */
+
+  pptCard(
+    pptx,
+    slide,
+    0.35,
+    2.52,
+    6.1,
+    4.1
+  );
+
+  slide.addText(
+    "Audit outcomes",
+    {
+      x: 0.7,
+      y: 2.78,
+      w: 3.2,
+      h: 0.3,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 15,
+      bold: true,
+
+      color:
+        PPT_THEME.navy,
+
+      margin: 0
+    }
+  );
+
+
+  slide.addText(
+    `${passes}/${total || 0} audits passed`,
+    {
+      x: 4.2,
+      y: 2.82,
+      w: 1.8,
+      h: 0.2,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 9.5,
+
+      color:
+        PPT_THEME.muted,
+
+      align: "right",
+      margin: 0
+    }
+  );
+
+
+  pptPassFailDonut(
+    pptx,
+    slide,
+    1.45,
+    3.42,
+    passes,
+    fails,
+    NaN
+  );
+
+
+  /*
+    Audit schedule beneath donut.
+  */
+
+  slide.addText(
+    "Current audit schedule",
+    {
+      x: 3.75,
+      y: 3.48,
+      w: 2.1,
+      h: 0.25,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 11,
+      bold: true,
+
+      color:
+        PPT_THEME.navy,
+
+      margin: 0
+    }
+  );
+
+
+  const scheduleRows = [
+    {
+      label: "Current",
+      value:
+        registerCounts.current,
+      colour:
+        PPT_THEME.green
+    },
+    {
+      label: "Due this month",
+      value:
+        registerCounts.due,
+      colour:
+        PPT_THEME.amber
+    },
+    {
+      label: "Overdue",
+      value:
+        registerCounts.overdue,
+      colour:
+        PPT_THEME.red
+    }
+  ];
+
+
+  scheduleRows.forEach(
+    (
+      row,
+      index
+    ) => {
+      const y =
+        4.05 +
+        index * 0.58;
+
+      slide.addShape(
+        pptx.ShapeType.ellipse,
+        {
+          x: 3.78,
+          y:
+            y + 0.04,
+          w: 0.11,
+          h: 0.11,
+
+          line: {
+            transparency:
+              100
+          },
+
+          fill: {
+            color:
+              row.colour
+          }
+        }
+      );
+
+      slide.addText(
+        row.label,
+        {
+          x: 4.02,
+          y,
+          w: 1.25,
+          h: 0.2,
+
+          fontFace:
+            PPT_THEME.font,
+
+          fontSize: 9.5,
+
+          color:
+            PPT_THEME.navy,
+
+          margin: 0
+        }
+      );
+
+      slide.addText(
+        String(
+          row.value
+        ),
+        {
+          x: 5.35,
+          y,
+          w: 0.45,
+          h: 0.2,
+
+          fontFace:
+            PPT_THEME.font,
+
+          fontSize: 10.5,
+          bold: true,
+
+          color:
+            row.colour,
+
+          align: "right",
+          margin: 0
+        }
+      );
+    }
+  );
+
+
+  /*
+    RIGHT CARD:
+    FAILED AUDITS / THEMES
+  */
+
+  pptCard(
+    pptx,
+    slide,
+    6.68,
+    2.52,
+    6.3,
+    4.1
+  );
+
+  slide.addText(
+    "Failed audits requiring attention",
+    {
+      x: 7.02,
+      y: 2.78,
+      w: 4.7,
+      h: 0.3,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 15,
+      bold: true,
+
+      color:
+        PPT_THEME.navy,
+
+      margin: 0
+    }
+  );
+
+  slide.addText(
+    "Most recent unresolved failures",
+    {
+      x: 7.02,
+      y: 3.08,
+      w: 4.7,
+      h: 0.18,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 9.5,
+
+      color:
+        PPT_THEME.muted,
+
+      margin: 0
+    }
+  );
+
+
+  const failures =
+    openFailures
+      .slice()
+      .sort(
+        (a, b) =>
+          String(
+            b.auditDate ||
+            ""
+          ).localeCompare(
+            String(
+              a.auditDate ||
+              ""
+            )
+          )
+      )
+      .slice(
+        0,
+        5
+      );
+
+
+  if (!failures.length) {
+
+    slide.addText(
+      "✓  No unresolved failed audits in this period.",
+      {
+        x: 7.05,
+        y: 3.75,
+        w: 5.25,
+        h: 0.4,
+
+        fontFace:
+          PPT_THEME.font,
+
+        fontSize: 11,
+        bold: true,
+
+        color:
+          PPT_THEME.greenDark,
+
+        margin: 0
+      }
+    );
+
+  } else {
+
+    failures.forEach(
+      (
+        audit,
+        index
+      ) => {
+        const y =
+          3.48 +
+          index * 0.58;
+
+        slide.addShape(
+          pptx.ShapeType.ellipse,
+          {
+            x: 7.04,
+            y:
+              y + 0.05,
+            w: 0.10,
+            h: 0.10,
+
+            line: {
+              transparency:
+                100
+            },
+
+            fill: {
+              color:
+                PPT_THEME.red
+            }
+          }
+        );
+
+        slide.addText(
+          audit.engineer ||
+            "Unknown engineer",
+          {
+            x: 7.25,
+            y,
+            w: 2.1,
+            h: 0.18,
+
+            fontFace:
+              PPT_THEME.font,
+
+            fontSize: 9.2,
+            bold: true,
+
+            color:
+              PPT_THEME.navy,
+
+            margin: 0,
+            fit: "shrink"
+          }
+        );
+
+        slide.addText(
+          audit.auditDate
+            ? formatDate(
+                audit.auditDate
+              )
+            : "Date not recorded",
+          {
+            x: 10.75,
+            y,
+            w: 1.5,
+            h: 0.18,
+
+            fontFace:
+              PPT_THEME.font,
+
+            fontSize: 8,
+
+            color:
+              PPT_THEME.muted,
+
+            align: "right",
+            margin: 0
+          }
+        );
+
+        slide.addText(
+          audit.reason ||
+            audit.notes ||
+            "Follow-up required",
+          {
+            x: 7.25,
+            y:
+              y + 0.21,
+            w: 5.0,
+            h: 0.19,
+
+            fontFace:
+              PPT_THEME.font,
+
+            fontSize: 7.8,
+
+            color:
+              PPT_THEME.muted,
+
+            margin: 0,
+            fit: "shrink"
+          }
+        );
+      }
+    );
+  }
+
+
+  /*
+    MANAGEMENT INSIGHT
+  */
+
+  let managementInsight =
+    "";
+
+  if (!total) {
+
+    managementInsight =
+      "No H&S audits were recorded during the selected period.";
+
+  } else if (
+    fails === 0
+  ) {
+
+    managementInsight =
+      `All ${total} H&S audits completed during the selected period achieved PASS.`;
+
+  } else {
+
+    managementInsight =
+      `${passes} of ${total} H&S audits passed (${passRate}%). ${openFailures.length} failed audit${
+        openFailures.length === 1
+          ? ""
+          : "s"
+      } remain unresolved.`;
+  }
+
+
+  slide.addShape(
+    pptx.ShapeType.roundRect,
+    {
+      x: 0.55,
+      y: 6.88,
+      w: 12.23,
+      h: 0.38,
+
+      rectRadius: 0.05,
+
+      line: {
+        transparency:
+          100
+      },
+
+      fill: {
+        color:
+          PPT_THEME.purpleLight
+      }
+    }
+  );
+
+
+  slide.addText(
+    [
+      {
+        text:
+          "Management insight: ",
+
+        options: {
+          bold: true,
+          color:
+            PPT_THEME.purple
+        }
+      },
+
+      {
+        text:
+          managementInsight,
+
+        options: {
+          color:
+            PPT_THEME.navy
+        }
+      }
+    ],
+    {
+      x: 0.72,
+      y: 6.97,
+      w: 11.88,
+      h: 0.16,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 9.4,
+
+      margin: 0,
+      fit: "shrink"
+    }
+  );
+}
+
+
+async function generateHsAuditSlide() {
+  const button =
+    el(
+      "hsAuditGenerateSlideBtn"
+    );
+
+  const originalText =
+    button?.textContent ||
+    "Generate Slide";
+
+  try {
+
+    if (
+      !window.PptxGenJS
+    ) {
+      throw new Error(
+        "PptxGenJS has not loaded."
+      );
+    }
+
+
+    const records =
+      getFilteredHsAuditHistory();
+
+
+    if (button) {
+      button.disabled =
+        true;
+
+      button.textContent =
+        "Generating…";
+    }
+
+
+    const pptx =
+      new window.PptxGenJS();
+
+    pptx.layout =
+      "LAYOUT_WIDE";
+
+    pptx.author =
+      "Property Care Auditing";
+
+    pptx.subject =
+      "Health & Safety Audit Performance";
+
+    pptx.title =
+      "Health & Safety Audit Performance";
+
+    pptx.company =
+      "Property Care";
+
+    pptx.lang =
+      "en-GB";
+
+    pptx.theme = {
+      headFontFace:
+        PPT_THEME.font,
+
+      bodyFontFace:
+        PPT_THEME.font,
+
+      lang: "en-GB"
+    };
+
+
+    pptHsAuditSlide(
+      pptx,
+      records
+    );
+
+
+    const date =
+      new Date()
+        .toISOString()
+        .slice(
+          0,
+          10
+        );
+
+
+    await pptx.writeFile({
+      fileName:
+        `H-S-Audit-Performance-${date}.pptx`
+    });
+
+  } catch (error) {
+
+    console.error(
+      "H&S audit slide generation failed:",
+      error
+    );
+
+    alert(
+      `The H&S Audit slide could not be generated: ${
+        error?.message ||
+        error
+      }`
+    );
+
+  } finally {
+
+    if (button) {
+      button.disabled =
+        false;
+
+      button.textContent =
+        originalText;
+    }
+  }
+}
+
+
+function initHsAuditSlideGenerator() {
+  if (
+    el(
+      "hsAuditGenerateSlideBtn"
+    )
+  ) {
+    return;
+  }
+
+  const importButton =
+    el(
+      "hsAuditImportBtn"
+    );
+
+  if (!importButton) {
+    return;
+  }
+
+
+  const button =
+    document.createElement(
+      "button"
+    );
+
+  button.id =
+    "hsAuditGenerateSlideBtn";
+
+  button.type =
+    "button";
+
+  button.className =
+    "btn";
+
+  button.textContent =
+    "Generate Slide";
+
+  button.addEventListener(
+    "click",
+    generateHsAuditSlide
+  );
+
+
+  /*
+    Put it alongside the existing
+    H&S Audit controls.
+  */
+  importButton.insertAdjacentElement(
+    "afterend",
+    button
+  );
+}
 // =========================================================
 // H&S WARNING NOTICE POWERPOINT SLIDE
 // =========================================================
@@ -34722,6 +35603,7 @@ function initHsWarningNotices() {
 }
 
 function initHsAuditRegister() {
+  initHsAuditSlideGenerator();
     el(
     "hsAuditPendingBtn"
   )?.addEventListener(
@@ -39929,6 +40811,26 @@ pptHsOverviewSlide(
   data.currentLabel
 );
 
+    /*
+  H&S AUDIT PERFORMANCE
+*/
+const hsQuarterlyPeriods =
+  getExecutiveDashboardPeriods();
+
+const hsQuarterlyAuditRecords =
+  getHsAuditRecordsForRange(
+    hsQuarterlyPeriods
+      ?.currentFrom || "",
+
+    hsQuarterlyPeriods
+      ?.currentTo || ""
+  );
+
+pptHsAuditSlide(
+  pptx,
+  hsQuarterlyAuditRecords,
+  data.currentLabel
+);
 
 /*
   WARNING NOTICE COMPLIANCE
