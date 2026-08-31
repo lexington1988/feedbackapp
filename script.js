@@ -1768,17 +1768,18 @@ auth.onAuthStateChanged(async user => {
   await initialiseCloudAnalyticsArchive();
   startCloudSync();
 
-  /*
-    If a calibration register already
-    exists locally, sync it after login.
-  */
-  if (
-  typeof hsCalibrationState !==
-    "undefined" &&
-  hsCalibrationState.records
-    ?.length
+ /*
+  Load the current Calibration register
+  from Firebase whenever a user logs in.
+
+  If Firebase is empty, the loader will
+  safely upload any existing local data.
+*/
+if (
+  typeof loadHsCalibrationFromCloud ===
+    "function"
 ) {
-  await syncHsCalibrationToCloud();
+  await loadHsCalibrationFromCloud();
 }
 
 if (
@@ -1806,12 +1807,10 @@ if (
   await loadHsAuditHistoryFromCloud();
 }
     if (
-  typeof hsWarningState !==
-    "undefined" &&
-  hsWarningState.records
-    ?.length
+  typeof loadHsWarningNoticesFromCloud ===
+    "function"
 ) {
-  await syncHsWarningNoticesToCloud();
+  await loadHsWarningNoticesFromCloud();
 }
 } catch (err) {
   console.error(
@@ -21497,7 +21496,153 @@ function setHsCalibrationCloudStatus(
   }
 }
 
+async function loadHsCalibrationFromCloud() {
+  if (!cloudSignedIn()) {
+    return false;
+  }
 
+  try {
+    const user = getUser();
+
+    setHsCalibrationCloudStatus(
+      "Loading calibration register from Firebase…"
+    );
+
+    const [
+      calibrationSnapshot,
+      metaSnapshot
+    ] = await Promise.all([
+      hsCalibrationCloudCol(
+        user.uid
+      ).get(),
+
+      hsCalibrationMetaRef(
+        user.uid
+      ).get()
+    ]);
+
+    /*
+      If Firebase already contains a
+      calibration register, Firebase is the
+      source for this device.
+    */
+    if (!calibrationSnapshot.empty) {
+      hsCalibrationState.records =
+        calibrationSnapshot.docs.map(
+          document => {
+            const data =
+              document.data() || {};
+
+            /*
+              Do not keep Firestore's
+              server timestamp in localStorage.
+            */
+            const {
+              updatedAt,
+              ...record
+            } = data;
+
+            return {
+              ...record,
+
+              id:
+                record.id ||
+                document.id
+            };
+          }
+        );
+    } else if (
+      hsCalibrationState.records
+        ?.length
+    ) {
+      /*
+        Firebase is empty but this device
+        already has calibration data.
+
+        Upload the local register instead
+        of deleting it.
+      */
+      const result =
+        await syncHsCalibrationToCloud();
+
+      return !!result?.synced;
+    }
+
+    /*
+      Restore the workbook information
+      stored in the calibration settings
+      document.
+    */
+    if (metaSnapshot.exists) {
+      const data =
+        metaSnapshot.data() || {};
+
+      hsCalibrationState.importMeta = {
+        fileName:
+          data.sourceFile ||
+          hsCalibrationState
+            .importMeta
+            ?.fileName ||
+          "",
+
+        sheetName:
+          data.sourceSheet ||
+          hsCalibrationState
+            .importMeta
+            ?.sheetName ||
+          "",
+
+        importedAt:
+          data.importedAt ||
+          hsCalibrationState
+            .importMeta
+            ?.importedAt ||
+          null,
+
+        recordCount:
+          Number.isFinite(
+            Number(data.recordCount)
+          )
+            ? Number(
+                data.recordCount
+              )
+            : hsCalibrationState
+                .records
+                .length
+      };
+    }
+
+    saveHsCalibrationState();
+
+    renderHsCalibration();
+
+    setHsCalibrationCloudStatus(
+      `Cloud loaded • ${
+        hsCalibrationState.records.length
+      } analyser${
+        hsCalibrationState.records.length ===
+        1
+          ? ""
+          : "s"
+      }.`,
+      "good"
+    );
+
+    return true;
+  } catch (error) {
+    console.error(
+      "Calibration register could not be loaded from Firebase:",
+      error
+    );
+
+    setHsCalibrationCloudStatus(
+      "Firebase load failed • Local calibration data is still safe.",
+      "error"
+    );
+
+    return false;
+  }
+}
 async function syncHsCalibrationToCloud() {
   if (!cloudSignedIn()) {
     setHsCalibrationCloudStatus(
@@ -24007,14 +24152,18 @@ async function saveHsAuditRecord() {
 
   saveHsAuditHistoryLocal();
 
-  saveHsAuditRegisterState();
+saveHsAuditRegisterState();
 
-  saveHsAuditPendingUpdatesLocal();
+saveHsAuditPendingUpdatesLocal();
 
 
-  renderHsAuditRegister();
+renderHsAuditRegister();
 
-  renderHsAuditPendingUpdates();
+renderHsAuditPendingUpdates();
+
+renderHsAuditHistory();
+
+renderHsAuditOverview();
 
 
   if (status) {
@@ -24900,10 +25049,15 @@ async function loadHsAuditHistoryFromCloud() {
       );
 
 
-    saveHsAuditHistoryLocal();
+   saveHsAuditHistoryLocal();
 
 
-    return true;
+renderHsAuditHistory();
+
+renderHsAuditOverview();
+
+
+return true;
   } catch (error) {
     console.error(
       "H&S audit history could not be loaded from Firebase:",
@@ -25236,7 +25390,648 @@ function getHsAuditRegisterCounts() {
   return counts;
 }
 
+function populateHsAuditHistoryEngineerFilter() {
+  const select =
+    el(
+      "hsAuditHistoryEngineer"
+    );
 
+
+  if (!select) {
+    return;
+  }
+
+
+  const current =
+    select.value;
+
+
+  const engineers = [
+    ...new Set(
+      (
+        hsAuditHistory ||
+        []
+      )
+        .map(
+          audit =>
+            String(
+              audit.engineer ||
+              ""
+            ).trim()
+        )
+        .filter(Boolean)
+    )
+  ].sort(
+    (a, b) =>
+      a.localeCompare(b)
+  );
+
+
+  select.innerHTML =
+    `
+      <option value="">
+        All engineers
+      </option>
+    ` +
+    engineers
+      .map(
+        engineer => `
+          <option
+            value="${escapeHtml(
+              engineer
+            )}"
+          >
+            ${escapeHtml(
+              engineer
+            )}
+          </option>
+        `
+      )
+      .join("");
+
+
+  if (
+    engineers.includes(
+      current
+    )
+  ) {
+    select.value =
+      current;
+  }
+}
+
+
+function getFilteredHsAuditHistory() {
+  const from =
+    el(
+      "hsAuditHistoryFrom"
+    )?.value || "";
+
+
+  const to =
+    el(
+      "hsAuditHistoryTo"
+    )?.value || "";
+
+
+  const engineer =
+    el(
+      "hsAuditHistoryEngineer"
+    )?.value || "";
+
+
+  const result =
+    el(
+      "hsAuditHistoryResult"
+    )?.value || "";
+
+
+  const resolution =
+    el(
+      "hsAuditHistoryResolution"
+    )?.value || "";
+
+
+  return (
+    hsAuditHistory ||
+    []
+  )
+    .filter(
+      audit => {
+        const date =
+          String(
+            audit.auditDate ||
+            ""
+          );
+
+
+        if (
+          from &&
+          date < from
+        ) {
+          return false;
+        }
+
+
+        if (
+          to &&
+          date > to
+        ) {
+          return false;
+        }
+
+
+        if (
+          engineer &&
+          audit.engineer !==
+            engineer
+        ) {
+          return false;
+        }
+
+
+        if (
+          result &&
+          audit.result !==
+            result
+        ) {
+          return false;
+        }
+
+
+        if (
+          resolution ===
+            "open" &&
+          !(
+            audit.result ===
+              "FAIL" &&
+            audit.resolved !==
+              true
+          )
+        ) {
+          return false;
+        }
+
+
+        if (
+          resolution ===
+            "resolved" &&
+          !(
+            audit.result ===
+              "FAIL" &&
+            audit.resolved ===
+              true
+          )
+        ) {
+          return false;
+        }
+
+
+        return true;
+      }
+    )
+    .sort(
+      (a, b) =>
+        String(
+          b.auditDate ||
+          ""
+        ).localeCompare(
+          String(
+            a.auditDate ||
+            ""
+          )
+        )
+    );
+}
+
+
+function getOpenHsAuditFailures() {
+  return (
+    hsAuditHistory ||
+    []
+  )
+    .filter(
+      audit =>
+        audit.result ===
+          "FAIL" &&
+        audit.resolved !==
+          true
+    )
+    .sort(
+      (a, b) =>
+        String(
+          b.auditDate ||
+          ""
+        ).localeCompare(
+          String(
+            a.auditDate ||
+            ""
+          )
+        )
+    );
+}
+
+
+function renderHsAuditOverview() {
+  const totalAudits =
+    (
+      hsAuditHistory ||
+      []
+    ).length;
+
+
+  const openFailures =
+    getOpenHsAuditFailures();
+
+
+  const auditCount =
+    el(
+      "hsOverviewAuditCount"
+    );
+
+
+  if (auditCount) {
+    auditCount.textContent =
+      String(
+        totalAudits
+      );
+  }
+
+
+  const highRisk =
+    el(
+      "hsOverviewHighRisk"
+    );
+
+
+  if (highRisk) {
+    highRisk.textContent =
+      String(
+        openFailures.length
+      );
+  }
+
+
+  /*
+    The shared Needs Attention renderer
+    lives inside the Calibration overview
+    function, so refresh it whenever audit
+    history changes.
+  */
+  if (
+    typeof renderHsCalibrationOverview ===
+      "function"
+  ) {
+    renderHsCalibrationOverview();
+  }
+}
+
+
+async function resolveHsAuditRecord(
+  auditId
+) {
+  const audit =
+    (
+      hsAuditHistory ||
+      []
+    ).find(
+      item =>
+        item.id ===
+        auditId
+    );
+
+
+  if (
+    !audit ||
+    audit.result !==
+      "FAIL" ||
+    audit.resolved ===
+      true
+  ) {
+    return;
+  }
+
+
+  const resolutionNote =
+    prompt(
+      "Resolution note (optional):",
+      ""
+    );
+
+
+  if (
+    resolutionNote ===
+    null
+  ) {
+    return;
+  }
+
+
+  const confirmed =
+    confirm(
+      `Mark the failed H&S audit for ${audit.engineer || "this engineer"} as resolved?`
+    );
+
+
+  if (!confirmed) {
+    return;
+  }
+
+
+  const now =
+    new Date();
+
+
+  const resolvedDate =
+    `${now.getFullYear()}-${String(
+      now.getMonth() + 1
+    ).padStart(2, "0")}-${String(
+      now.getDate()
+    ).padStart(2, "0")}`;
+
+
+  audit.resolved =
+    true;
+
+
+  audit.resolvedAt =
+    resolvedDate;
+
+
+  audit.resolutionNote =
+    String(
+      resolutionNote ||
+      ""
+    ).trim();
+
+
+  audit.resolutionUpdatedAt =
+    new Date()
+      .toISOString();
+
+
+  saveHsAuditHistoryLocal();
+
+
+  renderHsAuditHistory();
+
+  renderHsAuditOverview();
+
+
+  if (cloudSignedIn()) {
+    const result =
+      await saveHsAuditRecordToCloud(
+        audit
+      );
+
+
+    if (!result.saved) {
+      alert(
+        "The audit was resolved locally, but Firebase sync failed."
+      );
+    }
+  }
+}
+
+
+function renderHsAuditHistory() {
+  populateHsAuditHistoryEngineerFilter();
+
+
+  const records =
+    getFilteredHsAuditHistory();
+
+
+  const count =
+    el(
+      "hsAuditHistoryCount"
+    );
+
+
+  if (count) {
+    count.textContent =
+      `${records.length} of ${
+        (
+          hsAuditHistory ||
+          []
+        ).length
+      } audit${
+        (
+          hsAuditHistory ||
+          []
+        ).length === 1
+          ? ""
+          : "s"
+      } shown`;
+  }
+
+
+  const body =
+    el(
+      "hsAuditHistoryTableBody"
+    );
+
+
+  if (!body) {
+    return;
+  }
+
+
+  if (!records.length) {
+    body.innerHTML = `
+      <tr>
+        <td
+          colspan="9"
+          class="hs-calibration-empty"
+        >
+          ${
+            (
+              hsAuditHistory ||
+              []
+            ).length
+              ? "No audits match the selected filters."
+              : "No H&S audits recorded yet."
+          }
+        </td>
+      </tr>
+    `;
+
+
+    renderHsAuditOverview();
+
+    return;
+  }
+
+
+  body.innerHTML =
+    records
+      .map(
+        audit => {
+          const isFailure =
+            audit.result ===
+            "FAIL";
+
+
+          const isOpen =
+            isFailure &&
+            audit.resolved !==
+              true;
+
+
+          const statusLabel =
+            !isFailure
+              ? "Complete"
+              : isOpen
+                ? "Open"
+                : "Resolved";
+
+
+          const statusClass =
+            isOpen
+              ? "hs-audit-history-open"
+              : "hs-audit-history-closed";
+
+
+          return `
+            <tr>
+
+              <td>
+                ${escapeHtml(
+                  audit.auditDate
+                    ? formatDate(
+                        audit.auditDate
+                      )
+                    : "—"
+                )}
+              </td>
+
+
+              <td>
+                <strong>
+                  ${escapeHtml(
+                    audit.engineer ||
+                    "—"
+                  )}
+                </strong>
+              </td>
+
+
+              <td>
+                <span
+                  class="
+                    hs-audit-history-result
+                    ${
+                      audit.result ===
+                        "PASS"
+                        ? "hs-audit-history-pass"
+                        : "hs-audit-history-fail"
+                    }
+                  "
+                >
+                  ${escapeHtml(
+                    audit.result ||
+                    "—"
+                  )}
+                </span>
+              </td>
+
+
+              <td>
+                <div class="hs-audit-history-text">
+                  ${escapeHtml(
+                    audit.reason ||
+                    "—"
+                  )}
+                </div>
+              </td>
+
+
+              <td>
+                <div class="hs-audit-history-text">
+                  ${escapeHtml(
+                    audit.notes ||
+                    "—"
+                  )}
+                </div>
+              </td>
+
+
+              <td>
+                ${
+                  audit.followUpRequired
+                    ? "Required"
+                    : "No"
+                }
+              </td>
+
+
+              <td>
+                <span
+                  class="
+                    hs-audit-history-status
+                    ${statusClass}
+                  "
+                >
+                  ${statusLabel}
+                </span>
+              </td>
+
+
+              <td>
+                ${
+                  audit.resolvedAt
+                    ? `
+                        ${escapeHtml(
+                          formatDate(
+                            audit.resolvedAt
+                          )
+                        )}
+
+                        ${
+                          audit.resolutionNote
+                            ? `
+                                <div
+                                  class="hs-audit-history-resolution-note"
+                                >
+                                  ${escapeHtml(
+                                    audit.resolutionNote
+                                  )}
+                                </div>
+                              `
+                            : ""
+                        }
+                      `
+                    : "—"
+                }
+              </td>
+
+
+              <td>
+                ${
+                  isOpen
+                    ? `
+                        <button
+                          type="button"
+                          class="btn small"
+                          data-hs-audit-resolve="${escapeHtml(
+                            audit.id
+                          )}"
+                        >
+                          Resolve
+                        </button>
+                      `
+                    : ""
+                }
+              </td>
+
+            </tr>
+          `;
+        }
+      )
+      .join("");
+
+
+  body
+    .querySelectorAll(
+      "[data-hs-audit-resolve]"
+    )
+    .forEach(
+      button => {
+        button.addEventListener(
+          "click",
+          () => {
+            resolveHsAuditRecord(
+              button.dataset
+                .hsAuditResolve
+            );
+          }
+        );
+      }
+    );
+
+
+  renderHsAuditOverview();
+}
 function renderHsAuditRegister() {
   const records =
     hsAuditRegisterState.records ||
@@ -26191,72 +26986,197 @@ function renderHsCalibrationOverview() {
       counts.due30;
   }
 
-  const attentionList =
-    el("hsAttentionList");
+ const attentionList =
+  el(
+    "hsAttentionList"
+  );
 
-  if (!attentionList) {
-    return;
-  }
 
-  const urgentRecords =
-    (
-      hsCalibrationState.records ||
-      []
-    )
-      .map(record => ({
+if (!attentionList) {
+  return;
+}
+
+
+/*
+  CALIBRATION ITEMS
+*/
+const urgentCalibration =
+  (
+    hsCalibrationState.records ||
+    []
+  )
+    .map(
+      record => ({
+        type:
+          "calibration",
+
         record,
+
         days:
           hsCalibrationDaysLeft(
             record.dueDate
           )
-      }))
-      .filter(item =>
+      })
+    )
+    .filter(
+      item =>
         item.days !== null &&
         item.days <= 30
-      )
-      .sort(
-        (a, b) =>
-          a.days - b.days
-      )
-      .slice(0, 6);
+    );
 
-  if (!urgentRecords.length) {
-    attentionList.innerHTML = `
-      <div class="hs-good-state">
-        <span class="hs-good-icon">
-          ✓
+
+/*
+  UNRESOLVED FAILED H&S AUDITS
+*/
+const openAuditFailures =
+  typeof getOpenHsAuditFailures ===
+    "function"
+    ? getOpenHsAuditFailures()
+        .map(
+          audit => ({
+            type:
+              "audit",
+
+            audit
+          })
+        )
+    : [];
+
+
+const attentionItems = [
+  ...openAuditFailures,
+  ...urgentCalibration
+]
+  .slice(
+    0,
+    8
+  );
+
+
+if (
+  !attentionItems.length
+) {
+  attentionList.innerHTML = `
+    <div class="hs-good-state">
+
+      <span class="hs-good-icon">
+        ✓
+      </span>
+
+      <div>
+        <strong>
+          Nothing requiring attention
+        </strong>
+
+        <span>
+          No unresolved failed H&S audits or urgent calibration items.
         </span>
-
-        <div>
-          <strong>
-            Nothing requiring attention
-          </strong>
-
-          <span>
-            No analyser calibrations are
-            expired or due within 30 days.
-          </span>
-        </div>
       </div>
-    `;
 
-    return;
-  }
+    </div>
+  `;
 
-  attentionList.innerHTML =
-    urgentRecords
-      .map(({ record, days }) => {
+
+  return;
+}
+
+
+attentionList.innerHTML =
+  attentionItems
+    .map(
+      item => {
+
+        /*
+          FAILED H&S AUDIT
+        */
+        if (
+          item.type ===
+          "audit"
+        ) {
+          const audit =
+            item.audit;
+
+
+          return `
+            <button
+              type="button"
+              class="
+                hs-attention-item
+                hs-attention-danger
+              "
+              data-hs-attention-audit="${escapeHtml(
+                audit.id
+              )}"
+            >
+
+              <span
+                class="hs-attention-dot"
+              ></span>
+
+              <span>
+
+                <strong>
+                  ${escapeHtml(
+                    audit.engineer ||
+                    "Engineer"
+                  )}
+                  • Failed H&amp;S audit
+                </strong>
+
+                <small>
+                  ${escapeHtml(
+                    audit.reason ||
+                    "No failure reason recorded"
+                  )}
+                </small>
+
+                <small>
+                  ${escapeHtml(
+                    audit.auditDate
+                      ? formatDate(
+                          audit.auditDate
+                        )
+                      : "Unknown date"
+                  )}
+                  • Follow-up required
+                </small>
+
+              </span>
+
+              <span class="hs-arrow">
+                →
+              </span>
+
+            </button>
+          `;
+        }
+
+
+        /*
+          CALIBRATION
+        */
+        const record =
+          item.record;
+
+
+        const days =
+          item.days;
+
+
         const status =
           getHsCalibrationStatus(
             record.dueDate
           );
+
 
         const timing =
           days < 0
             ? `${Math.abs(
                 days
               )} day${
-                Math.abs(days) === 1
+                Math.abs(
+                  days
+                ) === 1
                   ? ""
                   : "s"
               } overdue`
@@ -26267,6 +27187,7 @@ function renderHsCalibrationOverview() {
                     ? ""
                     : "s"
                 }`;
+
 
         return `
           <button
@@ -26279,11 +27200,13 @@ function renderHsCalibrationOverview() {
               record.analyserCode
             )}"
           >
+
             <span
               class="hs-attention-dot"
             ></span>
 
             <span>
+
               <strong>
                 ${escapeHtml(
                   record.analyserCode
@@ -26303,7 +27226,9 @@ function renderHsCalibrationOverview() {
               </small>
 
               <small>
-                ${escapeHtml(timing)}
+                ${escapeHtml(
+                  timing
+                )}
                 •
                 ${escapeHtml(
                   formatDate(
@@ -26311,21 +27236,26 @@ function renderHsCalibrationOverview() {
                   )
                 )}
               </small>
+
             </span>
 
             <span class="hs-arrow">
               →
             </span>
+
           </button>
         `;
-      })
-      .join("");
-
-  attentionList
-    .querySelectorAll(
-      "[data-hs-calibration-code]"
+      }
     )
-    .forEach(button => {
+    .join("");
+
+
+attentionList
+  .querySelectorAll(
+    "[data-hs-calibration-code]"
+  )
+  .forEach(
+    button => {
       button.addEventListener(
         "click",
         () => {
@@ -26333,10 +27263,12 @@ function renderHsCalibrationOverview() {
             "calibration"
           );
 
+
           const search =
             el(
               "hsCalibrationSearch"
             );
+
 
           if (search) {
             search.value =
@@ -26344,11 +27276,57 @@ function renderHsCalibrationOverview() {
                 .hsCalibrationCode ||
               "";
 
+
             renderHsCalibration();
           }
         }
       );
-    });
+    }
+  );
+
+
+attentionList
+  .querySelectorAll(
+    "[data-hs-attention-audit]"
+  )
+  .forEach(
+    button => {
+      button.addEventListener(
+        "click",
+        () => {
+          setHealthSafetyTab(
+            "audits"
+          );
+
+
+          const resolution =
+            el(
+              "hsAuditHistoryResolution"
+            );
+
+
+          if (resolution) {
+            resolution.value =
+              "open";
+          }
+
+
+          renderHsAuditHistory();
+
+
+          el(
+            "hsAuditHistoryTableBody"
+          )?.scrollIntoView({
+            behavior:
+              "smooth",
+
+            block:
+              "start"
+          });
+        }
+      );
+    }
+  );
 }
 
 function updateHsCalibrationPendingBadge() {
@@ -28351,7 +29329,112 @@ function setHsWarningCloudStatus(
   }
 }
 
+async function loadHsWarningNoticesFromCloud() {
+  if (!cloudSignedIn()) {
+    return false;
+  }
 
+  try {
+    const user = getUser();
+
+    setHsWarningCloudStatus(
+      "Loading Warning Notice data from Firebase…"
+    );
+
+    const snapshot =
+      await hsWarningNoticesCloudCol(
+        user.uid
+      ).get();
+
+    /*
+      If Firebase contains Warning Notice
+      records, use them on this device.
+    */
+    if (!snapshot.empty) {
+      hsWarningState.records =
+        snapshot.docs.map(
+          document => {
+            const data =
+              document.data() || {};
+
+            /*
+              Remove Firestore's server
+              timestamp before saving locally.
+            */
+            const {
+              updatedAt,
+              ...record
+            } = data;
+
+            return {
+              ...record,
+
+              id:
+                record.id ||
+                document.id
+            };
+          }
+        );
+
+      saveHsWarningState();
+
+      renderHsWarningNotices();
+
+      setHsWarningCloudStatus(
+        `Cloud loaded • ${
+          hsWarningState.records.length
+        } Warning Notice record${
+          hsWarningState.records.length ===
+          1
+            ? ""
+            : "s"
+        }.`,
+        "good"
+      );
+
+      return true;
+    }
+
+    /*
+      Firebase is empty but this device has
+      local Warning Notice records.
+
+      Upload those local records instead.
+    */
+    if (
+      hsWarningState.records
+        ?.length
+    ) {
+      const result =
+        await syncHsWarningNoticesToCloud();
+
+      return !!result?.synced;
+    }
+
+    saveHsWarningState();
+
+    renderHsWarningNotices();
+
+    setHsWarningCloudStatus(
+      "Cloud connected • No Warning Notice records stored.",
+      "good"
+    );
+
+    return true;
+  } catch (error) {
+    console.error(
+      "Warning Notices could not be loaded from Firebase:",
+      error
+    );
+
+    setHsWarningCloudStatus(
+      "Firebase load failed • Local Warning Notice data is still safe.",
+      "error"
+    );
+
+    return false;
+  }
+}
 async function syncHsWarningNoticesToCloud() {
   if (!cloudSignedIn()) {
     setHsWarningCloudStatus(
@@ -32340,6 +33423,114 @@ el(
 
 
   renderHsAuditPendingUpdates();
+  el(
+  "hsAuditHistoryFrom"
+)?.addEventListener(
+  "change",
+  renderHsAuditHistory
+);
+
+
+el(
+  "hsAuditHistoryTo"
+)?.addEventListener(
+  "change",
+  renderHsAuditHistory
+);
+
+
+el(
+  "hsAuditHistoryEngineer"
+)?.addEventListener(
+  "change",
+  renderHsAuditHistory
+);
+
+
+el(
+  "hsAuditHistoryResult"
+)?.addEventListener(
+  "change",
+  renderHsAuditHistory
+);
+
+
+el(
+  "hsAuditHistoryResolution"
+)?.addEventListener(
+  "change",
+  renderHsAuditHistory
+);
+
+
+el(
+  "hsAuditHistoryClearBtn"
+)?.addEventListener(
+  "click",
+  () => {
+    if (
+      el(
+        "hsAuditHistoryFrom"
+      )
+    ) {
+      el(
+        "hsAuditHistoryFrom"
+      ).value = "";
+    }
+
+
+    if (
+      el(
+        "hsAuditHistoryTo"
+      )
+    ) {
+      el(
+        "hsAuditHistoryTo"
+      ).value = "";
+    }
+
+
+    if (
+      el(
+        "hsAuditHistoryEngineer"
+      )
+    ) {
+      el(
+        "hsAuditHistoryEngineer"
+      ).value = "";
+    }
+
+
+    if (
+      el(
+        "hsAuditHistoryResult"
+      )
+    ) {
+      el(
+        "hsAuditHistoryResult"
+      ).value = "";
+    }
+
+
+    if (
+      el(
+        "hsAuditHistoryResolution"
+      )
+    ) {
+      el(
+        "hsAuditHistoryResolution"
+      ).value = "";
+    }
+
+
+    renderHsAuditHistory();
+  }
+);
+
+
+renderHsAuditHistory();
+
+renderHsAuditOverview();
   const importButton =
     el(
       "hsAuditImportBtn"
