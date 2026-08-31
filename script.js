@@ -1224,6 +1224,8 @@ const cloudDb = firebase.firestore();
 
 let cloudUnsub = null;
 
+let hsCloudUnsubs = [];
+
 function cloudSignedIn() {
   return !!auth.currentUser;
 }
@@ -1622,9 +1624,341 @@ function startCloudSync() {
     );
 }
 
+function startHsCloudSync() {
+  if (!cloudSignedIn()) {
+    return;
+  }
+
+  /*
+    Stop any old H&S listeners before
+    starting a fresh set.
+  */
+  hsCloudUnsubs.forEach(
+    unsubscribe => {
+      try {
+        unsubscribe();
+      } catch {}
+    }
+  );
+
+  hsCloudUnsubs = [];
+
+  const user =
+    getUser();
+
+
+  /* ================================
+     H&S AUDIT REGISTER
+     ================================ */
+
+  hsCloudUnsubs.push(
+    hsAuditRegisterCloudCol(
+      user.uid
+    ).onSnapshot(
+      snapshot => {
+        hsAuditRegisterState.records =
+          snapshot.docs.map(
+            document => {
+              const data =
+                document.data() || {};
+
+              const {
+                updatedAt,
+                ...record
+              } = data;
+
+              return {
+                ...record,
+
+                id:
+                  record.id ||
+                  document.id
+              };
+            }
+          );
+
+        saveHsAuditRegisterState();
+
+        renderHsAuditRegister();
+        renderHsAuditOverview();
+      },
+
+      error => {
+        console.error(
+          "H&S Audit Register live sync failed:",
+          error
+        );
+      }
+    )
+  );
+
+
+  /* ================================
+     H&S AUDIT HISTORY
+     ================================ */
+
+  hsCloudUnsubs.push(
+    hsAuditHistoryCloudCol(
+      user.uid
+    ).onSnapshot(
+      snapshot => {
+        hsAuditHistory =
+          snapshot.docs.map(
+            document => {
+              const data =
+                document.data() || {};
+
+              const {
+                updatedAt,
+                ...audit
+              } = data;
+
+              return {
+                ...audit,
+
+                id:
+                  audit.id ||
+                  document.id
+              };
+            }
+          );
+
+        saveHsAuditHistoryLocal();
+
+        renderHsAuditHistory();
+        renderHsAuditOverview();
+      },
+
+      error => {
+        console.error(
+          "H&S Audit History live sync failed:",
+          error
+        );
+      }
+    )
+  );
+
+
+  /* ================================
+     H&S AUDIT PENDING UPDATES
+     ================================ */
+
+  hsCloudUnsubs.push(
+    hsAuditRegisterMetaRef(
+      user.uid
+    ).onSnapshot(
+      snapshot => {
+        if (!snapshot.exists) {
+          return;
+        }
+
+        const data =
+          snapshot.data() || {};
+
+        if (
+          Array.isArray(
+            data.pendingExcelUpdates
+          )
+        ) {
+          hsAuditPendingUpdates =
+            data.pendingExcelUpdates;
+
+          saveHsAuditPendingUpdatesLocal();
+
+          renderHsAuditPendingUpdates();
+        }
+      },
+
+      error => {
+        console.error(
+          "H&S Audit settings live sync failed:",
+          error
+        );
+      }
+    )
+  );
+
+
+  /* ================================
+     CALIBRATION
+     ================================ */
+
+  hsCloudUnsubs.push(
+    hsCalibrationCloudCol(
+      user.uid
+    ).onSnapshot(
+      snapshot => {
+        hsCalibrationState.records =
+          snapshot.docs.map(
+            document => {
+              const data =
+                document.data() || {};
+
+              const {
+                updatedAt,
+                ...record
+              } = data;
+
+              return {
+                ...record,
+
+                id:
+                  record.id ||
+                  document.id
+              };
+            }
+          );
+
+        saveHsCalibrationState();
+
+        renderHsCalibration();
+
+        if (
+          typeof renderHsCalibrationOverview ===
+            "function"
+        ) {
+          renderHsCalibrationOverview();
+        }
+
+        setHsCalibrationCloudStatus(
+          `Live synced • ${
+            hsCalibrationState.records.length
+          } analyser${
+            hsCalibrationState.records.length ===
+            1
+              ? ""
+              : "s"
+          }.`,
+          "good"
+        );
+      },
+
+      error => {
+        console.error(
+          "Calibration live sync failed:",
+          error
+        );
+      }
+    )
+  );
+
+
+  /* ================================
+     CALIBRATION SETTINGS /
+     PENDING UPDATES
+     ================================ */
+
+  hsCloudUnsubs.push(
+    hsCalibrationMetaRef(
+      user.uid
+    ).onSnapshot(
+      snapshot => {
+        if (!snapshot.exists) {
+          return;
+        }
+
+        const data =
+          snapshot.data() || {};
+
+        if (
+          Array.isArray(
+            data.pendingExcelUpdates
+          )
+        ) {
+          hsCalibrationPendingUpdates =
+            data.pendingExcelUpdates;
+
+          saveHsCalibrationPendingUpdatesLocal();
+
+          renderHsCalibrationPendingUpdates();
+          renderHsCalibration();
+        }
+      },
+
+      error => {
+        console.error(
+          "Calibration settings live sync failed:",
+          error
+        );
+      }
+    )
+  );
+
+
+  /* ================================
+     WARNING NOTICES
+     ================================ */
+
+  hsCloudUnsubs.push(
+    hsWarningNoticesCloudCol(
+      user.uid
+    ).onSnapshot(
+      snapshot => {
+        hsWarningState.records =
+          snapshot.docs.map(
+            document => {
+              const data =
+                document.data() || {};
+
+              const {
+                updatedAt,
+                ...record
+              } = data;
+
+              return {
+                ...record,
+
+                id:
+                  record.id ||
+                  document.id
+              };
+            }
+          );
+
+        saveHsWarningState();
+
+        renderHsWarningNotices();
+
+        setHsWarningCloudStatus(
+          `Live synced • ${
+            hsWarningState.records.length
+          } Warning Notice record${
+            hsWarningState.records.length ===
+            1
+              ? ""
+              : "s"
+          }.`,
+          "good"
+        );
+      },
+
+      error => {
+        console.error(
+          "Warning Notices live sync failed:",
+          error
+        );
+      }
+    )
+  );
+}
 function stopCloudSync() {
   if (cloudUnsub) cloudUnsub();
   cloudUnsub = null;
+
+  hsCloudUnsubs.forEach(
+    unsubscribe => {
+      try {
+        unsubscribe();
+      } catch (error) {
+        console.warn(
+          "H&S listener could not be stopped:",
+          error
+        );
+      }
+    }
+  );
+
+  hsCloudUnsubs = [];
 }
 
 async function upsertInspectionCloud(ins) {
@@ -1766,7 +2100,9 @@ auth.onAuthStateChanged(async user => {
 
   try {
   await initialiseCloudAnalyticsArchive();
-  startCloudSync();
+
+startCloudSync();
+startHsCloudSync();
 
  /*
   Load the current Calibration register
