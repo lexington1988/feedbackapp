@@ -24967,103 +24967,57 @@ async function loadHsAuditHistoryFromCloud() {
     return false;
   }
 
-
   try {
     const user =
       getUser();
-
 
     const snapshot =
       await hsAuditHistoryCloudCol(
         user.uid
       ).get();
 
+    /*
+      When logged in, Firebase is the
+      authoritative Audit History.
 
-    if (
-      snapshot.empty
-    ) {
-      /*
-        If Firebase has no history yet,
-        upload any local records.
-      */
-      for (
-        const audit of
-        hsAuditHistory
-      ) {
-        await saveHsAuditRecordToCloud(
-          audit
-        );
-      }
+      This is important because deletions
+      made on another device must also
+      disappear from this device.
+    */
+    hsAuditHistory =
+      snapshot.docs.map(
+        document => {
+          const data =
+            document.data() ||
+            {};
 
+          const {
+            updatedAt,
+            ...audit
+          } = data;
 
-      return true;
-    }
-
-
-    const merged =
-      new Map();
-
-
-    hsAuditHistory.forEach(
-      audit => {
-        if (audit.id) {
-          merged.set(
-            audit.id,
-            audit
-          );
-        }
-      }
-    );
-
-
-    snapshot.docs.forEach(
-      document => {
-        const data =
-          document.data() ||
-          {};
-
-
-        const {
-          updatedAt,
-          ...audit
-        } = data;
-
-
-        merged.set(
-          document.id,
-          {
+          return {
             ...audit,
 
             id:
               audit.id ||
               document.id
-          }
-        );
-      }
-    );
-
-
-    hsAuditHistory =
-      Array.from(
-        merged.values()
+          };
+        }
       );
 
+    saveHsAuditHistoryLocal();
 
-   saveHsAuditHistoryLocal();
+    renderHsAuditHistory();
+    renderHsAuditOverview();
 
+    return true;
 
-renderHsAuditHistory();
-
-renderHsAuditOverview();
-
-
-return true;
   } catch (error) {
     console.error(
       "H&S audit history could not be loaded from Firebase:",
       error
     );
-
 
     return false;
   }
