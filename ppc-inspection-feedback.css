@@ -6159,39 +6159,33 @@ tbody tr:last-child td {
 
 .hs-audit-table-wrap {
   width: 100%;
-  max-width: 100%;
-  overflow: hidden;
+  overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 14px;
-  box-sizing: border-box;
 }
 
 .hs-audit-table {
   width: 100%;
-  max-width: 100%;
-  table-layout: fixed;
+  min-width: 1450px;
   border-collapse: collapse;
-  font-size: 8px;
+  font-size: 9px;
 }
 
 .hs-audit-table th {
-  padding: 7px 5px;
+  padding: 9px 10px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
   color: var(--muted);
   text-align: left;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
 .hs-audit-table td {
-  padding: 7px 5px;
+  padding: 9px 10px;
   border-bottom:
     1px solid rgba(148,163,184,.10);
   vertical-align: middle;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  white-space: nowrap;
 }
 
 .hs-audit-table tbody tr:last-child td {
@@ -6264,17 +6258,22 @@ tbody tr:last-child td {
 
 .hs-audit-history-table-wrap {
   width: 100%;
+  min-width: 0;
   max-width: 100%;
-  overflow: hidden;
   box-sizing: border-box;
+
+  overflow-x: auto;
+  overflow-y: hidden;
+
   border: 1px solid var(--border);
   border-radius: 14px;
+
+  -webkit-overflow-scrolling: touch;
 }
 
 .hs-audit-history-table {
   width: 100%;
-  max-width: 100%;
-  table-layout: fixed;
+  min-width: 1200px;
   border-collapse: collapse;
   font-size: 9px;
 }
@@ -6402,20 +6401,4 @@ tbody tr:last-child td {
   overflow-x: auto;
   box-sizing: border-box;
   -webkit-overflow-scrolling: touch;
-}
-html,
-body {
-  max-width: 100%;
-  overflow-x: hidden;
-}
-
-.app,
-.grid,
-.card,
-#tabHealthSafety,
-#tabHealthSafety .hs-shell,
-#tabHealthSafety .hs-panel {
-  min-width: 0;
-  max-width: 100%;
-  box-sizing: border-box;
 }
