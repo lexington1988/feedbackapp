@@ -32137,6 +32137,944 @@ function initHsWarningManager() {
 }
 
 // =========================================================
+// H&S OVERVIEW POWERPOINT SLIDE
+// =========================================================
+
+function pptHsOverviewStatusRow(
+  pptx,
+  slide,
+  x,
+  y,
+  width,
+  label,
+  value,
+  colour
+) {
+  slide.addShape(
+    pptx.ShapeType.ellipse,
+    {
+      x,
+      y: y + 0.04,
+      w: 0.11,
+      h: 0.11,
+
+      line: {
+        transparency: 100
+      },
+
+      fill: {
+        color: colour
+      }
+    }
+  );
+
+  slide.addText(
+    label,
+    {
+      x: x + 0.22,
+      y,
+      w: width - 1.0,
+      h: 0.2,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 10,
+      color:
+        PPT_THEME.navy,
+
+      margin: 0
+    }
+  );
+
+  slide.addText(
+    String(value),
+    {
+      x:
+        x + width - 0.7,
+      y,
+      w: 0.55,
+      h: 0.2,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 11,
+      bold: true,
+
+      color: colour,
+      align: "right",
+      margin: 0
+    }
+  );
+}
+
+
+function pptHsOverviewSlide(
+  pptx,
+  presentationPeriod = ""
+) {
+  const slide =
+    pptx.addSlide();
+
+  pptBackground(
+    pptx,
+    slide
+  );
+
+
+  const auditCounts =
+    getHsAuditRegisterCounts();
+
+  const calibrationCounts =
+    getHsCalibrationCounts();
+
+  const openFailures =
+    getOpenHsAuditFailures();
+
+  const warningSummary =
+    getHsWarningSummary(
+      hsWarningState.records ||
+      []
+    );
+
+  const totalAudits =
+    (
+      hsAuditHistory ||
+      []
+    ).length;
+
+
+  const urgentCalibration =
+    (
+      hsCalibrationState.records ||
+      []
+    )
+      .map(
+        record => ({
+          record,
+
+          days:
+            hsCalibrationDaysLeft(
+              record.dueDate
+            )
+        })
+      )
+      .filter(
+        item =>
+          Number.isFinite(
+            item.days
+          ) &&
+          item.days <= 30
+      )
+      .sort(
+        (a, b) =>
+          a.days - b.days
+      );
+
+
+  const generatedDate =
+    new Date()
+      .toLocaleDateString(
+        "en-GB",
+        {
+          day: "2-digit",
+          month: "short",
+          year: "numeric"
+        }
+      );
+
+
+  pptTitle(
+    slide,
+    "Health & Safety Overview",
+
+    presentationPeriod
+      ? `${presentationPeriod} • current H&S position`
+      : `Current H&S position • generated ${generatedDate}`
+  );
+
+
+  /*
+    KPI CARDS
+  */
+
+  pptMetric(
+    pptx,
+    slide,
+    0.35,
+    0.92,
+    3.0,
+    "H&S audits",
+    totalAudits,
+    `${auditCounts.total} engineers in register`,
+    "",
+    true
+  );
+
+
+  pptMetric(
+    pptx,
+    slide,
+    3.55,
+    0.92,
+    3.0,
+    "Open audit failures",
+    openFailures.length,
+    "Unresolved failed H&S audits",
+
+    openFailures.length
+      ? "Needs attention"
+      : "Clear",
+
+    openFailures.length === 0
+  );
+
+
+  pptMetric(
+    pptx,
+    slide,
+    6.75,
+    0.92,
+    3.0,
+    "Calibration due",
+    calibrationCounts.due30,
+    `${calibrationCounts.expired} expired`,
+
+    calibrationCounts.expired
+      ? `${calibrationCounts.expired} expired`
+      : "",
+
+    calibrationCounts.expired === 0 &&
+      calibrationCounts.due30 === 0
+  );
+
+
+  pptMetric(
+    pptx,
+    slide,
+    9.95,
+    0.92,
+    3.0,
+    "Warning Notice FAILs",
+    warningSummary.incorrect,
+    `${warningSummary.compliance}% compliance`,
+    "",
+    warningSummary.incorrect === 0
+  );
+
+
+  /*
+    AUDIT PROGRAMME CARD
+  */
+
+  pptCard(
+    pptx,
+    slide,
+    0.35,
+    2.52,
+    3.9,
+    3.95
+  );
+
+  slide.addText(
+    "Audit programme",
+    {
+      x: 0.67,
+      y: 2.78,
+      w: 3.2,
+      h: 0.28,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 15,
+      bold: true,
+
+      color:
+        PPT_THEME.navy,
+
+      margin: 0
+    }
+  );
+
+  slide.addText(
+    "Current engineer audit schedule",
+    {
+      x: 0.67,
+      y: 3.08,
+      w: 3.2,
+      h: 0.18,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 9.5,
+
+      color:
+        PPT_THEME.muted,
+
+      margin: 0
+    }
+  );
+
+
+  pptHsOverviewStatusRow(
+    pptx,
+    slide,
+    0.72,
+    3.55,
+    3.15,
+    "Engineers",
+    auditCounts.total,
+    PPT_THEME.blue
+  );
+
+  pptHsOverviewStatusRow(
+    pptx,
+    slide,
+    0.72,
+    4.10,
+    3.15,
+    "Current",
+    auditCounts.current,
+    PPT_THEME.green
+  );
+
+  pptHsOverviewStatusRow(
+    pptx,
+    slide,
+    0.72,
+    4.65,
+    3.15,
+    "Due this month",
+    auditCounts.due,
+    PPT_THEME.amber
+  );
+
+  pptHsOverviewStatusRow(
+    pptx,
+    slide,
+    0.72,
+    5.20,
+    3.15,
+    "Overdue",
+    auditCounts.overdue,
+    PPT_THEME.red
+  );
+
+
+  /*
+    CALIBRATION CARD
+  */
+
+  pptCard(
+    pptx,
+    slide,
+    4.47,
+    2.52,
+    3.9,
+    3.95
+  );
+
+  slide.addText(
+    "Calibration",
+    {
+      x: 4.79,
+      y: 2.78,
+      w: 3.2,
+      h: 0.28,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 15,
+      bold: true,
+
+      color:
+        PPT_THEME.navy,
+
+      margin: 0
+    }
+  );
+
+  slide.addText(
+    "Current analyser calibration position",
+    {
+      x: 4.79,
+      y: 3.08,
+      w: 3.2,
+      h: 0.18,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 9.5,
+
+      color:
+        PPT_THEME.muted,
+
+      margin: 0
+    }
+  );
+
+
+  pptHsOverviewStatusRow(
+    pptx,
+    slide,
+    4.84,
+    3.55,
+    3.15,
+    "Analysers",
+    calibrationCounts.total,
+    PPT_THEME.blue
+  );
+
+  pptHsOverviewStatusRow(
+    pptx,
+    slide,
+    4.84,
+    4.00,
+    3.15,
+    "Current",
+    calibrationCounts.current,
+    PPT_THEME.green
+  );
+
+  pptHsOverviewStatusRow(
+    pptx,
+    slide,
+    4.84,
+    4.45,
+    3.15,
+    "Due within 90 days",
+    calibrationCounts.due90,
+    PPT_THEME.blue
+  );
+
+  pptHsOverviewStatusRow(
+    pptx,
+    slide,
+    4.84,
+    4.90,
+    3.15,
+    "Due within 30 days",
+    calibrationCounts.due30,
+    PPT_THEME.amber
+  );
+
+  pptHsOverviewStatusRow(
+    pptx,
+    slide,
+    4.84,
+    5.35,
+    3.15,
+    "Expired",
+    calibrationCounts.expired,
+    PPT_THEME.red
+  );
+
+
+  /*
+    NEEDS ATTENTION CARD
+  */
+
+  pptCard(
+    pptx,
+    slide,
+    8.59,
+    2.52,
+    4.39,
+    3.95
+  );
+
+  slide.addText(
+    "Needs attention",
+    {
+      x: 8.91,
+      y: 2.78,
+      w: 3.6,
+      h: 0.28,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 15,
+      bold: true,
+
+      color:
+        PPT_THEME.navy,
+
+      margin: 0
+    }
+  );
+
+  slide.addText(
+    "Priority H&S items",
+    {
+      x: 8.91,
+      y: 3.08,
+      w: 3.6,
+      h: 0.18,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 9.5,
+
+      color:
+        PPT_THEME.muted,
+
+      margin: 0
+    }
+  );
+
+
+  const attentionItems =
+    [];
+
+
+  openFailures
+    .slice(
+      0,
+      3
+    )
+    .forEach(
+      audit => {
+        attentionItems.push({
+          title:
+            `Audit • ${
+              audit.engineer ||
+              "Unknown engineer"
+            }`,
+
+          detail:
+            `${
+              audit.auditDate
+                ? formatDate(
+                    audit.auditDate
+                  )
+                : "Date not recorded"
+            } • ${
+              audit.reason ||
+              "Follow-up required"
+            }`,
+
+          colour:
+            PPT_THEME.red
+        });
+      }
+    );
+
+
+  urgentCalibration
+    .slice(
+      0,
+      3
+    )
+    .forEach(
+      item => {
+        const record =
+          item.record;
+
+        const days =
+          item.days;
+
+        attentionItems.push({
+          title:
+            `Calibration • ${
+              record.analyserCode ||
+              record.model ||
+              "Analyser"
+            }`,
+
+          detail:
+            `${
+              record.engineer ||
+              "Unassigned"
+            } • ${
+              days < 0
+                ? `${Math.abs(
+                    days
+                  )} days overdue`
+                : days === 0
+                  ? "Due today"
+                  : `Due in ${days} days`
+            }`,
+
+          colour:
+            days < 0
+              ? PPT_THEME.red
+              : PPT_THEME.amber
+        });
+      }
+    );
+
+
+  const visibleAttention =
+    attentionItems.slice(
+      0,
+      5
+    );
+
+
+  if (
+    !visibleAttention.length
+  ) {
+    slide.addText(
+      "✓  Nothing currently requiring attention",
+      {
+        x: 8.93,
+        y: 3.65,
+        w: 3.55,
+        h: 0.42,
+
+        fontFace:
+          PPT_THEME.font,
+
+        fontSize: 11,
+        bold: true,
+
+        color:
+          PPT_THEME.greenDark,
+
+        margin: 0
+      }
+    );
+
+  } else {
+
+    visibleAttention.forEach(
+      (
+        item,
+        index
+      ) => {
+        const y =
+          3.48 +
+          index * 0.55;
+
+        slide.addShape(
+          pptx.ShapeType.ellipse,
+          {
+            x: 8.93,
+            y:
+              y + 0.05,
+            w: 0.10,
+            h: 0.10,
+
+            line: {
+              transparency:
+                100
+            },
+
+            fill: {
+              color:
+                item.colour
+            }
+          }
+        );
+
+        slide.addText(
+          item.title,
+          {
+            x: 9.13,
+            y,
+            w: 3.25,
+            h: 0.19,
+
+            fontFace:
+              PPT_THEME.font,
+
+            fontSize: 9.2,
+            bold: true,
+
+            color:
+              PPT_THEME.navy,
+
+            margin: 0,
+            fit: "shrink"
+          }
+        );
+
+        slide.addText(
+          item.detail,
+          {
+            x: 9.13,
+            y:
+              y + 0.21,
+            w: 3.25,
+            h: 0.17,
+
+            fontFace:
+              PPT_THEME.font,
+
+            fontSize: 7.8,
+
+            color:
+              PPT_THEME.muted,
+
+            margin: 0,
+            fit: "shrink"
+          }
+        );
+      }
+    );
+  }
+
+
+  /*
+    MANAGEMENT INSIGHT
+  */
+
+  const managementInsight =
+    !openFailures.length &&
+    !urgentCalibration.length
+      ? "No unresolved failed H&S audits or calibration items due within 30 days."
+      : `${openFailures.length} unresolved failed audit${
+          openFailures.length === 1
+            ? ""
+            : "s"
+        } and ${urgentCalibration.length} calibration item${
+          urgentCalibration.length === 1
+            ? ""
+            : "s"
+        } currently require attention.`;
+
+
+  slide.addShape(
+    pptx.ShapeType.roundRect,
+    {
+      x: 0.55,
+      y: 6.88,
+      w: 12.23,
+      h: 0.38,
+
+      rectRadius: 0.05,
+
+      line: {
+        transparency:
+          100
+      },
+
+      fill: {
+        color:
+          PPT_THEME.purpleLight
+      }
+    }
+  );
+
+
+  slide.addText(
+    [
+      {
+        text:
+          "Management insight: ",
+
+        options: {
+          bold: true,
+          color:
+            PPT_THEME.purple
+        }
+      },
+
+      {
+        text:
+          managementInsight,
+
+        options: {
+          color:
+            PPT_THEME.navy
+        }
+      }
+    ],
+    {
+      x: 0.72,
+      y: 6.97,
+      w: 11.88,
+      h: 0.16,
+
+      fontFace:
+        PPT_THEME.font,
+
+      fontSize: 9.4,
+
+      margin: 0,
+      fit: "shrink"
+    }
+  );
+}
+
+
+async function generateHsOverviewSlide() {
+  const button =
+    el(
+      "hsOverviewGenerateSlideBtn"
+    );
+
+  const originalText =
+    button?.textContent ||
+    "Generate H&S Slide";
+
+
+  try {
+    if (
+      !window.PptxGenJS
+    ) {
+      throw new Error(
+        "PptxGenJS has not loaded."
+      );
+    }
+
+
+    if (button) {
+      button.disabled =
+        true;
+
+      button.textContent =
+        "Generating…";
+    }
+
+
+    const pptx =
+      new window.PptxGenJS();
+
+    pptx.layout =
+      "LAYOUT_WIDE";
+
+    pptx.author =
+      "Property Care Auditing";
+
+    pptx.subject =
+      "Health & Safety Overview";
+
+    pptx.title =
+      "Health & Safety Overview";
+
+    pptx.company =
+      "Property Care";
+
+    pptx.lang =
+      "en-GB";
+
+    pptx.theme = {
+      headFontFace:
+        PPT_THEME.font,
+
+      bodyFontFace:
+        PPT_THEME.font,
+
+      lang: "en-GB"
+    };
+
+
+    pptHsOverviewSlide(
+      pptx
+    );
+
+
+    const date =
+      new Date()
+        .toISOString()
+        .slice(
+          0,
+          10
+        );
+
+
+    await pptx.writeFile({
+      fileName:
+        `H-S-Overview-${date}.pptx`
+    });
+
+  } catch (error) {
+    console.error(
+      "H&S overview slide generation failed:",
+      error
+    );
+
+    alert(
+      `The H&S Overview slide could not be generated: ${
+        error?.message ||
+        error
+      }`
+    );
+
+  } finally {
+    if (button) {
+      button.disabled =
+        false;
+
+      button.textContent =
+        originalText;
+    }
+  }
+}
+
+
+function initHsOverviewSlideGenerator() {
+  const button =
+    el(
+      "hsOverviewGenerateSlideBtn"
+    );
+
+  if (
+    !button ||
+    button.dataset
+      .pptInitialised ===
+        "true"
+  ) {
+    return;
+  }
+
+  button.dataset
+    .pptInitialised =
+      "true";
+
+  button.addEventListener(
+    "click",
+    generateHsOverviewSlide
+  );
+}
+
+
+function getHsWarningRecordsForRange(
+  from,
+  to
+) {
+  return (
+    hsWarningState.records ||
+    []
+  ).filter(
+    record => {
+      const date =
+        String(
+          record.date ||
+          ""
+        );
+
+      if (!date) {
+        return false;
+      }
+
+      if (
+        from &&
+        date < from
+      ) {
+        return false;
+      }
+
+      if (
+        to &&
+        date > to
+      ) {
+        return false;
+      }
+
+      return true;
+    }
+  );
+}
+// =========================================================
 // H&S WARNING NOTICE POWERPOINT SLIDE
 // =========================================================
 
@@ -32549,7 +33487,8 @@ function getHsWarningTopFailureReasons(
 
 function pptHsWarningNoticesSlide(
   pptx,
-  records
+  records,
+  periodLabelOverride = ""
 ) {
   const slide =
     pptx.addSlide();
@@ -32562,9 +33501,10 @@ function pptHsWarningNoticesSlide(
 
 
   const periodLabel =
-    getHsWarningSlidePeriodLabel(
-      records
-    );
+  periodLabelOverride ||
+  getHsWarningSlidePeriodLabel(
+    records
+  );
 
 
   pptTitle(
@@ -34137,6 +35077,7 @@ renderHsAuditOverview();
   renderHsAuditRegister();
 }
 function initHealthSafety() {
+  initHsOverviewSlideGenerator();
   document
     .querySelectorAll(
       ".hs-subtab"
@@ -38975,10 +39916,47 @@ const cardHeight = 6.05;
     );
 
     pptMorganLambertSlide(
-      pptx,
-      externalData
-    );
-    const safeName =
+  pptx,
+  externalData
+);
+
+
+/*
+  HEALTH & SAFETY OVERVIEW
+*/
+pptHsOverviewSlide(
+  pptx,
+  data.currentLabel
+);
+
+
+/*
+  WARNING NOTICE COMPLIANCE
+
+  Use the Executive Dashboard's current
+  reporting period rather than any filters
+  currently selected on the H&S page.
+*/
+const hsPresentationPeriods =
+  getExecutiveDashboardPeriods();
+
+const hsPresentationWarningRecords =
+  getHsWarningRecordsForRange(
+    hsPresentationPeriods
+      ?.currentFrom || "",
+
+    hsPresentationPeriods
+      ?.currentTo || ""
+  );
+
+pptHsWarningNoticesSlide(
+  pptx,
+  hsPresentationWarningRecords,
+  data.currentLabel
+);
+
+
+const safeName =
       String(
         data.currentLabel ||
         "Quarterly"
