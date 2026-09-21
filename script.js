@@ -3144,157 +3144,783 @@ function renderFindings() {
 }
 
 // ---------- Saved list ----------
+// ---------- Saved list ----------
+
+function getSavedQuarterRange(
+  offset = 0
+) {
+  const now =
+    new Date();
+
+  const currentQuarter =
+    Math.floor(
+      now.getMonth() / 3
+    );
+
+  const quarterStart =
+    new Date(
+      now.getFullYear(),
+      currentQuarter * 3 +
+        offset * 3,
+      1
+    );
+
+  const quarterEnd =
+    new Date(
+      quarterStart.getFullYear(),
+      quarterStart.getMonth() + 3,
+      0
+    );
+
+  const iso = date =>
+    [
+      date.getFullYear(),
+      String(
+        date.getMonth() + 1
+      ).padStart(
+        2,
+        "0"
+      ),
+      String(
+        date.getDate()
+      ).padStart(
+        2,
+        "0"
+      )
+    ].join("-");
+
+  return {
+    from:
+      iso(
+        quarterStart
+      ),
+
+    to:
+      iso(
+        quarterEnd
+      )
+  };
+}
+
+
+function getSavedPeriodItems(
+  inspections,
+  period
+) {
+  const records =
+    inspections || [];
+
+  if (
+    period === "all"
+  ) {
+    return records;
+  }
+
+  const range =
+    period ===
+      "previous-quarter"
+      ? getSavedQuarterRange(
+          -1
+        )
+      : getSavedQuarterRange(
+          0
+        );
+
+  return records.filter(
+    inspection => {
+      const date =
+        String(
+          inspection.date ||
+          ""
+        );
+
+      return (
+        date &&
+        date >= range.from &&
+        date <= range.to
+      );
+    }
+  );
+}
+
+
 function renderSavedList() {
-  const container = el("savedList");
-  container.innerHTML = "";
+  const container =
+    el(
+      "savedList"
+    );
 
-  const allItems = state.db.inspections || [];
+  container.innerHTML =
+    "";
 
-  let filterWrap = document.getElementById("savedEngineerFilterWrap");
+  const allItems =
+    state.db.inspections ||
+    [];
+
+
+  /*
+    Create Saved-page filters once.
+
+    Nothing here deletes or archives
+    records. It only controls which
+    inspections are visible.
+  */
+  let filterWrap =
+    document.getElementById(
+      "savedEngineerFilterWrap"
+    );
 
   if (!filterWrap) {
-    filterWrap = document.createElement("div");
-    filterWrap.id = "savedEngineerFilterWrap";
-    filterWrap.style.margin = "0 0 14px 0";
-    filterWrap.style.display = "flex";
-    filterWrap.style.flexDirection = "column";
-    filterWrap.style.gap = "6px";
+    filterWrap =
+      document.createElement(
+        "div"
+      );
+
+    filterWrap.id =
+      "savedEngineerFilterWrap";
+
+    filterWrap.style.margin =
+      "0 0 14px 0";
+
+    filterWrap.style.display =
+      "grid";
+
+    filterWrap.style.gridTemplateColumns =
+      "1fr 1fr";
+
+    filterWrap.style.gap =
+      "10px";
+
 
     filterWrap.innerHTML = `
-      <label for="savedEngineerFilter" style="font-weight:bold; color:#5b2396;">
-        Filter by engineer
+      <label
+        style="
+          display:flex;
+          flex-direction:column;
+          gap:6px;
+        "
+      >
+        <span
+          style="
+            font-weight:bold;
+            color:#5b2396;
+          "
+        >
+          Period
+        </span>
+
+        <select
+          id="savedPeriodFilter"
+          style="
+            width:100%;
+            padding:12px;
+            border-radius:14px;
+            border:1px solid #ddd;
+            font-weight:bold;
+            background:white;
+          "
+        >
+          <option
+            value="current-quarter"
+            selected
+          >
+            Current quarter
+          </option>
+
+          <option
+            value="previous-quarter"
+          >
+            Previous quarter
+          </option>
+
+          <option
+            value="all"
+          >
+            All time
+          </option>
+        </select>
       </label>
-      <select id="savedEngineerFilter" style="
-        width:100%;
-        padding:12px;
-        border-radius:14px;
-        border:1px solid #ddd;
-        font-weight:bold;
-        background:white;
-      ">
-        <option value="">All Engineers</option>
-      </select>
+
+
+      <label
+        style="
+          display:flex;
+          flex-direction:column;
+          gap:6px;
+        "
+      >
+        <span
+          style="
+            font-weight:bold;
+            color:#5b2396;
+          "
+        >
+          Engineer
+        </span>
+
+        <select
+          id="savedEngineerFilter"
+          style="
+            width:100%;
+            padding:12px;
+            border-radius:14px;
+            border:1px solid #ddd;
+            font-weight:bold;
+            background:white;
+          "
+        >
+          <option value="">
+            All Engineers
+          </option>
+        </select>
+      </label>
     `;
 
-    container.parentNode.insertBefore(filterWrap, container);
+
+    container.parentNode
+      .insertBefore(
+        filterWrap,
+        container
+      );
   }
 
-  const filterSelect = document.getElementById("savedEngineerFilter");
-  const previousValue = filterSelect ? filterSelect.value : "";
 
-  const engineers = Array.from(
-    new Map(
-      allItems
-        .map(i => (i.engineer || "").trim())
-        .filter(Boolean)
-        .map(name => [normalizeEngineer(name), name])
-    ).values()
-  ).sort((a, b) => a.localeCompare(b));
+  const periodSelect =
+    document.getElementById(
+      "savedPeriodFilter"
+    );
+
+  const filterSelect =
+    document.getElementById(
+      "savedEngineerFilter"
+    );
+
+
+  const selectedPeriod =
+    periodSelect?.value ||
+    "current-quarter";
+
+
+  /*
+    Apply quarter filter first.
+
+    This is the important part:
+    old audits remain in state.db and
+    Firebase; they are merely hidden.
+  */
+  const periodItems =
+    getSavedPeriodItems(
+      allItems,
+      selectedPeriod
+    );
+
+
+  const previousEngineer =
+    filterSelect
+      ? filterSelect.value
+      : "";
+
+
+  /*
+    Engineer dropdown reflects the
+    currently selected period.
+  */
+  const engineers =
+    Array.from(
+      new Map(
+        periodItems
+          .map(
+            item =>
+              (
+                item.engineer ||
+                ""
+              ).trim()
+          )
+          .filter(Boolean)
+          .map(
+            name => [
+              normalizeEngineer(
+                name
+              ),
+              name
+            ]
+          )
+      ).values()
+    ).sort(
+      (
+        a,
+        b
+      ) =>
+        a.localeCompare(
+          b
+        )
+    );
+
 
   if (filterSelect) {
-    filterSelect.innerHTML = `<option value="">All Engineers</option>`;
+    filterSelect.innerHTML =
+      `
+        <option value="">
+          All Engineers
+        </option>
+      `;
 
-    engineers.forEach(name => {
-      const opt = document.createElement("option");
-      opt.value = normalizeEngineer(name);
-      opt.textContent = name;
-      filterSelect.appendChild(opt);
-    });
 
-    filterSelect.value = previousValue;
+    engineers.forEach(
+      name => {
+        const option =
+          document.createElement(
+            "option"
+          );
 
-    filterSelect.onchange = () => {
-      renderSavedList();
-    };
+        option.value =
+          normalizeEngineer(
+            name
+          );
+
+        option.textContent =
+          name;
+
+        filterSelect.appendChild(
+          option
+        );
+      }
+    );
+
+
+    if (
+      engineers.some(
+        name =>
+          normalizeEngineer(
+            name
+          ) ===
+          previousEngineer
+      )
+    ) {
+      filterSelect.value =
+        previousEngineer;
+    } else {
+      filterSelect.value =
+        "";
+    }
+
+
+    filterSelect.onchange =
+      () => {
+        renderSavedList();
+      };
   }
 
-  const selectedEngineer = filterSelect ? filterSelect.value : "";
 
-  const items = selectedEngineer
-    ? allItems.filter(ins => normalizeEngineer(ins.engineer || "") === selectedEngineer)
-    : allItems;
+  if (periodSelect) {
+    periodSelect.onchange =
+      () => {
+        /*
+          Reset engineer when changing
+          reporting period.
+        */
+        if (
+          filterSelect
+        ) {
+          filterSelect.value =
+            "";
+        }
 
-  el("savedEmpty").classList.toggle("hidden", items.length > 0);
+        renderSavedList();
+      };
+  }
+
+
+  const selectedEngineer =
+    filterSelect
+      ? filterSelect.value
+      : "";
+
+
+  const items =
+    selectedEngineer
+      ? periodItems.filter(
+          inspection =>
+            normalizeEngineer(
+              inspection.engineer ||
+              ""
+            ) ===
+            selectedEngineer
+        )
+      : periodItems;
+
+
+  /*
+    Give the empty message useful
+    quarter-specific wording.
+  */
+  const empty =
+    el(
+      "savedEmpty"
+    );
+
+  if (empty) {
+    empty.classList.toggle(
+      "hidden",
+      items.length > 0
+    );
+
+    if (
+      !items.length
+    ) {
+      empty.textContent =
+        selectedPeriod ===
+          "current-quarter"
+          ? "No inspections saved for the current quarter yet."
+          : selectedPeriod ===
+              "previous-quarter"
+            ? "No inspections saved for the previous quarter."
+            : "No saved inspections yet.";
+    }
+  }
+
+
+  /*
+    Small status line so you can always
+    see that older records still exist.
+  */
+  let status =
+    document.getElementById(
+      "savedPeriodStatus"
+    );
+
+  if (!status) {
+    status =
+      document.createElement(
+        "div"
+      );
+
+    status.id =
+      "savedPeriodStatus";
+
+    status.className =
+      "muted";
+
+    status.style.margin =
+      "0 0 12px 0";
+
+    container.parentNode
+      .insertBefore(
+        status,
+        container
+      );
+  }
+
+
+  const periodLabel =
+    selectedPeriod ===
+      "previous-quarter"
+      ? "Previous quarter"
+      : selectedPeriod ===
+          "all"
+        ? "All time"
+        : "Current quarter";
+
+
+  status.textContent =
+    `${periodLabel}: ${periodItems.length} inspection${
+      periodItems.length ===
+      1
+        ? ""
+        : "s"
+    } • ${allItems.length} total stored`;
+
 
   if (!items.length) {
     refreshEngineerDropdown();
     refreshEngineerDatalist();
     updateSelectedCount();
+
     return;
   }
 
-  const grouped = new Map();
 
-  items.forEach(ins => {
-    const engineer = ins.engineer || "Unnamed engineer";
-    const key = normalizeEngineer(engineer) || "unnamed";
-    if (!grouped.has(key)) grouped.set(key, { name: engineer, audits: [] });
-    grouped.get(key).audits.push(ins);
-  });
+  const grouped =
+    new Map();
 
-  Array.from(grouped.values())
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .forEach(group => {
-      group.audits.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
-      const section = document.createElement("div");
-      section.className = "saved-engineer-section";
-      section.style.marginBottom = "14px";
+  items.forEach(
+    inspection => {
+      const engineer =
+        inspection.engineer ||
+        "Unnamed engineer";
 
-      section.innerHTML = `
-        <details ${selectedEngineer ? "open" : ""}>
-          <summary style="
-            cursor:pointer;
-            font-weight:bold;
-            color:#5b2396;
-            background:rgba(106,13,173,0.08);
-            padding:12px;
-            border-radius:14px;
-            margin-bottom:10px;
-          ">
-            ${escapeHtml(group.name)} — ${group.audits.length} audit${group.audits.length === 1 ? "" : "s"}
-          </summary>
-          <div class="saved-engineer-cards"></div>
-        </details>
-      `;
+      const key =
+        normalizeEngineer(
+          engineer
+        ) ||
+        "unnamed";
 
-      const cardsWrap = section.querySelector(".saved-engineer-cards");
 
-      group.audits.forEach(ins => {
-        const card = document.createElement("div");
-        card.className = "saved-card";
+      if (
+        !grouped.has(
+          key
+        )
+      ) {
+        grouped.set(
+          key,
+          {
+            name:
+              engineer,
 
-        const title = `${ins.jobRef || "No job ref"}`;
-        const meta = `${formatDate(ins.date)} • ${ins.outcome || "Outcome"} • ${ins.findings?.length || 0} findings`;
+            audits:
+              []
+          }
+        );
+      }
 
-        card.innerHTML = `
-          <div>
-            <h4>${escapeHtml(title)}</h4>
-            <p>${escapeHtml(meta)}</p>
-          </div>
 
-          <div class="badges">
-            <label class="select-toggle" title="Select for email">
-              <input class="saved-select" type="checkbox" data-select="${ins.id}" />
-              <span class="select-icon" aria-hidden="true">✉️</span>
-            </label>
+      grouped
+        .get(
+          key
+        )
+        .audits
+        .push(
+          inspection
+        );
+    }
+  );
 
-            <button class="btn ghost small" type="button" data-load="${ins.id}">Load</button>
-            <button class="btn danger small" type="button" data-del="${ins.id}">Delete</button>
-          </div>
+
+  Array.from(
+    grouped.values()
+  )
+    .sort(
+      (
+        a,
+        b
+      ) =>
+        a.name.localeCompare(
+          b.name
+        )
+    )
+    .forEach(
+      group => {
+        group.audits.sort(
+          (
+            a,
+            b
+          ) =>
+            (
+              b.date ||
+              ""
+            ).localeCompare(
+              a.date ||
+              ""
+            )
+        );
+
+
+        const section =
+          document.createElement(
+            "div"
+          );
+
+        section.className =
+          "saved-engineer-section";
+
+        section.style.marginBottom =
+          "14px";
+
+
+        section.innerHTML = `
+          <details ${
+            selectedEngineer
+              ? "open"
+              : ""
+          }>
+            <summary
+              style="
+                cursor:pointer;
+                font-weight:bold;
+                color:#5b2396;
+                background:rgba(106,13,173,0.08);
+                padding:12px;
+                border-radius:14px;
+                margin-bottom:10px;
+              "
+            >
+              ${escapeHtml(
+                group.name
+              )}
+              —
+              ${
+                group.audits
+                  .length
+              }
+              audit${
+                group.audits
+                  .length ===
+                1
+                  ? ""
+                  : "s"
+              }
+            </summary>
+
+            <div
+              class="saved-engineer-cards"
+            ></div>
+          </details>
         `;
 
-        card.querySelector("[data-load]").addEventListener("click", () => loadInspectionById(ins.id));
-        card.querySelector("[data-del]").addEventListener("click", () => deleteInspectionById(ins.id));
 
-        const cb = card.querySelector(".saved-select");
-        if (cb) cb.addEventListener("change", updateSelectedCount);
+        const cardsWrap =
+          section.querySelector(
+            ".saved-engineer-cards"
+          );
 
-        cardsWrap.appendChild(card);
-      });
 
-      container.appendChild(section);
-    });
+        group.audits.forEach(
+          inspection => {
+            const card =
+              document.createElement(
+                "div"
+              );
+
+            card.className =
+              "saved-card";
+
+
+            const title =
+              `${
+                inspection.jobRef ||
+                "No job ref"
+              }`;
+
+
+            const meta =
+              `${
+                formatDate(
+                  inspection.date
+                )
+              } • ${
+                inspection.outcome ||
+                "Outcome"
+              } • ${
+                inspection.findings
+                  ?.length ||
+                0
+              } findings`;
+
+
+            card.innerHTML = `
+              <div>
+                <h4>
+                  ${escapeHtml(
+                    title
+                  )}
+                </h4>
+
+                <p>
+                  ${escapeHtml(
+                    meta
+                  )}
+                </p>
+              </div>
+
+              <div class="badges">
+                <label
+                  class="select-toggle"
+                  title="Select for email"
+                >
+                  <input
+                    class="saved-select"
+                    type="checkbox"
+                    data-select="${
+                      inspection.id
+                    }"
+                  />
+
+                  <span
+                    class="select-icon"
+                    aria-hidden="true"
+                  >
+                    ✉️
+                  </span>
+                </label>
+
+                <button
+                  class="btn ghost small"
+                  type="button"
+                  data-load="${
+                    inspection.id
+                  }"
+                >
+                  Load
+                </button>
+
+                <button
+                  class="btn danger small"
+                  type="button"
+                  data-del="${
+                    inspection.id
+                  }"
+                >
+                  Delete
+                </button>
+              </div>
+            `;
+
+
+            card
+              .querySelector(
+                "[data-load]"
+              )
+              .addEventListener(
+                "click",
+                () =>
+                  loadInspectionById(
+                    inspection.id
+                  )
+              );
+
+
+            card
+              .querySelector(
+                "[data-del]"
+              )
+              .addEventListener(
+                "click",
+                () =>
+                  deleteInspectionById(
+                    inspection.id
+                  )
+              );
+
+
+            const checkbox =
+              card.querySelector(
+                ".saved-select"
+              );
+
+            if (
+              checkbox
+            ) {
+              checkbox.addEventListener(
+                "change",
+                updateSelectedCount
+              );
+            }
+
+
+            cardsWrap.appendChild(
+              card
+            );
+          }
+        );
+
+
+        container.appendChild(
+          section
+        );
+      }
+    );
+
 
   refreshEngineerDropdown();
   refreshEngineerDatalist();
