@@ -24,6 +24,9 @@ const PERFORMANCE_IMPORT_META_KEY =
 const DASHBOARD_DATES_KEY =
   "ppc_dashboard_dates_v1";
 
+const YEAR_END_ROLLOVER_KEY =
+  "ppc_year_end_rollover_v1";
+
 const HS_WARNING_NOTICES_KEY =
   "ppc_hs_warning_notices_v1";
 
@@ -2148,6 +2151,11 @@ if (
 ) {
   await loadHsWarningNoticesFromCloud();
 }
+    /*
+  Check for annual rollover only after
+  the Firebase/H&S data has loaded.
+*/
+checkAnnualRolloverPrompt();
 } catch (err) {
   console.error(
     "Analytics cloud sync failed:",
@@ -20897,6 +20905,12 @@ saveDashboardDateState();
   renderExecutiveDashboard();
 }
 function initExecutiveDashboard() {
+  el(
+  "yearEndArchiveBtn"
+)?.addEventListener(
+  "click",
+  manualYearEndArchive
+);
   document
     .querySelectorAll(
       "[data-dashboard-period]"
@@ -36787,6 +36801,1535 @@ async function copyToClipboard(text) {
   }
 }
 
+// =========================================================
+// YEAR-END ARCHIVE
+// =========================================================
+
+let yearEndPromptShownThisSession =
+  false;
+
+
+function recordIsInYear(
+  record,
+  year,
+  field = "date"
+) {
+  const value =
+    String(
+      record?.[field] ||
+      ""
+    );
+
+  return value.startsWith(
+    `${year}-`
+  );
+}
+
+
+function getYearEndArchiveCounts(
+  year
+) {
+  const inspections =
+    (
+      state.db.inspections ||
+      []
+    ).filter(
+      record =>
+        recordIsInYear(
+          record,
+          year,
+          "date"
+        )
+    );
+
+  const findings =
+    inspections.flatMap(
+      inspection =>
+        inspection.findings ||
+        []
+    );
+
+  const hsAudits =
+    (
+      hsAuditHistory ||
+      []
+    ).filter(
+      record =>
+        recordIsInYear(
+          record,
+          year,
+          "auditDate"
+        )
+    );
+
+  const warnings =
+    (
+      hsWarningState.records ||
+      []
+    ).filter(
+      record =>
+        recordIsInYear(
+          record,
+          year,
+          "date"
+        )
+    );
+
+  const tcw =
+    (
+      performanceState.tcwErrors ||
+      []
+    ).filter(
+      record =>
+        recordIsInYear(
+          record,
+          year,
+          "date"
+        )
+    );
+
+  const morgan =
+    (
+      performanceState
+        .morganLambertAudits ||
+      []
+    ).filter(
+      record =>
+        recordIsInYear(
+          record,
+          year,
+          "date"
+        )
+    );
+
+  return {
+    inspections,
+    findings,
+    hsAudits,
+    warnings,
+    tcw,
+    morgan
+  };
+}
+
+
+function buildYearEndInspectionRows(
+  inspections
+) {
+  return inspections.map(
+    inspection => ({
+      "Inspection ID":
+        inspection.id || "",
+
+      "Date":
+        inspection.date || "",
+
+      "Engineer":
+        inspection.engineer || "",
+
+      "Job Reference":
+        inspection.jobRef || "",
+
+      "Address":
+        inspection.address || "",
+
+      "Appliance":
+        inspection.appliance || "",
+
+      "Outcome":
+        inspection.outcome || "",
+
+      "Findings":
+        (
+          inspection.findings ||
+          []
+        ).length,
+
+      "Positives":
+        (
+          inspection.positives ||
+          []
+        )
+          .map(
+            positive =>
+              positive.text ||
+              ""
+          )
+          .filter(Boolean)
+          .join(" | ")
+    })
+  );
+}
+
+
+function buildYearEndFindingRows(
+  inspections
+) {
+  const rows = [];
+
+  inspections.forEach(
+    inspection => {
+      (
+        inspection.findings ||
+        []
+      ).forEach(
+        finding => {
+          rows.push({
+            "Inspection ID":
+              inspection.id ||
+              "",
+
+            "Date":
+              inspection.date ||
+              "",
+
+            "Engineer":
+              inspection.engineer ||
+              "",
+
+            "Job Reference":
+              inspection.jobRef ||
+              "",
+
+            "Address":
+              inspection.address ||
+              "",
+
+            "Finding":
+              finding.title ||
+              "",
+
+            "Category":
+              finding.category ||
+              "",
+
+            "Severity":
+              finding.severity ||
+              "",
+
+            "Issue Tag":
+              finding.tag ||
+              "",
+
+            "Why It Matters":
+              finding.why ||
+              "",
+
+            "Required Action":
+              finding.action ||
+              "",
+
+            "Notes":
+              finding.notes ||
+              "",
+
+            "Status":
+              finding.status ||
+              "",
+
+            "Due":
+              finding.due ||
+              ""
+          });
+        }
+      );
+    }
+  );
+
+  return rows;
+}
+
+
+function buildYearEndEngineerRows(
+  inspections
+) {
+  const map =
+    new Map();
+
+  inspections.forEach(
+    inspection => {
+      const engineer =
+        inspection.engineer ||
+        "Unnamed engineer";
+
+      if (
+        !map.has(
+          engineer
+        )
+      ) {
+        map.set(
+          engineer,
+          {
+            Engineer:
+              engineer,
+
+            Audits: 0,
+
+            "Audits with Findings":
+              0,
+
+            Findings: 0
+          }
+        );
+      }
+
+      const row =
+        map.get(
+          engineer
+        );
+
+      const findingCount =
+        (
+          inspection.findings ||
+          []
+        ).length;
+
+      row.Audits++;
+
+      row.Findings +=
+        findingCount;
+
+      if (
+        findingCount > 0
+      ) {
+        row[
+          "Audits with Findings"
+        ]++;
+      }
+    }
+  );
+
+  return Array.from(
+    map.values()
+  ).sort(
+    (
+      a,
+      b
+    ) =>
+      a.Engineer.localeCompare(
+        b.Engineer
+      )
+  );
+}
+
+
+function addYearEndWorksheet(
+  workbook,
+  name,
+  rows
+) {
+  const safeRows =
+    rows.length
+      ? rows
+      : [
+          {
+            Status:
+              "No records for this year"
+          }
+        ];
+
+  const sheet =
+    window.XLSX.utils
+      .json_to_sheet(
+        safeRows
+      );
+
+  window.XLSX.utils
+    .book_append_sheet(
+      workbook,
+      sheet,
+      name
+    );
+}
+
+
+async function generateYearEndArchive(
+  year
+) {
+  if (
+    !window.XLSX
+  ) {
+    throw new Error(
+      "The Excel library has not loaded."
+    );
+  }
+
+
+  const data =
+    getYearEndArchiveCounts(
+      year
+    );
+
+
+  const workbook =
+    window.XLSX.utils
+      .book_new();
+
+
+  /*
+    SUMMARY
+  */
+
+  addYearEndWorksheet(
+    workbook,
+    "Summary",
+    [
+      {
+        "Archive Year":
+          year,
+
+        "Created":
+          new Date()
+            .toLocaleString(
+              "en-GB"
+            ),
+
+        "PPC Inspections":
+          data.inspections
+            .length,
+
+        "PPC Findings":
+          data.findings
+            .length,
+
+        "H&S Audits":
+          data.hsAudits
+            .length,
+
+        "Warning Notices":
+          data.warnings
+            .length,
+
+        "TCW Records":
+          data.tcw.length,
+
+        "Morgan & Lambert":
+          data.morgan.length,
+
+        "Calibration":
+          "Not included"
+      }
+    ]
+  );
+
+
+  /*
+    PPC INSPECTIONS
+  */
+
+  addYearEndWorksheet(
+    workbook,
+    "PPC Inspections",
+    buildYearEndInspectionRows(
+      data.inspections
+    )
+  );
+
+
+  /*
+    INDIVIDUAL FINDINGS
+  */
+
+  addYearEndWorksheet(
+    workbook,
+    "PPC Findings",
+    buildYearEndFindingRows(
+      data.inspections
+    )
+  );
+
+
+  /*
+    ENGINEER SUMMARY
+  */
+
+  addYearEndWorksheet(
+    workbook,
+    "Engineer Summary",
+    buildYearEndEngineerRows(
+      data.inspections
+    )
+  );
+
+
+  /*
+    H&S AUDIT HISTORY
+  */
+
+  addYearEndWorksheet(
+    workbook,
+    "H&S Audits",
+    data.hsAudits
+  );
+
+
+  /*
+    WARNING NOTICES
+  */
+
+  addYearEndWorksheet(
+    workbook,
+    "Warning Notices",
+    data.warnings
+  );
+
+
+  /*
+    TCW
+  */
+
+  addYearEndWorksheet(
+    workbook,
+    "TCW",
+    data.tcw
+  );
+
+
+  /*
+    MORGAN & LAMBERT
+  */
+
+  addYearEndWorksheet(
+    workbook,
+    "Morgan Lambert",
+    data.morgan
+  );
+
+
+  const fileName =
+    `PPC-${year}-Year-End-Archive.xlsx`;
+
+
+  window.XLSX.writeFile(
+    workbook,
+    fileName
+  );
+
+
+  return {
+    fileName,
+    ...data
+  };
+}
+
+async function commitYearEndDeleteRefs(
+  refs
+) {
+  const uniqueRefs =
+    Array.from(
+      new Map(
+        (
+          refs ||
+          []
+        )
+          .filter(Boolean)
+          .map(
+            ref => [
+              ref.path,
+              ref
+            ]
+          )
+      ).values()
+    );
+
+  const batchSize =
+    400;
+
+  for (
+    let index = 0;
+    index <
+      uniqueRefs.length;
+    index += batchSize
+  ) {
+    const batch =
+      cloudDb.batch();
+
+    uniqueRefs
+      .slice(
+        index,
+        index +
+          batchSize
+      )
+      .forEach(
+        ref => {
+          batch.delete(
+            ref
+          );
+        }
+      );
+
+    await batch.commit();
+  }
+}
+
+
+async function beginNewAuditingYear(
+  archiveYear
+) {
+  if (
+    !cloudSignedIn()
+  ) {
+    alert(
+      "You must be logged in before starting a new auditing year.\n\n" +
+      "This prevents local data being cleared while old Firebase data remains online."
+    );
+
+    return false;
+  }
+
+
+  const currentYear =
+    new Date()
+      .getFullYear();
+
+
+  if (
+    archiveYear >=
+    currentYear
+  ) {
+    alert(
+      "The current auditing year cannot be reset."
+    );
+
+    return false;
+  }
+
+
+  const archiveData =
+    getYearEndArchiveCounts(
+      archiveYear
+    );
+
+
+  /*
+    Final safety confirmation.
+
+    The user must physically type the
+    closed year before Firebase is altered.
+  */
+  const confirmation =
+    prompt(
+      `START NEW AUDITING YEAR\n\n` +
+
+      `The ${archiveYear} archive should already be safely saved.\n\n` +
+
+      `This will permanently remove ${archiveYear} operational data from the live app and Firebase:\n\n` +
+
+      `• ${archiveData.inspections.length} PPC inspections\n` +
+      `• ${archiveData.findings.length} PPC findings\n` +
+      `• ${archiveData.hsAudits.length} H&S audits\n` +
+      `• ${archiveData.warnings.length} Warning Notices\n` +
+      `• ${archiveData.tcw.length} TCW records\n` +
+      `• ${archiveData.morgan.length} Morgan & Lambert records\n\n` +
+
+      `Calibration will NOT be removed.\n` +
+      `The H&S Audit Register will NOT be removed.\n` +
+      `Libraries and settings will NOT be removed.\n\n` +
+
+      `Type ${archiveYear} to confirm:`,
+      ""
+    );
+
+
+  if (
+    confirmation !==
+    String(
+      archiveYear
+    )
+  ) {
+    alert(
+      "New year reset cancelled. No data was deleted."
+    );
+
+    return false;
+  }
+
+
+  const user =
+    getUser();
+
+
+  /*
+    Work out exactly which Analytics
+    documents belong to the PPC
+    inspections being archived.
+
+    This means separately imported
+    historical workbook audits are
+    NOT accidentally deleted.
+  */
+  const analyticsAuditRecords =
+    [];
+
+  const analyticsDefectRecords =
+    [];
+
+
+  archiveData.inspections
+    .forEach(
+      inspection => {
+        const built =
+          buildAnalyticsRecordsFromInspection(
+            inspection
+          );
+
+        if (
+          built.auditRecord
+        ) {
+          analyticsAuditRecords.push(
+            built.auditRecord
+          );
+        }
+
+        analyticsDefectRecords.push(
+          ...(
+            built.defectRecords ||
+            []
+          )
+        );
+      }
+    );
+
+
+  const removedInspectionIds =
+    new Set(
+      archiveData.inspections
+        .map(
+          inspection =>
+            String(
+              inspection.id ||
+              ""
+            )
+        )
+        .filter(Boolean)
+    );
+
+
+  const removedDefectKeys =
+    new Set(
+      analyticsDefectRecords
+        .map(
+          record =>
+            String(
+              record.sourceKey ||
+              ""
+            )
+        )
+        .filter(Boolean)
+    );
+
+
+  /*
+    Stop live listeners while the reset
+    is taking place.
+
+    Otherwise intermediate Firebase
+    snapshots could briefly repopulate
+    local state during the deletion.
+  */
+  stopCloudSync();
+
+
+  try {
+    const deleteRefs =
+      [];
+
+
+    /*
+      PPC INSPECTIONS
+    */
+
+    archiveData.inspections
+      .forEach(
+        inspection => {
+          if (
+            !inspection.id
+          ) {
+            return;
+          }
+
+          deleteRefs.push(
+            inspectionsCol(
+              user.uid
+            ).doc(
+              String(
+                inspection.id
+              )
+            )
+          );
+        }
+      );
+
+
+    /*
+      PPC ANALYTICS AUDITS
+
+      Only Analytics generated from the
+      inspections being removed.
+    */
+
+    analyticsAuditRecords
+      .forEach(
+        record => {
+          if (
+            !record.id
+          ) {
+            return;
+          }
+
+          deleteRefs.push(
+            analyticsAuditsCol(
+              user.uid
+            ).doc(
+              analyticsCloudDocumentId(
+                record.id
+              )
+            )
+          );
+        }
+      );
+
+
+    /*
+      PPC ANALYTICS FINDINGS
+    */
+
+    analyticsDefectRecords
+      .forEach(
+        record => {
+          if (
+            !record.sourceKey
+          ) {
+            return;
+          }
+
+          deleteRefs.push(
+            analyticsDefectsCol(
+              user.uid
+            ).doc(
+              analyticsCloudDocumentId(
+                record.sourceKey
+              )
+            )
+          );
+        }
+      );
+
+
+    /*
+      H&S AUDIT HISTORY
+
+      The engineer Audit Register itself
+      is deliberately retained.
+    */
+
+    archiveData.hsAudits
+      .forEach(
+        audit => {
+          if (
+            !audit.id
+          ) {
+            return;
+          }
+
+          deleteRefs.push(
+            hsAuditHistoryCloudCol(
+              user.uid
+            ).doc(
+              String(
+                audit.id
+              )
+            )
+          );
+        }
+      );
+
+
+    /*
+      WARNING NOTICES
+    */
+
+    archiveData.warnings
+      .forEach(
+        record => {
+          if (
+            !record.id
+          ) {
+            return;
+          }
+
+          deleteRefs.push(
+            hsWarningNoticesCloudCol(
+              user.uid
+            ).doc(
+              String(
+                record.id
+              )
+            )
+          );
+        }
+      );
+
+
+    /*
+      Delete Firebase documents.
+    */
+
+    await commitYearEndDeleteRefs(
+      deleteRefs
+    );
+
+
+    /*
+      ==============================
+      CLEAN LOCAL LIVE DATA
+      ==============================
+    */
+
+
+    /*
+      Saved PPC inspections
+    */
+
+    state.db.inspections =
+      (
+        state.db.inspections ||
+        []
+      ).filter(
+        inspection =>
+          !removedInspectionIds.has(
+            String(
+              inspection.id ||
+              ""
+            )
+          )
+      );
+
+    saveDb();
+
+
+    /*
+      Analytics
+
+      Preserve imported historical
+      workbook audits and any records
+      belonging to the new year.
+    */
+
+    analyticsState.audits =
+      (
+        analyticsState.audits ||
+        []
+      ).filter(
+        record =>
+          !removedInspectionIds.has(
+            String(
+              record.id ||
+              ""
+            )
+          )
+      );
+
+
+    analyticsState.defects =
+      (
+        analyticsState.defects ||
+        []
+      ).filter(
+        record =>
+          !removedDefectKeys.has(
+            String(
+              record.sourceKey ||
+              ""
+            )
+          )
+      );
+
+    saveAnalyticsArchive();
+
+
+    /*
+      H&S Audit History
+    */
+
+    hsAuditHistory =
+      (
+        hsAuditHistory ||
+        []
+      ).filter(
+        record =>
+          !recordIsInYear(
+            record,
+            archiveYear,
+            "auditDate"
+          )
+      );
+
+    saveHsAuditHistoryLocal();
+
+
+    /*
+      Warning Notices
+    */
+
+    hsWarningState.records =
+      (
+        hsWarningState.records ||
+        []
+      ).filter(
+        record =>
+          !recordIsInYear(
+            record,
+            archiveYear,
+            "date"
+          )
+      );
+
+    saveHsWarningState();
+
+
+    /*
+      TCW
+    */
+
+    performanceState.tcwErrors =
+      (
+        performanceState
+          .tcwErrors ||
+        []
+      ).filter(
+        record =>
+          !recordIsInYear(
+            record,
+            archiveYear,
+            "date"
+          )
+      );
+
+
+    /*
+      Morgan & Lambert
+    */
+
+    performanceState
+      .morganLambertAudits =
+        (
+          performanceState
+            .morganLambertAudits ||
+          []
+        ).filter(
+          record =>
+            !recordIsInYear(
+              record,
+              archiveYear,
+              "date"
+            )
+        );
+
+
+    /*
+      Keep the import metadata counts
+      sensible after the old records
+      have been removed.
+    */
+
+    if (
+      performanceState
+        .importMeta
+    ) {
+      performanceState
+        .importMeta
+        .tcwCount =
+          performanceState
+            .tcwErrors
+            .length;
+
+      performanceState
+        .importMeta
+        .morganCount =
+          performanceState
+            .morganLambertAudits
+            .length;
+    }
+
+    savePerformanceState();
+
+
+    /*
+      ==============================
+      RESET REPORTING PERIOD
+      ==============================
+
+      Start the Dashboard on the
+      current quarter with comparison
+      switched off.
+
+      Previous-quarter dates are retained
+      internally so comparison can be
+      enabled later if wanted.
+    */
+
+    const currentQuarter =
+      getSavedQuarterRange(
+        0
+      );
+
+    const previousQuarter =
+      getSavedQuarterRange(
+        -1
+      );
+
+
+    dashboardDateState
+      .currentFrom =
+        currentQuarter.from;
+
+    dashboardDateState
+      .currentTo =
+        currentQuarter.to;
+
+    dashboardDateState
+      .previousFrom =
+        previousQuarter.from;
+
+    dashboardDateState
+      .previousTo =
+        previousQuarter.to;
+
+    dashboardDateState
+      .comparisonEnabled =
+        false;
+
+    saveDashboardDateState();
+
+
+    /*
+      Mark the rollover complete.
+
+      The automatic New Year prompt
+      will therefore not appear again
+      for this year.
+    */
+
+    localStorage.setItem(
+      YEAR_END_ROLLOVER_KEY,
+      String(
+        currentYear
+      )
+    );
+
+
+    /*
+      Refresh the application.
+    */
+
+    newInspection();
+
+    renderSavedList();
+
+    refreshEngineerDropdown();
+    refreshEngineerDatalist();
+
+    refreshAnalyticsFilters();
+
+    if (
+      el(
+        "tabAnalytics"
+      )
+    ) {
+      renderAnalytics();
+    }
+
+    renderExecutiveDashboard();
+
+    renderHsAuditHistory();
+    renderHsAuditOverview();
+
+    renderHsWarningNotices();
+
+
+    /*
+      Restart Firebase live sync.
+    */
+
+    startCloudSync();
+    startHsCloudSync();
+
+
+    alert(
+      `${archiveYear} has been closed successfully.\n\n` +
+
+      `The live app is now ready for ${currentYear}.\n\n` +
+
+      `Removed from the live system:\n` +
+      `• ${archiveData.inspections.length} PPC inspections\n` +
+      `• ${archiveData.findings.length} PPC findings\n` +
+      `• ${archiveData.hsAudits.length} H&S audits\n` +
+      `• ${archiveData.warnings.length} Warning Notices\n` +
+      `• ${archiveData.tcw.length} TCW records\n` +
+      `• ${archiveData.morgan.length} Morgan & Lambert records\n\n` +
+
+      `Retained:\n` +
+      `• Calibration\n` +
+      `• H&S Audit Register\n` +
+      `• Defect and boiler libraries\n` +
+      `• App settings\n` +
+      `• Any records already created in ${currentYear}`
+    );
+
+
+    return true;
+
+  } catch (error) {
+    console.error(
+      "New auditing year reset failed:",
+      error
+    );
+
+
+    /*
+      Restart listeners even if the
+      reset failed part-way through.
+    */
+
+    startCloudSync();
+    startHsCloudSync();
+
+
+    alert(
+      `The new auditing year could not be completed.\n\n` +
+
+      `Your downloaded archive has NOT been affected.\n\n` +
+
+      `Error: ${
+        error?.message ||
+        error
+      }\n\n` +
+
+      `Do not repeat the reset until we have checked the error.`
+    );
+
+
+    return false;
+  }
+}
+async function runYearEndArchive(
+  year,
+  fromAutomaticPrompt = false
+) {
+  const data =
+    getYearEndArchiveCounts(
+      year
+    );
+
+
+  const totalRecords =
+    data.inspections.length +
+    data.hsAudits.length +
+    data.warnings.length +
+    data.tcw.length +
+    data.morgan.length;
+
+
+  if (
+    totalRecords === 0
+  ) {
+    alert(
+      `No annual records were found for ${year}.`
+    );
+
+    return false;
+  }
+
+
+  const confirmed =
+    confirm(
+      `Create the ${year} Year-End Archive?\n\n` +
+
+      `PPC inspections: ${data.inspections.length}\n` +
+      `PPC findings: ${data.findings.length}\n` +
+      `H&S audits: ${data.hsAudits.length}\n` +
+      `Warning Notices: ${data.warnings.length}\n` +
+      `TCW records: ${data.tcw.length}\n` +
+      `Morgan & Lambert records: ${data.morgan.length}\n\n` +
+
+      `Calibration will NOT be included.`
+    );
+
+
+  if (
+    !confirmed
+  ) {
+    return false;
+  }
+
+
+  try {
+    const result =
+      await generateYearEndArchive(
+        year
+      );
+
+
+    /*
+      If this is the current year,
+      simply create the archive.
+
+      For example, generating a 2026
+      backup during September 2026 must
+      obviously NOT wipe the live year.
+    */
+
+    const currentYear =
+      new Date()
+        .getFullYear();
+
+
+    if (
+      year >=
+      currentYear
+    ) {
+      alert(
+        `${result.fileName} has been generated.\n\n` +
+
+        `Nothing has been deleted from the app or Firebase.`
+      );
+
+      return true;
+    }
+
+
+    /*
+      Closed year.
+
+      The archive has now been generated,
+      so offer the controlled rollover.
+    */
+
+    const beginNewYear =
+      confirm(
+        `${result.fileName} has been generated.\n\n` +
+
+        `Please make sure the Excel file has been saved somewhere safe.\n\n` +
+
+        `Would you now like to close ${year} and begin the ${currentYear} auditing year?\n\n` +
+
+        `Choosing Cancel will leave ALL live data exactly where it is.`
+      );
+
+
+    if (
+      !beginNewYear
+    ) {
+      return true;
+    }
+
+
+    return await beginNewAuditingYear(
+      year
+    );
+
+  } catch (error) {
+    console.error(
+      "Year-End Archive failed:",
+      error
+    );
+
+    alert(
+      `The Year-End Archive could not be generated:\n\n${
+        error?.message ||
+        error
+      }\n\n` +
+
+      `No live data has been deleted.`
+    );
+
+    return false;
+  }
+}
+
+function manualYearEndArchive() {
+  const now =
+    new Date();
+
+  const currentYear =
+    now.getFullYear();
+
+  /*
+    In January, the sensible default is
+    the year that has just ended.
+  */
+  const suggestedYear =
+    now.getMonth() === 0
+      ? currentYear - 1
+      : currentYear;
+
+
+  const value =
+    prompt(
+      "Which year do you want to archive?",
+      String(
+        suggestedYear
+      )
+    );
+
+
+  if (
+    value === null
+  ) {
+    return;
+  }
+
+
+  const year =
+    Number(
+      value
+    );
+
+
+  if (
+    !Number.isInteger(
+      year
+    ) ||
+    year < 2000 ||
+    year > currentYear
+  ) {
+    alert(
+      "Enter a valid four-digit year."
+    );
+
+    return;
+  }
+
+
+  closeDashboardActionsMenu();
+
+  runYearEndArchive(
+    year,
+    false
+  );
+}
+
+
+function checkAnnualRolloverPrompt() {
+  if (
+    yearEndPromptShownThisSession
+  ) {
+    return;
+  }
+
+
+  const currentYear =
+    new Date()
+      .getFullYear();
+
+
+  const storedYear =
+    Number(
+      localStorage.getItem(
+        YEAR_END_ROLLOVER_KEY
+      ) ||
+      0
+    );
+
+
+  /*
+    First installation of this feature.
+
+    Establish the current year as the
+    baseline so it does NOT suddenly ask
+    you to archive an old year today.
+  */
+  if (
+    !storedYear
+  ) {
+    localStorage.setItem(
+      YEAR_END_ROLLOVER_KEY,
+      String(
+        currentYear
+      )
+    );
+
+    return;
+  }
+
+
+  if (
+    storedYear >=
+    currentYear
+  ) {
+    return;
+  }
+
+
+  const previousYear =
+    currentYear - 1;
+
+
+  const data =
+    getYearEndArchiveCounts(
+      previousYear
+    );
+
+
+  const hasPreviousYearData =
+    data.inspections.length ||
+    data.hsAudits.length ||
+    data.warnings.length ||
+    data.tcw.length ||
+    data.morgan.length;
+
+
+  if (
+    !hasPreviousYearData
+  ) {
+    localStorage.setItem(
+      YEAR_END_ROLLOVER_KEY,
+      String(
+        currentYear
+      )
+    );
+
+    return;
+  }
+
+
+  yearEndPromptShownThisSession =
+    true;
+
+
+  const confirmed =
+    confirm(
+      `A new auditing year has started.\n\n` +
+
+      `${previousYear} data is still stored in the app.\n\n` +
+
+     `Would you like to archive ${previousYear} and begin the ${currentYear} auditing year?\n\n` +
+
+`The Excel archive will be created FIRST.\n\n` +
+
+`You will then be asked separately whether you want to clear the closed year from the live app and Firebase.`
+    );
+
+
+  if (
+    !confirmed
+  ) {
+    /*
+      Do not update YEAR_END_ROLLOVER_KEY.
+
+      That means the app will ask again
+      next time it is opened.
+    */
+    return;
+  }
+
+
+  runYearEndArchive(
+    previousYear,
+    true
+  );
+}
 function exportAllJson() {
   const data = JSON.stringify(state.db, null, 2);
   downloadTextFile("ppc-inspections-export.json", data);
