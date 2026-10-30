@@ -18723,10 +18723,9 @@ function openPerformanceExplorer(
     </section>
   `;
 
-  document.body.appendChild(
-    backdrop
-  );
-
+ document.body.appendChild(
+  backdrop
+);
   populatePerformanceExplorerFilters();
 
   el("performanceExplorerEngineer").value =
@@ -22971,7 +22970,19 @@ function hsCalibrationPopupAlertKey(
     stage.key
   ].join("|");
 }
+function hsCalibrationPopupAcknowledgedKey(
+  record
+) {
+  return [
+    "acknowledged",
+    record.analyserCode ||
+      record.id ||
+      "unknown",
 
+    record.dueDate ||
+      "unknown-date"
+  ].join("|");
+}
 
 function getPendingHsCalibrationPopupAlerts() {
   const history =
@@ -22996,22 +23007,52 @@ function getPendingHsCalibrationPopupAlerts() {
         return null;
       }
 
-      const alertKey =
-        hsCalibrationPopupAlertKey(
-          record,
-          stage
-        );
+     const alertKey =
+  hsCalibrationPopupAlertKey(
+    record,
+    stage
+  );
 
-      if (history[alertKey]) {
-        return null;
-      }
+const acknowledgedKey =
+  hsCalibrationPopupAcknowledgedKey(
+    record
+  );
 
-      return {
-        record,
-        days,
-        stage,
-        alertKey
-      };
+/*
+  If this analyser has already been
+  acknowledged for its current due date,
+  suppress every later reminder stage
+  for the same calibration cycle.
+*/
+if (
+  history[
+    acknowledgedKey
+  ]
+) {
+  return null;
+}
+
+
+/*
+  Keep support for the older
+  stage-specific acknowledgement history.
+*/
+if (
+  history[
+    alertKey
+  ]
+) {
+  return null;
+}
+
+
+return {
+  record,
+  days,
+  stage,
+  alertKey,
+  acknowledgedKey
+};
     })
     .filter(Boolean)
     .sort((a, b) => {
@@ -23036,6 +23077,76 @@ function closeHsCalibrationStartupAlert() {
   )?.remove();
 }
 
+function acknowledgeSingleHsCalibrationAlert(
+  alertItem
+) {
+  if (
+    !alertItem ||
+    !alertItem.record
+  ) {
+    return;
+  }
+
+
+  const history =
+    loadHsCalibrationPopupHistory();
+
+
+  const acknowledgedKey =
+    alertItem
+      .acknowledgedKey ||
+    hsCalibrationPopupAcknowledgedKey(
+      alertItem.record
+    );
+
+
+  history[
+    acknowledgedKey
+  ] = {
+    acknowledgedAt:
+      new Date()
+        .toISOString(),
+
+    analyserCode:
+      alertItem.record
+        .analyserCode ||
+      "",
+
+    dueDate:
+      alertItem.record
+        .dueDate ||
+      "",
+
+    status:
+      "acknowledged"
+  };
+
+
+  saveHsCalibrationPopupHistory(
+    history
+  );
+
+
+  /*
+    Rebuild the popup immediately.
+
+    The acknowledged analyser disappears,
+    while any others remain visible.
+  */
+  const remaining =
+    getPendingHsCalibrationPopupAlerts();
+
+
+  if (
+    remaining.length
+  ) {
+    openHsCalibrationStartupAlert(
+      remaining
+    );
+  } else {
+    closeHsCalibrationStartupAlert();
+  }
+}
 
 function acknowledgeHsCalibrationStartupAlerts(
   alerts
@@ -23044,12 +23155,25 @@ function acknowledgeHsCalibrationStartupAlerts(
     loadHsCalibrationPopupHistory();
 
   const acknowledgedAt =
-    new Date().toISOString();
+    new Date()
+      .toISOString();
 
-  (alerts || []).forEach(
+
+  (
+    alerts ||
+    []
+  ).forEach(
     alertItem => {
+      const acknowledgedKey =
+        alertItem
+          .acknowledgedKey ||
+        hsCalibrationPopupAcknowledgedKey(
+          alertItem.record
+        );
+
+
       history[
-        alertItem.alertKey
+        acknowledgedKey
       ] = {
         acknowledgedAt,
 
@@ -23063,15 +23187,17 @@ function acknowledgeHsCalibrationStartupAlerts(
             .dueDate ||
           "",
 
-        stage:
-          alertItem.stage.key
+        status:
+          "acknowledged"
       };
     }
   );
 
+
   saveHsCalibrationPopupHistory(
     history
   );
+
 
   closeHsCalibrationStartupAlert();
 }
@@ -23546,7 +23672,26 @@ function openHsCalibrationStartupAlert(
                     timingText
                   )}
                 </span>
-              </div>
+                           </div>
+            </div>
+
+            <div
+              style="
+                display:flex;
+                align-items:center;
+                margin-left:auto;
+                padding-left:12px;
+              "
+            >
+              <button
+                type="button"
+                class="btn ghost small"
+                data-hs-calibration-ack="${escapeHtml(
+                  item.alertKey
+                )}"
+              >
+                Acknowledge
+              </button>
             </div>
           </div>
         `;
@@ -23670,29 +23815,80 @@ function openHsCalibrationStartupAlert(
       </div>
     </section>
   `;
+document.body.appendChild(
+  backdrop
+);
 
-  document.body.appendChild(
-    backdrop
-  );
 
-  el(
-    "hsStartupViewCalibrationBtn"
-  )?.addEventListener(
-    "click",
-    () => {
-      acknowledgeHsCalibrationStartupAlerts(
-        alerts
-      );
+/*
+  INDIVIDUAL ANALYSER ACKNOWLEDGEMENT
+*/
+backdrop
+  .querySelectorAll(
+    "[data-hs-calibration-ack]"
+  )
+  .forEach(
+    button => {
+      button.addEventListener(
+        "click",
+        () => {
+          const key =
+            button.dataset
+              .hsCalibrationAck;
 
-      setTab(
-        "healthSafety"
-      );
 
-      setHealthSafetyTab(
-        "calibration"
+          const alertItem =
+            alerts.find(
+              item =>
+                item.alertKey ===
+                key
+            );
+
+
+          if (!alertItem) {
+            return;
+          }
+
+
+          acknowledgeSingleHsCalibrationAlert(
+            alertItem
+          );
+        }
       );
     }
   );
+
+
+/*
+  VIEW CALIBRATION REGISTER
+*/
+el(
+  "hsStartupViewCalibrationBtn"
+)?.addEventListener(
+  "click",
+  () => {
+    /*
+      Viewing the register should NOT
+      acknowledge any analyser.
+    */
+    closeHsCalibrationStartupAlert();
+
+
+    setTab(
+      "healthSafety"
+    );
+
+
+    setHealthSafetyTab(
+      "calibration"
+    );
+  }
+);
+
+
+/*
+  EMAIL RECIPIENTS
+*/
 el(
   "hsStartupEmailRecipientsBtn"
 )?.addEventListener(
@@ -23703,7 +23899,12 @@ el(
     );
   }
 );
-  el(
+
+
+/*
+  REMIND ME NEXT TIME
+*/
+el(
   "hsStartupRemindLaterBtn"
 )?.addEventListener(
   "click",
@@ -23718,16 +23919,21 @@ el(
     closeHsCalibrationStartupAlert();
   }
 );
-  el(
-    "hsStartupAcknowledgeBtn"
-  )?.addEventListener(
-    "click",
-    () => {
-      acknowledgeHsCalibrationStartupAlerts(
-        alerts
-      );
-    }
-  );
+
+
+/*
+  ACKNOWLEDGE ALL REMAINING ALERTS
+*/
+el(
+  "hsStartupAcknowledgeBtn"
+)?.addEventListener(
+  "click",
+  () => {
+    acknowledgeHsCalibrationStartupAlerts(
+      alerts
+    );
+  }
+);
 }
 
 
