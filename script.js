@@ -1876,6 +1876,50 @@ function startHsCloudSync() {
           renderHsCalibrationPendingUpdates();
           renderHsCalibration();
         }
+        /*
+  Keep calibration popup acknowledgements
+  synchronised across devices.
+*/
+if (
+  data.popupAcknowledgements &&
+  typeof data.popupAcknowledgements ===
+    "object"
+) {
+  const localHistory =
+    loadHsCalibrationPopupHistory();
+
+
+  const mergedHistory = {
+    ...localHistory,
+    ...data.popupAcknowledgements
+  };
+
+
+  localStorage.setItem(
+    HS_CALIBRATION_POPUP_HISTORY_KEY,
+    JSON.stringify(
+      mergedHistory
+    )
+  );
+
+
+  /*
+    If the calibration warning popup is
+    currently visible, rebuild it immediately.
+
+    An analyser acknowledged on another
+    device will therefore disappear here too.
+  */
+  if (
+    el(
+      "hsCalibrationStartupAlertBackdrop"
+    )
+  ) {
+    closeHsCalibrationStartupAlert();
+
+    checkHsCalibrationStartupAlerts();
+  }
+}
       },
 
       error => {
@@ -2126,6 +2170,12 @@ if (
     "function"
 ) {
   await loadHsCalibrationAlertSettingsFromCloud();
+}
+    if (
+  typeof loadHsCalibrationPopupHistoryFromCloud ===
+    "function"
+) {
+  await loadHsCalibrationPopupHistoryFromCloud();
 }
     if (
   typeof loadHsCalibrationPendingUpdatesFromCloud ===
@@ -22905,12 +22955,199 @@ function loadHsCalibrationPopupHistory() {
 function saveHsCalibrationPopupHistory(
   history
 ) {
+  const safeHistory =
+    history &&
+    typeof history === "object"
+      ? history
+      : {};
+
+
+  /*
+    Always save locally first.
+  */
   localStorage.setItem(
     HS_CALIBRATION_POPUP_HISTORY_KEY,
     JSON.stringify(
-      history || {}
+      safeHistory
     )
   );
+
+
+  /*
+    If logged in, mirror the
+    acknowledgement history to Firebase.
+
+    We do not await this here because
+    acknowledgement buttons should react
+    instantly on screen.
+  */
+  if (
+    cloudSignedIn()
+  ) {
+    saveHsCalibrationPopupHistoryToCloud(
+      safeHistory
+    ).catch(
+      error => {
+        console.error(
+          "Calibration acknowledgement cloud save failed:",
+          error
+        );
+      }
+    );
+  }
+}
+
+
+async function saveHsCalibrationPopupHistoryToCloud(
+  history
+) {
+  if (
+    !cloudSignedIn()
+  ) {
+    return {
+      saved: false,
+      reason: "not-signed-in"
+    };
+  }
+
+
+  const user =
+    getUser();
+
+
+  await hsCalibrationMetaRef(
+    user.uid
+  ).set(
+    {
+      popupAcknowledgements:
+        history || {},
+
+      popupAcknowledgementsUpdatedAt:
+        firebase
+          .firestore
+          .FieldValue
+          .serverTimestamp()
+    },
+    {
+      merge: true
+    }
+  );
+
+
+  return {
+    saved: true
+  };
+}
+
+
+async function loadHsCalibrationPopupHistoryFromCloud() {
+  if (
+    !cloudSignedIn()
+  ) {
+    return false;
+  }
+
+
+  try {
+    const user =
+      getUser();
+
+
+    const snapshot =
+      await hsCalibrationMetaRef(
+        user.uid
+      ).get();
+
+
+    if (
+      !snapshot.exists
+    ) {
+      return false;
+    }
+
+
+    const data =
+      snapshot.data() || {};
+
+
+    const cloudHistory =
+      data.popupAcknowledgements &&
+      typeof data.popupAcknowledgements ===
+        "object"
+        ? data.popupAcknowledgements
+        : {};
+
+
+    const localHistory =
+      loadHsCalibrationPopupHistory();
+
+
+    /*
+      Acknowledgements are additive.
+
+      Merge both sides so an acknowledgement
+      made while one device was temporarily
+      offline is not lost.
+    */
+    const mergedHistory = {
+      ...cloudHistory,
+      ...localHistory
+    };
+
+
+    /*
+      Write directly to localStorage here.
+
+      Do not use
+      saveHsCalibrationPopupHistory()
+      because that would immediately send
+      another Firebase write while we are
+      loading.
+    */
+    localStorage.setItem(
+      HS_CALIBRATION_POPUP_HISTORY_KEY,
+      JSON.stringify(
+        mergedHistory
+      )
+    );
+
+
+    /*
+      If this device contained acknowledgement
+      records that Firebase did not yet have,
+      send the merged copy back to Firebase.
+    */
+    const cloudJson =
+      JSON.stringify(
+        cloudHistory
+      );
+
+    const mergedJson =
+      JSON.stringify(
+        mergedHistory
+      );
+
+
+    if (
+      cloudJson !==
+      mergedJson
+    ) {
+      await saveHsCalibrationPopupHistoryToCloud(
+        mergedHistory
+      );
+    }
+
+
+    return true;
+
+  } catch (error) {
+    console.error(
+      "Calibration acknowledgements could not be loaded from Firebase:",
+      error
+    );
+
+    return false;
+  }
 }
 
 
